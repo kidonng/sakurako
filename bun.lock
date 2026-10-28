@@ -5,13 +5,14 @@
     "": {
       "dependencies": {
         "@effect/platform-bun": "^4.0.6",
+        "@snowluma/sdk": "^2.2.1",
         "effect": "^4.0.6",
       },
       "devDependencies": {
         "@effect/tsgo": "0.62.0",
         "@types/bun": "latest",
-        "oxlint": "^1.90.0",
-        "oxlint-tsgolint": "^7.0.2005",
+        "oxlint": "1.90.0",
+        "oxlint-tsgolint": "7.0.2005",
         "typescript": "7.0.2",
       },
     },
@@ -86,6 +87,8 @@
     "@oxlint/binding-win32-ia32-msvc": ["@oxlint/binding-win32-ia32-msvc@1.90.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-+x42rDHQGbTCuT3EzpWAzhP3NoVPE/cJsG4gnrakOSg0olV+GCdMpPU23Nvrl3zZMnXxFZdTtDv4D3SuaA5ZeQ=="],
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.90.0", "", { "os": "win32", "cpu": "x64" }, "sha512-30JiaFEBUB9peEOcvVM8ggo88SoN/IdSr9DW505JdBji/R6dM66gKEiG65hw6qcaF2f4mO0cEJ+RwRZprmun9g=="],
+
+    "@snowluma/sdk": ["@snowluma/sdk@2.2.1", "", {}, "sha512-SUnXqv81yFaSx+uBPHryQjvU6Pnc4Ql/bt3hIvonGH60teamRBlAvADtMCEtdjAmZNsyAow8X30JAcscxipfBw=="],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
