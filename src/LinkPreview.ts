@@ -9,6 +9,8 @@ import metascraperImage from "metascraper-image";
 import metascraperTitle from "metascraper-title";
 import {
   findSiteCustomizer,
+  getUserAgent,
+  shouldSendImageAsBase64,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
 import type { IncomingMessage } from "./SnowLuma.ts";
@@ -39,6 +41,12 @@ export interface FormattedPreview {
 
 export class SendLinkPreviewReplyError extends Data.TaggedError(
   "SendLinkPreviewReplyError",
+)<{
+  readonly cause: unknown;
+}> {}
+
+export class DownloadImageAsBase64Error extends Data.TaggedError(
+  "DownloadImageAsBase64Error",
 )<{
   readonly cause: unknown;
 }> {}
@@ -240,8 +248,7 @@ export function scrapeMetadata(
       try: () =>
         fetchFn(url, {
           headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": getUserAgent(urlObj),
           },
           signal: AbortSignal.timeout(10000),
         }),
@@ -275,6 +282,63 @@ export function scrapeMetadata(
       description,
       image,
     };
+  });
+}
+
+export function prepareOutgoingImage(
+  imageUrl: string,
+  fetchFn: typeof fetch = fetch,
+): Effect.Effect<string | undefined, never> {
+  return Effect.gen(function* () {
+    const urlObj = yield* Effect.try({
+      try: () => new URL(imageUrl),
+      catch: (e) => `Invalid URL: ${String(e)}`,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Blocked private or invalid image URL: ${imageUrl} (${error})`,
+        ).pipe(Effect.as(undefined)),
+      ),
+    );
+
+    if (!urlObj || isPrivateHost(urlObj.hostname)) {
+      if (urlObj) {
+        yield* Effect.logWarning(
+          `Blocked private or invalid image URL: ${imageUrl}`,
+        );
+      }
+      return undefined;
+    }
+
+    if (!shouldSendImageAsBase64(imageUrl)) {
+      return imageUrl;
+    }
+
+    const downloadEffect = Effect.tryPromise({
+      try: async () => {
+        const response = await fetchFn(imageUrl, {
+          headers: {
+            "User-Agent": getUserAgent(urlObj),
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        }
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString("base64");
+        return `base64://${base64}` as string | undefined;
+      },
+      catch: (cause) => new DownloadImageAsBase64Error({ cause }),
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      ),
+    );
+
+    return yield* downloadEffect;
   });
 }
 
@@ -328,19 +392,40 @@ export function handleLinkPreviewMessage(
       return;
     }
 
-    const outgoing: OutgoingMessage = formatted.image
-      ? formatted.text
-        ? [
-            segments.text(formatted.text + "\n"),
-            segments.image(formatted.image),
-          ]
-        : [segments.image(formatted.image)]
-      : segments.text(formatted.text);
+    const resolvedImage = formatted.image
+      ? yield* prepareOutgoingImage(formatted.image, fetchFn)
+      : undefined;
+
+    const buildOutgoing = (image?: string): OutgoingMessage =>
+      image
+        ? formatted.text
+          ? [segments.text(formatted.text + "\n"), segments.image(image)]
+          : [segments.image(image)]
+        : segments.text(formatted.text);
+
+    const outgoing = buildOutgoing(resolvedImage);
 
     yield* Effect.tryPromise({
       try: () => item.context.quote(outgoing),
       catch: (cause) => new SendLinkPreviewReplyError({ cause }),
-    });
+    }).pipe(
+      Effect.catch((error) => {
+        if (resolvedImage && formatted.text) {
+          return Effect.logWarning(
+            `Failed to send quote reply with image, falling back to text-only: ${formatErrorDetail(error.cause)}`,
+          ).pipe(
+            Effect.andThen(
+              Effect.tryPromise({
+                try: () => item.context.quote(buildOutgoing(undefined)),
+                catch: (fallbackCause) =>
+                  new SendLinkPreviewReplyError({ cause: fallbackCause }),
+              }),
+            ),
+          );
+        }
+        return Effect.fail(error);
+      }),
+    );
     yield* Effect.logInfo("Link preview quote reply sent.");
   }).pipe(
     Effect.catch((error) =>

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
-import { extractUrls, scrapeAll, scrapeMetadata } from "../src/LinkPreview.ts";
+import {
+  extractUrls,
+  prepareOutgoingImage,
+  scrapeAll,
+  scrapeMetadata,
+} from "../src/LinkPreview.ts";
 
 describe("LinkPreviewEngine", () => {
   it("extracts and normalizes URLs from text", () => {
@@ -54,6 +59,50 @@ describe("LinkPreviewEngine", () => {
     expect(result.title).toBe("Test Page");
     expect(result.description).toBe("A cool test page");
     expect(result.image).toBe("https://example.com/cover.png");
+  });
+
+  it("sends Sakurako/1.0 User-Agent header by default", async () => {
+    let capturedHeaders: Record<string, string> | undefined;
+    const mockFetch = async (
+      _url: string,
+      init?: { headers?: Record<string, string> },
+    ) => {
+      capturedHeaders = init?.headers;
+      return new Response("<html><head><title>OK</title></head></html>", {
+        status: 200,
+      });
+    };
+    await Effect.runPromise(
+      scrapeMetadata(
+        "https://example.com",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(capturedHeaders?.["User-Agent"]).toBe("Sakurako/1.0");
+  });
+
+  it("sends custom Danbooru User-Agent header for Danbooru URLs", async () => {
+    let capturedHeaders: Record<string, string> | undefined;
+    const mockFetch = async (
+      _url: string,
+      init?: { headers?: Record<string, string> },
+    ) => {
+      capturedHeaders = init?.headers;
+      return new Response("<html><head><title>Danbooru</title></head></html>", {
+        status: 200,
+      });
+    };
+    await Effect.runPromise(
+      scrapeMetadata(
+        "https://danbooru.donmai.us/posts/12459835",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(capturedHeaders?.["User-Agent"]).toBe(
+      "Sakurako/1.0  (user #898759)",
+    );
   });
 
   it("handles missing title, description, image gracefully", async () => {
@@ -246,5 +295,54 @@ describe("LinkPreviewEngine", () => {
     );
 
     expect(result.image).toBeUndefined();
+  });
+
+  describe("prepareOutgoingImage", () => {
+    it("leaves regular URLs untouched when sendImageAsBase64 is false", async () => {
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/image.png"),
+      );
+      expect(result).toBe("https://example.com/image.png");
+    });
+
+    it("downloads and encodes image to base64 for Danbooru URLs", async () => {
+      const mockBytes = new Uint8Array([1, 2, 3, 4]);
+      const mockFetch = async () =>
+        new Response(mockBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      const result = await Effect.runPromise(
+        prepareOutgoingImage(
+          "https://cdn.donmai.us/original/123.jpg",
+          mockFetch as unknown as typeof fetch,
+        ),
+      );
+      expect(result).toBe(
+        "base64://" + Buffer.from(mockBytes).toString("base64"),
+      );
+    });
+
+    it("returns undefined when image download fails", async () => {
+      const mockFetch = async () =>
+        new Response("Not Found", {
+          status: 404,
+          statusText: "Not Found",
+        });
+      const result = await Effect.runPromise(
+        prepareOutgoingImage(
+          "https://cdn.donmai.us/original/missing.jpg",
+          mockFetch as unknown as typeof fetch,
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks private hostnames and local addresses", async () => {
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("http://127.0.0.1:8080/secret.jpg"),
+      );
+      expect(result).toBeUndefined();
+    });
   });
 });

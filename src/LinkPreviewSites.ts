@@ -11,9 +11,14 @@ export interface SiteFormatOptions {
   readonly description?: string;
 }
 
+export const DEFAULT_USER_AGENT = "Sakurako/1.0";
+export const DANBOORU_USER_AGENT = "Sakurako/1.0  (user #898759)";
+
 export interface SiteCustomizer {
   readonly name: string;
   readonly match: (url: URL) => boolean;
+  readonly userAgent?: string;
+  readonly sendImageAsBase64?: boolean;
   readonly metascraperRules?: {
     readonly description?: (
       context: MetascraperRuleContext,
@@ -99,18 +104,44 @@ export const hackerNewsCustomizer: SiteCustomizer = {
   },
 };
 
+export const danbooruCustomizer: SiteCustomizer = {
+  name: "danbooru.donmai.us",
+  match: (url) => {
+    const host = url.hostname.toLowerCase();
+    return host === "donmai.us" || host.endsWith(".donmai.us");
+  },
+  userAgent: DANBOORU_USER_AGENT,
+  sendImageAsBase64: true,
+  formatItem: () => ({
+    hideDescription: true,
+  }),
+};
+
 export const siteCustomizers: ReadonlyArray<SiteCustomizer> = [
   githubCustomizer,
   hackerNewsCustomizer,
+  danbooruCustomizer,
 ];
 
-export function findSiteCustomizer(rawUrl: string): SiteCustomizer | undefined {
+export function findSiteCustomizer(
+  rawUrl: string | URL,
+): SiteCustomizer | undefined {
   try {
-    const url = new URL(rawUrl);
+    const url = typeof rawUrl === "string" ? new URL(rawUrl) : rawUrl;
     return siteCustomizers.find((c) => c.match(url));
   } catch {
     return undefined;
   }
+}
+
+export function getUserAgent(rawUrl: string | URL): string {
+  const customizer = findSiteCustomizer(rawUrl);
+  return customizer?.userAgent ?? DEFAULT_USER_AGENT;
+}
+
+export function shouldSendImageAsBase64(rawUrl: string | URL): boolean {
+  const customizer = findSiteCustomizer(rawUrl);
+  return customizer?.sendImageAsBase64 ?? false;
 }
 
 export function createSiteMetascraperPlugin(): () => createMetascraper.Rules {

@@ -250,4 +250,52 @@ describe("handleLinkPreviewMessage", () => {
       },
     });
   });
+
+  it("falls back to text-only quote when quote with image fails", async () => {
+    const quotesAttempted: unknown[] = [];
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://example.com/with-image",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotesAttempted.push(msg);
+          if (quotesAttempted.length === 1) {
+            throw new Error("HTTP download failed: 403");
+          }
+          return { message_id: 12345 };
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const mockFetch = async () =>
+      new Response(
+        '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
+        { status: 200 },
+      );
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+    );
+
+    expect(quotesAttempted.length).toBe(2);
+    // First attempt included image segment
+    expect(Array.isArray(quotesAttempted[0])).toBe(true);
+    expect(
+      (quotesAttempted[0] as Array<{ type: string }>).some(
+        (s) => s.type === "image",
+      ),
+    ).toBe(true);
+    // Second attempt was text-only
+    expect(quotesAttempted[1]).toEqual({
+      type: "text",
+      data: {
+        text: "Title",
+      },
+    });
+  });
 });

@@ -231,4 +231,25 @@ describe("formatPreview", () => {
     const formatted = formatPreview(results);
     expect(formatted?.image).toBeUndefined();
   });
+
+  it("formats Danbooru link by hiding description", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://danbooru.donmai.us/posts/12459835",
+          title: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+          description: "View this 1536x2048 455 KB image",
+          image:
+            "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+      image:
+        "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
+    });
+  });
 });

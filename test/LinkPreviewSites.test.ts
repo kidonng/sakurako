@@ -1,9 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import * as cheerio from "cheerio";
 import {
+  DANBOORU_USER_AGENT,
+  DEFAULT_USER_AGENT,
+  danbooruCustomizer,
   findSiteCustomizer,
+  getUserAgent,
   githubCustomizer,
   hackerNewsCustomizer,
+  shouldSendImageAsBase64,
 } from "../src/LinkPreviewSites.ts";
 
 describe("LinkPreviewSites", () => {
@@ -25,6 +30,17 @@ describe("LinkPreviewSites", () => {
         findSiteCustomizer("https://www.news.ycombinator.com/item?id=12345")
           ?.name,
       ).toBe("news.ycombinator.com");
+    });
+    it("matches danbooru.donmai.us and related donmai.us URLs", () => {
+      expect(
+        findSiteCustomizer("https://danbooru.donmai.us/posts/12459835")?.name,
+      ).toBe("danbooru.donmai.us");
+      expect(
+        findSiteCustomizer("https://testbooru.donmai.us/posts/1")?.name,
+      ).toBe("danbooru.donmai.us");
+      expect(
+        findSiteCustomizer("https://safebooru.donmai.us/posts/1")?.name,
+      ).toBe("danbooru.donmai.us");
     });
 
     it("returns undefined for unrecognized or invalid URLs", () => {
@@ -154,6 +170,61 @@ describe("LinkPreviewSites", () => {
       });
 
       expect(options?.hideImage).toBe(true);
+    });
+  });
+
+  describe("danbooruCustomizer", () => {
+    it("has the custom userAgent for danbooru", () => {
+      expect(danbooruCustomizer.userAgent).toBe("Sakurako/1.0  (user #898759)");
+    });
+    it("enables sendImageAsBase64 for danbooru", () => {
+      expect(danbooruCustomizer.sendImageAsBase64).toBe(true);
+    });
+    it("hides description via formatItem", () => {
+      const options = danbooruCustomizer.formatItem?.({
+        metadata: {
+          url: "https://danbooru.donmai.us/posts/12459835",
+          title: "Title",
+          description: "View this image",
+        },
+        isSingle: true,
+      });
+      expect(options?.hideDescription).toBe(true);
+    });
+  });
+
+  describe("getUserAgent", () => {
+    it("returns default UA for generic websites", () => {
+      expect(getUserAgent("https://example.com")).toBe(DEFAULT_USER_AGENT);
+      expect(getUserAgent("https://github.com/kidonng/sakurako")).toBe(
+        DEFAULT_USER_AGENT,
+      );
+      expect(getUserAgent(new URL("https://example.com"))).toBe("Sakurako/1.0");
+    });
+
+    it("returns Danbooru UA for danbooru domains", () => {
+      expect(getUserAgent("https://danbooru.donmai.us/posts/12459835")).toBe(
+        DANBOORU_USER_AGENT,
+      );
+      expect(
+        getUserAgent(new URL("https://danbooru.donmai.us/posts/12459835")),
+      ).toBe("Sakurako/1.0  (user #898759)");
+    });
+  });
+
+  describe("shouldSendImageAsBase64", () => {
+    it("returns true for Danbooru image URLs", () => {
+      expect(
+        shouldSendImageAsBase64(
+          "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
+        ),
+      ).toBe(true);
+    });
+
+    it("returns false for generic websites", () => {
+      expect(shouldSendImageAsBase64("https://example.com/cover.png")).toBe(
+        false,
+      );
     });
   });
 });
