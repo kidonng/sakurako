@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import stringWidth from "string-width";
-import { truncate } from "../src/TextWidth.ts";
+import { truncate } from "../../src/utils/TextWidth.ts";
 
 describe("truncate", () => {
   it("returns original text if width <= maxWidth", () => {

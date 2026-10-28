@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
 import { Effect } from "effect";
-import { handleIncomingMessage } from "../src/EchoBot.ts";
-import type { IncomingMessage } from "../src/SnowLuma.ts";
+import { handleIncomingMessage } from "../../../src/features/echo/EchoBot.ts";
+import type { IncomingMessage } from "../../../src/SnowLuma.ts";
 
 describe("handleIncomingMessage", () => {
   it("replies with 喵喵喵 when raw_message is strictly 喵喵喵 in a group", async () => {

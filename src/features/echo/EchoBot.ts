@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect";
-import { type IncomingMessage, SnowLumaClient } from "./SnowLuma.ts";
+import { type IncomingMessage, SnowLumaClient } from "../../SnowLuma.ts";
 
 export const handleIncomingMessage = (
   item: IncomingMessage,

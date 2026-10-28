@@ -1,8 +1,8 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer, Stream } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { handleIncomingMessage } from "./EchoBot.ts";
-import { handleLinkPreviewMessage } from "./LinkPreview.ts";
+import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
+import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
 
 const MainProgram = Effect.gen(function* () {

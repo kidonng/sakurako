@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
-import { makeTestHttpClient } from "./TestHttpClient.ts";
+import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import * as cheerio from "cheerio";
 import {
   extractFirstParagraph,
@@ -8,7 +8,7 @@ import {
   prepareOutgoingImage,
   scrapeAll,
   scrapeMetadata,
-} from "../src/LinkPreview.ts";
+} from "../../../src/features/link-preview/LinkPreview.ts";
 
 describe("LinkPreviewEngine", () => {
   it("extracts and normalizes URLs from text", () => {

@@ -9,7 +9,7 @@ import {
   githubCustomizer,
   hackerNewsCustomizer,
   shouldSendImageAsBase64,
-} from "../src/LinkPreviewSites.ts";
+} from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewSites", () => {
   describe("findSiteCustomizer", () => {

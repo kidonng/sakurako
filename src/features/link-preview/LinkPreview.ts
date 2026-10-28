@@ -16,8 +16,8 @@ import {
   shouldSendImageAsBase64,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
-import type { IncomingMessage } from "./SnowLuma.ts";
-import { truncate } from "./TextWidth.ts";
+import type { IncomingMessage } from "../../SnowLuma.ts";
+import { truncate } from "../../utils/TextWidth.ts";
 
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
 

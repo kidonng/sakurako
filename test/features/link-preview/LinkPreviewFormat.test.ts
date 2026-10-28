@@ -4,7 +4,7 @@ import {
   formatPreview,
   HttpFetchError,
   type ScrapingResult,
-} from "../src/LinkPreview.ts";
+} from "../../../src/features/link-preview/LinkPreview.ts";
 
 describe("formatPreview", () => {
   it("returns null when all results are failures", () => {

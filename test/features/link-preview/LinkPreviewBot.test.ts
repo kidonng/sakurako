@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
 import { Effect, Layer, Logger } from "effect";
-import { handleLinkPreviewMessage } from "../src/LinkPreview.ts";
-import type { IncomingMessage } from "../src/SnowLuma.ts";
-import { makeTestHttpClient } from "./TestHttpClient.ts";
+import { handleLinkPreviewMessage } from "../../../src/features/link-preview/LinkPreview.ts";
+import type { IncomingMessage } from "../../../src/SnowLuma.ts";
+import { makeTestHttpClient } from "../../TestHttpClient.ts";
 
 const dummyLayer = makeTestHttpClient(() => new Response(""));
 
