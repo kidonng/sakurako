@@ -240,6 +240,7 @@ export function extractUrls(text: string): ReadonlyArray<string> {
   for (const url of getUrls(stripCqCodes(text), {
     requireSchemeOrWww: true,
     stripWWW: false,
+    removeTrailingSlash: false,
   })) {
     const cleaned = trimTrailingUrlPunctuation(url);
     if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
@@ -307,8 +308,9 @@ export function scrapeMetadata(
       catch: (error) => `Failed to read response body: ${String(error)}`,
     });
 
+    const targetUrl = response.url || url;
     const metadata = yield* Effect.tryPromise({
-      try: () => scraper({ html, url }),
+      try: () => scraper({ html, url: targetUrl }),
       catch: (error) => `Failed to parse metadata: ${String(error)}`,
     });
 

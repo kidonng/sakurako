@@ -15,6 +15,12 @@ describe("LinkPreviewEngine", () => {
     const urls = extractUrls(text);
     expect(urls).toEqual(["https://github.com", "http://example.com/test?a=1"]);
   });
+  it("preserves trailing slashes on URL paths", () => {
+    const text = "See https://tree-sitter.github.io/tree-sitter/ for docs";
+    const urls = extractUrls(text);
+    expect(urls).toEqual(["https://tree-sitter.github.io/tree-sitter/"]);
+  });
+
 
   it("strips trailing punctuation and parentheses from URLs", () => {
     const text = "Visit (https://example.com/doc) and https://example.com/end.";
@@ -80,6 +86,33 @@ describe("LinkPreviewEngine", () => {
     expect(result.description).toBe("A cool test page");
     expect(result.image).toBe("https://example.com/cover.png");
   });
+  it("resolves relative images against redirected response.url", async () => {
+    const mockHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Redirected Page</title></head>
+        <body><img src="assets/images/logo.png"></body>
+      </html>
+    `;
+    const mockFetch = async () => {
+      const res = new Response(mockHtml, { status: 200 });
+      Object.defineProperty(res, "url", {
+        value: "https://example.com/subdir/",
+      });
+      return res;
+    };
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://example.com/subdir",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.image).toBe(
+      "https://example.com/subdir/assets/images/logo.png",
+    );
+  });
+
 
   it("sends Sakurako/1.0 User-Agent header by default", async () => {
     let capturedHeaders: Record<string, string> | undefined;
