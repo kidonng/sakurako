@@ -1,19 +1,8 @@
 import { describe, expect, it } from "bun:test"
-import { stringWidth, truncate } from "../src/TextWidth.ts"
+import stringWidth from "string-width"
+import { truncate } from "../src/TextWidth.ts"
 
-describe("TextWidth", () => {
-  it("calculates string width correctly with string-width", () => {
-    expect(stringWidth("a")).toBe(1)
-    expect(stringWidth("1")).toBe(1)
-    expect(stringWidth("中")).toBe(2)
-    expect(stringWidth("文")).toBe(2)
-    expect(stringWidth("，")).toBe(2)
-    expect(stringWidth("🌸")).toBe(2)
-    expect(stringWidth("hello")).toBe(5)
-    expect(stringWidth("你好")).toBe(4)
-    expect(stringWidth("hello 你好")).toBe(10)
-  })
-
+describe("truncate", () => {
   it("returns original text if width <= maxWidth", () => {
     expect(truncate("hello", 100)).toBe("hello")
     expect(truncate("短文本", 100)).toBe("短文本")

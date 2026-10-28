@@ -1,7 +1,5 @@
 import stringWidth from "string-width"
 
-export { stringWidth }
-
 export function truncate(text: string, maxWidth = 100, ellipsis = "..."): string {
   const totalWidth = stringWidth(text)
   if (totalWidth <= maxWidth) {
