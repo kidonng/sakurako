@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import * as cheerio from "cheerio";
 import {
+  extractFirstParagraph,
   extractUrls,
   prepareOutgoingImage,
   scrapeAll,
@@ -361,6 +363,66 @@ describe("LinkPreviewEngine", () => {
         prepareOutgoingImage("http://127.0.0.1:8080/secret.jpg"),
       );
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe("extractFirstParagraph", () => {
+    it("prioritizes semantic containers over generic p", () => {
+      const $ = cheerio.load(`
+        <body>
+          <p>Generic intro</p>
+          <article><p>Article main content</p></article>
+        </body>
+      `);
+      expect(extractFirstParagraph($)).toBe("Article main content");
+    });
+
+    it("ignores paragraphs inside noise containers", () => {
+      const $ = cheerio.load(`
+        <body>
+          <header><p>Header notice</p></header>
+          <nav><p>Nav links</p></nav>
+          <article>
+            <aside><p>Sidebar note</p></aside>
+            <p>Real article paragraph.</p>
+          </article>
+          <footer><p>Footer copyright</p></footer>
+        </body>
+      `);
+      expect(extractFirstParagraph($)).toBe("Real article paragraph.");
+    });
+
+    it("skips empty and whitespace-only paragraphs", () => {
+      const $ = cheerio.load(`
+        <body>
+          <p></p>
+          <p>   \n\t  </p>
+          <p>&nbsp;</p>
+          <p>First valid text.</p>
+        </body>
+      `);
+      expect(extractFirstParagraph($)).toBe("First valid text.");
+    });
+
+    it("collapses multiple whitespaces and newlines", () => {
+      const $ = cheerio.load(`
+        <main>
+          <p>
+            Hello\n\n   world! \t This is
+            Sakurako.
+          </p>
+        </main>
+      `);
+      expect(extractFirstParagraph($)).toBe("Hello world! This is Sakurako.");
+    });
+
+    it("returns undefined when no valid paragraph exists", () => {
+      const $ = cheerio.load(`
+        <body>
+          <header><p>Only header</p></header>
+        </body>
+      `);
+      expect(extractFirstParagraph($)).toBeUndefined();
     });
   });
 });

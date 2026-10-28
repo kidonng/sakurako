@@ -10,6 +10,7 @@ import metascraperTitle from "metascraper-title";
 import {
   findSiteCustomizer,
   getUserAgent,
+  type MetascraperRuleContext,
   shouldSendImageAsBase64,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
@@ -22,6 +23,39 @@ const scraper = createMetascraper([
   metascraperDescription(),
   metascraperImage(),
 ]);
+
+const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
+
+export function extractFirstParagraph(
+  $: MetascraperRuleContext["htmlDom"],
+): string | undefined {
+  const findIn = (selector: string): string | undefined => {
+    for (const el of $(selector).toArray()) {
+      const $el = $(el);
+      if ($el.closest(NOISE_CONTAINERS).length > 0) {
+        continue;
+      }
+      const text = $el.text().replace(/\s+/g, " ").trim();
+      if (text.length > 0) {
+        return text;
+      }
+    }
+    return undefined;
+  };
+
+  return (
+    findIn("article p, main p, [role=\"main\"] p") ??
+    findIn("p")
+  );
+}
+
+export function firstParagraphPlugin(): () => createMetascraper.Rules {
+  return () => ({
+    description: [
+      ({ htmlDom }: MetascraperRuleContext) => extractFirstParagraph(htmlDom),
+    ],
+  });
+}
 
 export interface PageMetadata {
   readonly url: string;
