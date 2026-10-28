@@ -77,7 +77,7 @@ All development tasks use Bun:
 - **Services**: Define services extending `Context.Service<Tag, Shape>()("package/Id")`.
 - **Layer Construction**: Use `Layer.effect(Service, Effect.gen(...))` combining `Effect.acquireRelease` for resource lifecycle management.
 - **Async Execution in Callbacks**: Capture surrounding context with `const context = yield* Effect.context()` and dispatch tasks via `const runFork = Effect.runForkWith(context)` to prevent `effecttsgo(run-effect-inside-effect)` warnings.
-- **Tagged Errors**: Subclass `Schema.TaggedError` with a brand type parameter:
+- **Tagged Errors**: For internal domain failure channels that do not require Schema serialization, use `Data.TaggedError`. For serialized/wire errors, subclass `Schema.TaggedError` with a brand type parameter:
   ```ts
   export class WebSocketConnectionError extends Schema.TaggedError<
     WebSocketConnectionError,
@@ -92,12 +92,13 @@ All development tasks use Bun:
 
 ## Important Files
 
-- `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage` and `handleLinkPreviewMessage` with `SnowLumaClient.layer` via `BunRuntime.runMain`.
+- `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage` and `handleLinkPreviewMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
 - `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL` and `SNOWLUMA_ACCESS_TOKEN` (`Redacted`).
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
 - `src/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
-- `src/LinkPreview.ts`: URL extraction, metadata scraping, East Asian Width formatting, SSRF guard, and quote reply dispatch.
+- `src/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
 - `src/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
+- `test/TestHttpClient.ts`: Test layer helper (`makeTestHttpClient`) bridging mock responses into `HttpClient.HttpClient`.
 - `src/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `.env.example`: Public template for environment configuration.
 - `package.json` & `tsconfig.json`: Project setup configured for TypeScript 7, Bundler module resolution, and tsgo.
@@ -113,7 +114,8 @@ All development tasks use Bun:
 ## Testing & QA
 
 - **Framework**: Native `bun:test` (`describe`, `it`, `expect`).
-- **No `any` Policy**: Never use `any` or `as any`. Use domain interfaces and double-cast mocks via `as unknown as TargetType`.
+- **No `any` Policy**: Never use `any` or `as any`. Use domain interfaces and double-cast mocks via `as unknown as TargetType` for external SDK structures (`item.context`, `item.event`).
+- **HTTP Mocking**: Never mock global `fetch` or use `as unknown as typeof fetch`. Provide a mock `HttpClient.HttpClient` layer using `makeTestHttpClient` from `test/TestHttpClient.ts`.
 - **Testing Effect**: Run effects within tests using `await Effect.runPromise(program)`.
 - **Config Mocking**: Mock environment configs with `ConfigProvider.fromEnvRecord` wrapped in `ConfigProvider.layer`.
 - **Coverage & Edge Cases**:
