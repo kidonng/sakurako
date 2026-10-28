@@ -28,7 +28,9 @@ export function extractFirstParagraph(
       if ($el.closest(NOISE_CONTAINERS).length > 0) {
         continue;
       }
-      const text = $el.text().replace(/\s+/g, " ").trim();
+      const $clone = $el.clone();
+      $clone.find("br").replaceWith(" ");
+      const text = $clone.text().replace(/\s+/g, " ").trim();
       if (text.length > 0) {
         return text;
       }

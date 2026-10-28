@@ -467,6 +467,15 @@ describe("LinkPreviewEngine", () => {
       expect(extractFirstParagraph($)).toBe("Hello world! This is Sakurako.");
     });
 
+    it("treats <br> tags as spaces instead of gluing words together", () => {
+      const $ = cheerio.load(`
+        <article>
+          <p>Hello<br>world &amp; <b>friends</b><br/>again</p>
+        </article>
+      `);
+      expect(extractFirstParagraph($)).toBe("Hello world & friends again");
+    });
+
     it("returns undefined when no valid paragraph exists", () => {
       const $ = cheerio.load(`
         <body>
