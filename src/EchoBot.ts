@@ -4,10 +4,15 @@ import { type IncomingMessage, SnowLumaClient } from "./SnowLuma.ts"
 export const handleIncomingMessage = (
   item: IncomingMessage
 ): Effect.Effect<void, never> => {
-  if (item.event.raw_message === "喵喵喵") {
+  const { event } = item
+  if (
+    event.raw_message === "喵喵喵" &&
+    event.post_type !== "message_sent" &&
+    event.user_id !== event.self_id
+  ) {
     return Effect.gen(function*() {
       yield* Effect.logInfo(
-        `Received '喵喵喵' from user ${item.event.user_id} (${item.event.message_type}), replying...`
+        `Received '喵喵喵' from user ${event.user_id} (${event.message_type}), replying...`
       )
       yield* Effect.tryPromise(() => item.context.reply("喵喵喵"))
       yield* Effect.logInfo("Reply sent: 喵喵喵")
