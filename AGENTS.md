@@ -5,6 +5,7 @@
 Sakurako is a QQ bot built with TypeScript, running on Bun and powered by the Effect 4 framework (`effect`, `@effect/platform-bun`). It integrates with a SnowLuma OneBot v11 backend (running via OrbStack at `snowluma.orb.local`) via `@snowluma/sdk`.
 
 Key features include:
+
 - **Echo Bot**: Matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"`.
 - **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
 
@@ -42,6 +43,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket message callbacks offer items to an unbounded `Queue`, exposed downstream as a typed `Stream`.
 - **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot` and `LinkPreview`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
+
 ## Key Directories
 
 - `src/`: Core application source files (services, handlers, entrypoint, configuration).
@@ -65,22 +67,24 @@ All development tasks use Bun:
 ## Code Conventions & Common Patterns
 
 ### File & Code Naming
+
 - **Files**: PascalCase for services and domain modules (`SnowLuma.ts`, `EchoBot.ts`, `Config.ts`), camelCase for entry points (`index.ts`).
 - **Extensions**: Always include `.ts` extensions in local relative imports (e.g. `import { BotConfig } from "./Config.ts"`), required by `"allowImportingTsExtensions": true`.
 - **Types vs Values**: Enforce `verbatimModuleSyntax: true` using `import type { ... }` or `import { type Foo, Bar } from "..."`.
 
 ### Effect 4 Patterns
+
 - **Services**: Define services extending `Context.Service<Tag, Shape>()("package/Id")`.
 - **Layer Construction**: Use `Layer.effect(Service, Effect.gen(...))` combining `Effect.acquireRelease` for resource lifecycle management.
 - **Async Execution in Callbacks**: Capture surrounding context with `const context = yield* Effect.context()` and dispatch tasks via `const runFork = Effect.runForkWith(context)` to prevent `effecttsgo(run-effect-inside-effect)` warnings.
 - **Tagged Errors**: Subclass `Schema.TaggedError` with a brand type parameter:
   ```ts
-  export class WebSocketConnectionError extends Schema.TaggedError<WebSocketConnectionError, {
-    readonly brand: unique symbol
-  }>()(
-    "WebSocketConnectionError",
-    { message: Schema.String }
-  ) {}
+  export class WebSocketConnectionError extends Schema.TaggedError<
+    WebSocketConnectionError,
+    {
+      readonly brand: unique symbol;
+    }
+  >()("WebSocketConnectionError", { message: Schema.String }) {}
   ```
 - **Error Handling**: Use `Effect.tryPromise` for promise-based APIs and attach `Effect.catch` to handle typed errors. `Effect.promise` defects on rejection; avoid unless defects are expected.
 - **Retries**: Compose schedules with `Schedule.exponential(...)` and `Schedule.upTo({ duration: ... })`.

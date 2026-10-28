@@ -1,71 +1,89 @@
-import { SnowLumaWebSocketClient, type SnowLumaEventContextWithQuote } from "@snowluma/sdk"
-import type { OneBotMessageEvent } from "@snowluma/sdk/types"
-import { Context, Effect, Layer, Queue, Redacted, Schedule, Schema, Stream } from "effect"
-import { BotConfig } from "./Config.ts"
+import {
+  SnowLumaWebSocketClient,
+  type SnowLumaEventContextWithQuote,
+} from "@snowluma/sdk";
+import type { OneBotMessageEvent } from "@snowluma/sdk/types";
+import {
+  Context,
+  Effect,
+  Layer,
+  Queue,
+  Redacted,
+  Schedule,
+  Schema,
+  Stream,
+} from "effect";
+import { BotConfig } from "./Config.ts";
 
 export interface IncomingMessage {
-  readonly event: OneBotMessageEvent
-  readonly context: SnowLumaEventContextWithQuote<OneBotMessageEvent>
+  readonly event: OneBotMessageEvent;
+  readonly context: SnowLumaEventContextWithQuote<OneBotMessageEvent>;
 }
 
-export class WebSocketConnectionError extends Schema.TaggedError<WebSocketConnectionError, {
-  readonly brand: unique symbol
-}>()(
-  "WebSocketConnectionError",
+export class WebSocketConnectionError extends Schema.TaggedError<
+  WebSocketConnectionError,
   {
-    message: Schema.String
+    readonly brand: unique symbol;
   }
-) {}
+>()("WebSocketConnectionError", {
+  message: Schema.String,
+}) {}
 
-export class SnowLumaClient extends Context.Service<SnowLumaClient, {
-  readonly client: SnowLumaWebSocketClient
-  readonly messages: Stream.Stream<IncomingMessage>
-}>()("sakurako/SnowLumaClient") {
+export class SnowLumaClient extends Context.Service<
+  SnowLumaClient,
+  {
+    readonly client: SnowLumaWebSocketClient;
+    readonly messages: Stream.Stream<IncomingMessage>;
+  }
+>()("sakurako/SnowLumaClient") {
   static readonly layer = Layer.effect(
     SnowLumaClient,
-    Effect.gen(function*() {
-      const context = yield* Effect.context()
-      const runFork = Effect.runForkWith(context)
-      const config = yield* BotConfig
-      const queue = yield* Queue.unbounded<IncomingMessage>()
+    Effect.gen(function* () {
+      const context = yield* Effect.context();
+      const runFork = Effect.runForkWith(context);
+      const config = yield* BotConfig;
+      const queue = yield* Queue.unbounded<IncomingMessage>();
 
       const client = yield* Effect.acquireRelease(
         Effect.sync(() => {
           const ws = new SnowLumaWebSocketClient({
             url: config.wsUrl,
             accessToken: Redacted.value(config.accessToken),
-            reconnect: true
-          })
+            reconnect: true,
+          });
           ws.onMessage((event, eventContext) => {
-            runFork(Queue.offer(queue, { event, context: eventContext }))
-          })
-          return ws
+            runFork(Queue.offer(queue, { event, context: eventContext }));
+          });
+          return ws;
         }),
         (ws) =>
-          Effect.gen(function*() {
-            yield* Effect.logInfo("Closing SnowLuma WebSocket client...")
-            ws.close()
-            yield* Queue.shutdown(queue)
-          })
-      )
+          Effect.gen(function* () {
+            yield* Effect.logInfo("Closing SnowLuma WebSocket client...");
+            ws.close();
+            yield* Queue.shutdown(queue);
+          }),
+      );
 
-      yield* Effect.logInfo(`Connecting to SnowLuma WebSocket at ${config.wsUrl}...`)
+      yield* Effect.logInfo(
+        `Connecting to SnowLuma WebSocket at ${config.wsUrl}...`,
+      );
       yield* Effect.tryPromise({
         try: () => client.connect(),
-        catch: (error) => new WebSocketConnectionError({ message: String(error) })
+        catch: (error) =>
+          new WebSocketConnectionError({ message: String(error) }),
       }).pipe(
         Effect.retry(
           Schedule.exponential("500 millis").pipe(
-            Schedule.upTo({ duration: "10 seconds" })
-          )
-        )
-      )
-      yield* Effect.logInfo("Connected to SnowLuma WebSocket")
+            Schedule.upTo({ duration: "10 seconds" }),
+          ),
+        ),
+      );
+      yield* Effect.logInfo("Connected to SnowLuma WebSocket");
 
       return SnowLumaClient.of({
         client,
-        messages: Stream.fromQueue(queue)
-      })
-    })
-  )
+        messages: Stream.fromQueue(queue),
+      });
+    }),
+  );
 }
