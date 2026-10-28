@@ -1,5 +1,5 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Effect, Stream } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { handleIncomingMessage } from "./EchoBot.ts";
 import { handleLinkPreviewMessage } from "./LinkPreview.ts";
@@ -21,8 +21,13 @@ const MainProgram = Effect.gen(function* () {
 });
 
 const MainLive = MainProgram.pipe(
-  Effect.provide(SnowLumaClient.layer),
-  Effect.provide(FetchHttpClient.layer),
+  Effect.provide(
+    Layer.merge(
+      SnowLumaClient.layer,
+      // oxlint-disable-next-line effecttsgo/unstable-api-usage
+      FetchHttpClient.layer,
+    ),
+  ),
 );
 // oxlint-disable-next-line effecttsgo/unstable-api-usage
 BunRuntime.runMain(MainLive);

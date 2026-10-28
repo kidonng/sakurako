@@ -61,21 +61,6 @@ describe("LinkPreviewEngine", () => {
       "https://news.ycombinator.com/item?id=50261319",
     ]);
   });
-  it("fetches metadata using HttpClient service layer", async () => {
-    const layer = makeTestHttpClient(() =>
-      new Response(
-        "<html><head><title>Effect Http Title</title><meta name=\"description\" content=\"Effect Http Desc\"></head></html>",
-        { status: 200 },
-      ),
-    );
-    const result = await Effect.runPromise(
-      scrapeMetadata("https://example.com/effect").pipe(Effect.provide(layer)),
-    );
-    expect(result.title).toBe("Effect Http Title");
-    expect(result.description).toBe("Effect Http Desc");
-  });
-
-
   it("scrapes metadata from HTML successfully", async () => {
     const mockHtml = `
       <!DOCTYPE html>
@@ -88,11 +73,11 @@ describe("LinkPreviewEngine", () => {
         <body>Hello</body>
       </html>
     `;
-    const mockFetch = async () => new Response(mockHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://example.com").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(mockHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -101,6 +86,7 @@ describe("LinkPreviewEngine", () => {
     expect(result.description).toBe("A cool test page");
     expect(result.image).toBe("https://example.com/cover.png");
   });
+
   it("resolves relative images against redirected response.url", async () => {
     const mockHtml = `
       <!DOCTYPE html>
@@ -109,18 +95,15 @@ describe("LinkPreviewEngine", () => {
         <body><img src="assets/images/logo.png"></body>
       </html>
     `;
-    const mockFetch = async () => {
+    const layer = makeTestHttpClient(() => {
       const res = new Response(mockHtml, { status: 200 });
       Object.defineProperty(res, "url", {
         value: "https://example.com/subdir/",
       });
       return res;
-    };
+    });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com/subdir",
-        mockFetch as unknown as typeof fetch,
-      ),
+      scrapeMetadata("https://example.com/subdir").pipe(Effect.provide(layer)),
     );
 
     expect(result.image).toBe(
@@ -128,58 +111,47 @@ describe("LinkPreviewEngine", () => {
     );
   });
 
-
   it("sends Sakurako/1.0 User-Agent header by default", async () => {
-    let capturedHeaders: Record<string, string> | undefined;
-    const mockFetch = async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      capturedHeaders = init?.headers;
+    let capturedUserAgent: string | undefined;
+    const layer = makeTestHttpClient((req) => {
+      capturedUserAgent = req.headers["user-agent"];
       return new Response("<html><head><title>OK</title></head></html>", {
         status: 200,
       });
-    };
+    });
     await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com",
-        mockFetch as unknown as typeof fetch,
-      ),
+      scrapeMetadata("https://example.com").pipe(Effect.provide(layer)),
     );
 
-    expect(capturedHeaders?.["User-Agent"]).toBe("Sakurako/1.0");
+    expect(capturedUserAgent).toBe("Sakurako/1.0");
   });
 
   it("sends custom Danbooru User-Agent header for Danbooru URLs", async () => {
-    let capturedHeaders: Record<string, string> | undefined;
-    const mockFetch = async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      capturedHeaders = init?.headers;
+    let capturedUserAgent: string | undefined;
+    const layer = makeTestHttpClient((req) => {
+      capturedUserAgent = req.headers["user-agent"];
       return new Response("<html><head><title>Danbooru</title></head></html>", {
         status: 200,
       });
-    };
+    });
     await Effect.runPromise(
-      scrapeMetadata(
-        "https://danbooru.donmai.us/posts/12459835",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://danbooru.donmai.us/posts/12459835").pipe(
+        Effect.provide(layer),
       ),
     );
 
-    expect(capturedHeaders?.["User-Agent"]).toBe(
+    expect(capturedUserAgent).toBe(
       "Sakurako/1.0  (user #898759)",
     );
   });
 
   it("handles missing title, description, image gracefully", async () => {
     const mockHtml = "<html><head></head><body>No meta</body></html>";
-    const mockFetch = async () => new Response(mockHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://example.com").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(mockHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -188,7 +160,6 @@ describe("LinkPreviewEngine", () => {
     expect(result.description).toBeUndefined();
     expect(result.image).toBeUndefined();
   });
-
   it("falls back to first paragraph when description metadata is missing", async () => {
     const mockHtml = `
       <!DOCTYPE html>
@@ -202,11 +173,11 @@ describe("LinkPreviewEngine", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(mockHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com/no-desc",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://example.com/no-desc").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(mockHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -229,11 +200,11 @@ describe("LinkPreviewEngine", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(mockHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com/meta-priority",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://example.com/meta-priority").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(mockHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -241,54 +212,77 @@ describe("LinkPreviewEngine", () => {
   });
 
   it("fails when HTTP status is not 200", async () => {
-    const mockFetch = async () =>
-      new Response("Not Found", { status: 404, statusText: "Not Found" });
-    const program = scrapeMetadata(
-      "https://example.com/missing",
-      mockFetch as unknown as typeof fetch,
+    const layer = makeTestHttpClient(() =>
+      new Response("Not Found", { status: 404, statusText: "Not Found" }),
     );
-    const error = await Effect.runPromise(program.pipe(Effect.flip));
+    const error = await Effect.runPromise(
+      scrapeMetadata("https://example.com/missing").pipe(
+        Effect.provide(layer),
+        Effect.flip,
+      ),
+    );
 
-    expect(error).toContain("HTTP 404");
+    expect(error._tag).toBe("HttpFetchError");
+    if (error._tag === "HttpFetchError") {
+      expect(error.status).toBe(404);
+    }
+    expect(error.message).toContain("HTTP 404 Not Found");
   });
+
   it("blocks SSRF attempts on localhost and private IP addresses", async () => {
-    const programLocalhost = scrapeMetadata("http://localhost:3000");
+    const dummyLayer = makeTestHttpClient(() => new Response(""));
+
     const errorLocalhost = await Effect.runPromise(
-      programLocalhost.pipe(Effect.flip),
+      scrapeMetadata("http://localhost:3000").pipe(
+        Effect.provide(dummyLayer),
+        Effect.flip,
+      ),
     );
-    expect(errorLocalhost).toContain("Blocked private or local address");
+    expect(errorLocalhost._tag).toBe("BlockedHostError");
+    expect(errorLocalhost.message).toBe("Blocked private or local address");
 
-    const programIp = scrapeMetadata("http://127.0.0.1:8080/secret");
-    const errorIp = await Effect.runPromise(programIp.pipe(Effect.flip));
-    expect(errorIp).toContain("Blocked private or local address");
+    const errorIp = await Effect.runPromise(
+      scrapeMetadata("http://127.0.0.1:8080/secret").pipe(
+        Effect.provide(dummyLayer),
+        Effect.flip,
+      ),
+    );
+    expect(errorIp._tag).toBe("BlockedHostError");
+    expect(errorIp.message).toBe("Blocked private or local address");
 
-    const programPrivate = scrapeMetadata("http://192.168.1.1/admin");
     const errorPrivate = await Effect.runPromise(
-      programPrivate.pipe(Effect.flip),
+      scrapeMetadata("http://192.168.1.1/admin").pipe(
+        Effect.provide(dummyLayer),
+        Effect.flip,
+      ),
     );
-    expect(errorPrivate).toContain("Blocked private or local address");
+    expect(errorPrivate._tag).toBe("BlockedHostError");
+    expect(errorPrivate.message).toBe("Blocked private or local address");
 
-    const programIpv6 = scrapeMetadata("http://[::1]:8080");
-    const errorIpv6 = await Effect.runPromise(programIpv6.pipe(Effect.flip));
-    expect(errorIpv6).toContain("Blocked private or local address");
+    const errorIpv6 = await Effect.runPromise(
+      scrapeMetadata("http://[::1]:8080").pipe(
+        Effect.provide(dummyLayer),
+        Effect.flip,
+      ),
+    );
+    expect(errorIpv6._tag).toBe("BlockedHostError");
+    expect(errorIpv6.message).toBe("Blocked private or local address");
   });
 
   it("scrapeAll aggregates successes and failures concurrently", async () => {
-    const mockFetch = async (input: unknown) => {
-      const urlStr = String(input);
-      if (urlStr.includes("fail")) {
-        return new Response("Error", { status: 500 });
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("fail")) {
+        return new Response("Error", { status: 500, statusText: "Internal Server Error" });
       }
       return new Response(
         "<html><head><title>Success Title</title></head></html>",
         { status: 200 },
       );
-    };
+    });
 
     const results = await Effect.runPromise(
-      scrapeAll(
-        ["https://ok.com", "https://fail.com"],
-        mockFetch as unknown as typeof fetch,
+      scrapeAll(["https://ok.com", "https://fail.com"]).pipe(
+        Effect.provide(layer),
       ),
     );
 
@@ -302,6 +296,10 @@ describe("LinkPreviewEngine", () => {
     expect(second?._tag).toBe("Failure");
     if (second?._tag === "Failure") {
       expect(second.url).toBe("https://fail.com");
+      expect(second.error._tag).toBe("HttpFetchError");
+      if (second.error._tag === "HttpFetchError") {
+        expect(second.error.status).toBe(500);
+      }
       expect(second.error.message).toContain("HTTP 500");
     }
   });
@@ -322,11 +320,11 @@ describe("LinkPreviewEngine", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(hnHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://news.ycombinator.com/item?id=50268380",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://news.ycombinator.com/item?id=50268380").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(hnHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -335,7 +333,6 @@ describe("LinkPreviewEngine", () => {
       "https://lexifina.com/blog/git-for-the-us-code",
     );
   });
-
   it("scrapes news.ycombinator.com Ask HN without setting link description", async () => {
     const askHnHtml = `
       <!DOCTYPE html>
@@ -352,18 +349,17 @@ describe("LinkPreviewEngine", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(askHnHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://news.ycombinator.com/item?id=50260146",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://news.ycombinator.com/item?id=50260146").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(askHnHtml, { status: 200 })),
+        ),
       ),
     );
 
     expect(result.title).toBe("Ask HN: What are you working on? | Hacker News");
     expect(result.description).toBeUndefined();
   });
-
   it("scrapes news.ycombinator.com comment without setting link description", async () => {
     const commentHtml = `
       <!DOCTYPE html>
@@ -382,11 +378,11 @@ describe("LinkPreviewEngine", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(commentHtml, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://news.ycombinator.com/item?id=43180000",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://news.ycombinator.com/item?id=43180000").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(commentHtml, { status: 200 })),
+        ),
       ),
     );
 
@@ -405,11 +401,11 @@ describe("LinkPreviewEngine", () => {
         <body><img src="y18.svg"></body>
       </html>
     `;
-    const mockFetch = async () => new Response(htmlWithSvg, { status: 200 });
     const result = await Effect.runPromise(
-      scrapeMetadata(
-        "https://example.com",
-        mockFetch as unknown as typeof fetch,
+      scrapeMetadata("https://example.com").pipe(
+        Effect.provide(
+          makeTestHttpClient(() => new Response(htmlWithSvg, { status: 200 })),
+        ),
       ),
     );
 
@@ -418,23 +414,26 @@ describe("LinkPreviewEngine", () => {
 
   describe("prepareOutgoingImage", () => {
     it("leaves regular URLs untouched when sendImageAsBase64 is false", async () => {
+      const dummyLayer = makeTestHttpClient(() => new Response(""));
       const result = await Effect.runPromise(
-        prepareOutgoingImage("https://example.com/image.png"),
+        prepareOutgoingImage("https://example.com/image.png").pipe(
+          Effect.provide(dummyLayer),
+        ),
       );
       expect(result).toBe("https://example.com/image.png");
     });
 
     it("downloads and encodes image to base64 for Danbooru URLs", async () => {
       const mockBytes = new Uint8Array([1, 2, 3, 4]);
-      const mockFetch = async () =>
+      const layer = makeTestHttpClient(() =>
         new Response(mockBytes, {
           status: 200,
           headers: { "Content-Type": "image/jpeg" },
-        });
+        }),
+      );
       const result = await Effect.runPromise(
-        prepareOutgoingImage(
-          "https://cdn.donmai.us/original/123.jpg",
-          mockFetch as unknown as typeof fetch,
+        prepareOutgoingImage("https://cdn.donmai.us/original/123.jpg").pipe(
+          Effect.provide(layer),
         ),
       );
       expect(result).toBe(
@@ -443,23 +442,26 @@ describe("LinkPreviewEngine", () => {
     });
 
     it("returns undefined when image download fails", async () => {
-      const mockFetch = async () =>
+      const layer = makeTestHttpClient(() =>
         new Response("Not Found", {
           status: 404,
           statusText: "Not Found",
-        });
+        }),
+      );
       const result = await Effect.runPromise(
-        prepareOutgoingImage(
-          "https://cdn.donmai.us/original/missing.jpg",
-          mockFetch as unknown as typeof fetch,
+        prepareOutgoingImage("https://cdn.donmai.us/original/missing.jpg").pipe(
+          Effect.provide(layer),
         ),
       );
       expect(result).toBeUndefined();
     });
 
     it("blocks private hostnames and local addresses", async () => {
+      const dummyLayer = makeTestHttpClient(() => new Response(""));
       const result = await Effect.runPromise(
-        prepareOutgoingImage("http://127.0.0.1:8080/secret.jpg"),
+        prepareOutgoingImage("http://127.0.0.1:8080/secret.jpg").pipe(
+          Effect.provide(dummyLayer),
+        ),
       );
       expect(result).toBeUndefined();
     });

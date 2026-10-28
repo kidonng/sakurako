@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
-import { Effect, Logger } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { handleLinkPreviewMessage } from "../src/LinkPreview.ts";
 import type { IncomingMessage } from "../src/SnowLuma.ts";
+import { makeTestHttpClient } from "./TestHttpClient.ts";
+
+const dummyLayer = makeTestHttpClient(() => new Response(""));
 
 describe("handleLinkPreviewMessage", () => {
   it("quotes reply when message contains valid link", async () => {
@@ -23,14 +26,15 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const mockFetch = async () =>
+    const layer = makeTestHttpClient(() =>
       new Response(
         '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
         { status: 200 },
-      );
+      ),
+    );
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
     expect(quotedMessage).toBeDefined();
@@ -52,7 +56,9 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    await Effect.runPromise(handleLinkPreviewMessage(item));
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
+    );
     expect(quoted).toBe(false);
   });
 
@@ -72,7 +78,9 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    await Effect.runPromise(handleLinkPreviewMessage(item));
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
+    );
     expect(quoted).toBe(false);
   });
 
@@ -92,7 +100,9 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    await Effect.runPromise(handleLinkPreviewMessage(item));
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
+    );
     expect(quoted).toBe(false);
   });
 
@@ -114,13 +124,13 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const mockFetch = async () => {
+    const layer = makeTestHttpClient(() => {
       fetchCalled = true;
       return new Response("ok", { status: 200 });
-    };
+    });
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
     expect(fetchCalled).toBe(false);
     expect(quoted).toBe(false);
@@ -142,9 +152,11 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const mockFetch = async () => new Response("Not Found", { status: 404 });
+    const layer = makeTestHttpClient(
+      () => new Response("Not Found", { status: 404 }),
+    );
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
     expect(quoted).toBe(false);
   });
@@ -176,10 +188,10 @@ describe("handleLinkPreviewMessage", () => {
         <body>GitHub</body>
       </html>
     `;
-    const mockFetch = async () => new Response(githubHtml, { status: 200 });
+    const layer = makeTestHttpClient(() => new Response(githubHtml, { status: 200 }));
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
     expect(quotedMessage).toEqual([
@@ -218,15 +230,16 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const mockFetch = async () =>
+    const layer = makeTestHttpClient(() =>
       new Response(
         '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
         { status: 200 },
-      );
+      ),
+    );
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch).pipe(
-        Effect.provide(Logger.layer([testLogger])),
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(layer, Logger.layer([testLogger]))),
       ),
     );
 
@@ -267,10 +280,10 @@ describe("handleLinkPreviewMessage", () => {
         </body>
       </html>
     `;
-    const mockFetch = async () => new Response(hnHtml, { status: 200 });
+    const layer = makeTestHttpClient(() => new Response(hnHtml, { status: 200 }));
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
     expect(quotedMessage).toEqual({
@@ -302,14 +315,15 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const mockFetch = async () =>
+    const layer = makeTestHttpClient(() =>
       new Response(
         '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
         { status: 200 },
-      );
+      ),
+    );
 
     await Effect.runPromise(
-      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
     expect(quotesAttempted.length).toBe(2);

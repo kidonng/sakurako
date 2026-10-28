@@ -334,9 +334,10 @@ export function scrapeMetadata(
     });
 
     if (isPrivateHost(urlObj.hostname)) {
-      return yield* Effect.fail(
-        new BlockedHostError({ url, hostname: urlObj.hostname }),
-      );
+      return yield* new BlockedHostError({
+        url,
+        hostname: urlObj.hostname,
+      });
     }
 
     const request = HttpClientRequest.get(url).pipe(
@@ -360,14 +361,12 @@ export function scrapeMetadata(
         webRes._tag === "Some" && webRes.value.statusText
           ? webRes.value.statusText
           : undefined;
-      return yield* Effect.fail(
-        new HttpFetchError({
-          url,
-          status: response.status,
-          statusText,
-          detail: `HTTP status ${response.status}`,
-        }),
-      );
+      return yield* new HttpFetchError({
+        url,
+        status: response.status,
+        statusText,
+        detail: `HTTP status ${response.status}`,
+      });
     }
 
     const html = yield* response.text.pipe(
@@ -443,20 +442,24 @@ export function prepareOutgoingImage(
           webRes._tag === "Some" && webRes.value.statusText
             ? webRes.value.statusText
             : "";
-        return yield* Effect.fail(
-          new Error(
+        return yield* new DownloadImageAsBase64Error({
+          cause: new Error(
             `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
           ),
-        );
+        });
       }
       const buffer = yield* response.arrayBuffer;
       const base64 = Buffer.from(buffer).toString("base64");
       return `base64://${base64}` as string | undefined;
     }).pipe(
-      Effect.mapError((cause) => new DownloadImageAsBase64Error({ cause })),
-      Effect.catch((error) =>
+      Effect.catchTag("DownloadImageAsBase64Error", (error) =>
         Effect.logWarning(
           `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      ),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error)}`,
         ).pipe(Effect.as(undefined as string | undefined)),
       ),
     );
