@@ -15,7 +15,8 @@
     "metascraper": "^5.58.5",
     "metascraper-description": "^5.58.4",
     "metascraper-image": "^5.58.4",
-    "metascraper-title": "^5.58.4"
+    "metascraper-title": "^5.58.4",
+    "string-width": "^8.3.0"
   },
   "scripts": {
     "check": "tsc",

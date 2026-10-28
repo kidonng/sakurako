@@ -1,20 +1,17 @@
 import { describe, expect, it } from "bun:test"
-import { getCharacterWidth, getStringWidth, truncate } from "../src/TextWidth.ts"
+import { stringWidth, truncate } from "../src/TextWidth.ts"
 
 describe("TextWidth", () => {
-  it("calculates character width correctly", () => {
-    expect(getCharacterWidth("a")).toBe(1)
-    expect(getCharacterWidth("1")).toBe(1)
-    expect(getCharacterWidth("中")).toBe(2)
-    expect(getCharacterWidth("文")).toBe(2)
-    expect(getCharacterWidth("，")).toBe(2)
-    expect(getCharacterWidth("🌸")).toBe(2)
-  })
-
-  it("calculates string width correctly", () => {
-    expect(getStringWidth("hello")).toBe(5)
-    expect(getStringWidth("你好")).toBe(4)
-    expect(getStringWidth("hello 你好")).toBe(10)
+  it("calculates string width correctly with string-width", () => {
+    expect(stringWidth("a")).toBe(1)
+    expect(stringWidth("1")).toBe(1)
+    expect(stringWidth("中")).toBe(2)
+    expect(stringWidth("文")).toBe(2)
+    expect(stringWidth("，")).toBe(2)
+    expect(stringWidth("🌸")).toBe(2)
+    expect(stringWidth("hello")).toBe(5)
+    expect(stringWidth("你好")).toBe(4)
+    expect(stringWidth("hello 你好")).toBe(10)
   })
 
   it("returns original text if width <= maxWidth", () => {
@@ -25,7 +22,7 @@ describe("TextWidth", () => {
   it("truncates long ASCII text to <= maxWidth with ellipsis", () => {
     const text = "a".repeat(120)
     const result = truncate(text, 100)
-    expect(getStringWidth(result)).toBeLessThanOrEqual(100)
+    expect(stringWidth(result)).toBeLessThanOrEqual(100)
     expect(result.endsWith("...")).toBe(true)
     expect(result).toBe("a".repeat(97) + "...")
   })
@@ -33,7 +30,7 @@ describe("TextWidth", () => {
   it("truncates long CJK text to <= maxWidth with ellipsis", () => {
     const text = "中".repeat(60) // 120 width
     const result = truncate(text, 100)
-    expect(getStringWidth(result)).toBeLessThanOrEqual(100)
+    expect(stringWidth(result)).toBeLessThanOrEqual(100)
     expect(result.endsWith("...")).toBe(true)
     // 97 max content width: 48 CJK chars = 96 width, + "..." (3 width) = 99 <= 100
     expect(result).toBe("中".repeat(48) + "...")
@@ -44,7 +41,7 @@ describe("TextWidth", () => {
     // With 3-char ellipsis (width 3), 96 + 3 = 99 <= 100; but adding CJK would be 96 + 2 + 3 = 101 > 100
     const text = "a".repeat(96) + "中" + "b".repeat(20)
     const result = truncate(text, 100)
-    expect(getStringWidth(result)).toBeLessThanOrEqual(100)
+    expect(stringWidth(result)).toBeLessThanOrEqual(100)
     expect(result).toBe("a".repeat(96) + "...")
   })
 })
