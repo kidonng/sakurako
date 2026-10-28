@@ -287,7 +287,7 @@ describe("LinkPreviewEngine", () => {
     expect(second?._tag).toBe("Failure");
     if (second?._tag === "Failure") {
       expect(second.url).toBe("https://fail.com");
-      expect(second.reason).toContain("HTTP 500");
+      expect(second.error.message).toContain("HTTP 500");
     }
   });
 

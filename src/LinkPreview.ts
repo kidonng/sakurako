@@ -67,10 +67,54 @@ export interface PageMetadata {
   readonly image?: string;
 }
 
+export class InvalidUrlError extends Data.TaggedError("InvalidUrlError")<{
+  readonly url: string;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `Invalid URL: ${String(this.cause)}`;
+  }
+}
+
+export class BlockedHostError extends Data.TaggedError("BlockedHostError")<{
+  readonly url: string;
+  readonly hostname: string;
+}> {
+  override readonly message = "Blocked private or local address";
+}
+
+export class HttpFetchError extends Data.TaggedError("HttpFetchError")<{
+  readonly url: string;
+  readonly status?: number;
+  readonly statusText?: string;
+  readonly detail: string;
+}> {
+  override get message(): string {
+    if (this.status !== undefined) {
+      return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
+    }
+    return `Network error: ${this.detail}`;
+  }
+}
+
+export class ParseMetadataError extends Data.TaggedError("ParseMetadataError")<{
+  readonly url: string;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `Failed to parse metadata: ${String(this.cause)}`;
+  }
+}
+
+export type ScrapeMetadataError =
+  | InvalidUrlError
+  | BlockedHostError
+  | HttpFetchError
+  | ParseMetadataError;
+
 export type ScrapingResult =
   | { readonly _tag: "Success"; readonly data: PageMetadata }
-  | { readonly _tag: "Failure"; readonly url: string; readonly reason: string };
-
+  | { readonly _tag: "Failure"; readonly url: string; readonly error: ScrapeMetadataError };
 export interface FormattedPreview {
   readonly text: string;
   readonly image?: string;
@@ -177,7 +221,7 @@ export function formatPreview(
   results.forEach((item, index) => {
     const num = index + 1;
     if (item._tag === "Failure") {
-      blocks.push(`${num}. [提取失败：${item.reason}]`);
+      blocks.push(`${num}. [提取失败：${item.error.message}]`);
     } else {
       const data = item.data;
       const customizer = findSiteCustomizer(data.url);
@@ -395,7 +439,7 @@ export function scrapeAll(
         onFailure: (reason): ScrapingResult => ({
           _tag: "Failure",
           url,
-          reason,
+          error: new HttpFetchError({ url, detail: reason }),
         }),
         onSuccess: (data): ScrapingResult => ({ _tag: "Success", data }),
       }),

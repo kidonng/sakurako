@@ -1,11 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import { formatPreview, type ScrapingResult } from "../src/LinkPreview.ts";
+import {
+  BlockedHostError,
+  formatPreview,
+  HttpFetchError,
+  type ScrapingResult,
+} from "../src/LinkPreview.ts";
 
 describe("formatPreview", () => {
   it("returns null when all results are failures", () => {
     const results: ScrapingResult[] = [
-      { _tag: "Failure", url: "https://a.com", reason: "HTTP 404" },
-      { _tag: "Failure", url: "https://b.com", reason: "Timeout" },
+      {
+        _tag: "Failure",
+        url: "https://a.com",
+        error: new HttpFetchError({ url: "https://a.com", status: 404, statusText: "Not Found", detail: "HTTP status 404" }),
+      },
+      {
+        _tag: "Failure",
+        url: "https://b.com",
+        error: new HttpFetchError({ url: "https://b.com", detail: "Timeout" }),
+      },
     ];
     expect(formatPreview(results)).toBeNull();
   });
@@ -96,7 +109,11 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://fail.com",
-        reason: "HTTP 404",
+        error: new HttpFetchError({
+          url: "https://fail.com",
+          status: 404,
+          detail: "HTTP status 404",
+        }),
       },
       {
         _tag: "Success",
@@ -112,6 +129,36 @@ describe("formatPreview", () => {
       text: "1. [提取失败：HTTP 404]\n2. Success Title",
       image: "https://has-img.com/img.png",
     });
+  });
+  it("formats multiple URLs with mixed successes and failures using TaggedError message", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: { url: "https://success.com", title: "Success Title" },
+      },
+      {
+        _tag: "Failure",
+        url: "https://fail.com",
+        error: new HttpFetchError({
+          url: "https://fail.com",
+          status: 404,
+          statusText: "Not Found",
+          detail: "HTTP status 404",
+        }),
+      },
+      {
+        _tag: "Failure",
+        url: "http://127.0.0.1",
+        error: new BlockedHostError({
+          url: "http://127.0.0.1",
+          hostname: "127.0.0.1",
+        }),
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.text).toBe(
+      "1. Success Title\n2. [提取失败：HTTP 404 Not Found]\n3. [提取失败：Blocked private or local address]",
+    );
   });
 
   it("truncates long titles and descriptions in multi-link output", () => {
