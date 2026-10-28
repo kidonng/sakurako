@@ -1,9 +1,12 @@
+import { segments } from "@snowluma/sdk/messages"
+import type { OutgoingMessage } from "@snowluma/sdk/types"
 import { Effect } from "effect"
 import getUrls from "get-urls"
 import createMetascraper from "metascraper"
 import metascraperDescription from "metascraper-description"
 import metascraperImage from "metascraper-image"
 import metascraperTitle from "metascraper-title"
+import type { IncomingMessage } from "./SnowLuma.ts"
 import { truncate } from "./TextWidth.ts"
 
 const scraper = createMetascraper([
@@ -150,4 +153,49 @@ export function scrapeAll(
     )
   )
   return Effect.all(effects, { concurrency: "unbounded" })
+}
+
+export function handleLinkPreviewMessage(
+  item: IncomingMessage,
+  fetchFn?: typeof fetch
+): Effect.Effect<void, never> {
+  const { event } = item
+  if (
+    event.post_type === "message_sent" ||
+    event.user_id === event.self_id ||
+    !event.raw_message
+  ) {
+    return Effect.void
+  }
+
+  const urls = extractUrls(event.raw_message)
+  if (urls.length === 0) {
+    return Effect.void
+  }
+
+  return Effect.gen(function*() {
+    yield* Effect.logInfo(
+      `Found ${urls.length} URL(s) in message from user ${event.user_id}, scraping preview...`
+    )
+    const results = yield* scrapeAll(urls, fetchFn)
+    const formatted = formatPreview(results)
+    if (!formatted) {
+      yield* Effect.logInfo("All URL scrapes failed or produced no preview, remaining silent.")
+      return
+    }
+
+    const outgoing: OutgoingMessage = formatted.image
+      ? [
+          segments.text(formatted.text + (formatted.text ? "\n" : "")),
+          segments.image(formatted.image)
+        ]
+      : segments.text(formatted.text)
+
+    yield* Effect.tryPromise(() => item.context.quote(outgoing))
+    yield* Effect.logInfo("Link preview quote reply sent.")
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logError(`Failed to send link preview reply: ${String(error)}`)
+    )
+  )
 }
