@@ -102,8 +102,7 @@ export function handleSauceMessage(
     }
 
     const imgData = imageSegment.data as
-      | { url?: unknown; file?: unknown }
-      | undefined;
+      { url?: unknown; file?: unknown } | undefined;
     const imageUrl =
       typeof imgData?.url === "string" && imgData.url.length > 0
         ? imgData.url

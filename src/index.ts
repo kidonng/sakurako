@@ -3,6 +3,7 @@ import { Effect, Layer, Stream } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
+import { handleSauceMessage } from "./features/sauce/Sauce.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
 
 const MainProgram = Effect.gen(function* () {
@@ -11,7 +12,11 @@ const MainProgram = Effect.gen(function* () {
   yield* messages.pipe(
     Stream.runForEach((item) =>
       Effect.all(
-        [handleIncomingMessage(item), handleLinkPreviewMessage(item)],
+        [
+          handleIncomingMessage(item),
+          handleLinkPreviewMessage(item),
+          handleSauceMessage(item),
+        ],
         {
           concurrency: "unbounded",
         },

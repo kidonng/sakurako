@@ -134,9 +134,9 @@ export function searchSauce(
 
     const request = HttpClientRequest.get(requestUrl.toString());
 
-    const response = yield* client.execute(request).pipe(
-      Effect.mapError((cause) => new SauceNaoError({ cause })),
-    );
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
 
     if (response.status < 200 || response.status >= 300) {
       return yield* new SauceNaoError({
