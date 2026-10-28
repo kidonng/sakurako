@@ -95,9 +95,12 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe(
-      "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
-    );
+    expect(replies[0]).toEqual({
+      type: "text",
+      data: {
+        text: "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
+      },
+    });
   });
 
   it("extracts and searches the first image when quoted message has multiple images", async () => {
@@ -158,7 +161,12 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toContain("Test Art");
+    expect(replies[0]).toEqual({
+      type: "text",
+      data: {
+        text: "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
+      },
+    });
   });
 
   it("quotes reply with notice when message is /sauce without a quote reply", async () => {
@@ -332,5 +340,54 @@ describe("handleSauceMessage", () => {
     );
 
     expect(getQuotedReplies().length).toBe(0);
+  });
+
+  it("quotes reply as a text segment preventing raw CQ code injection", async () => {
+    const cpHackResponse = {
+      header: {
+        status: 0,
+        minimum_similarity: 60.0,
+      },
+      results: [
+        {
+          header: {
+            similarity: "99.00",
+          },
+          data: {
+            title: "[CQ:at,qq=all] Dangerous Title",
+            ext_urls: ["https://example.com/pic"],
+          },
+        },
+      ],
+    };
+
+    const httpLayer = makeTestHttpClient(() => Response.json(cpHackResponse));
+
+    const { item, getQuotedReplies } = createMockItem({
+      raw_message: "[CQ:reply,id=12345] /sauce",
+      getMessageResponse: {
+        message: [
+          {
+            type: "image",
+            data: {
+              url: "https://example.com/pic.jpg",
+            },
+          },
+        ],
+      },
+    });
+
+    await Effect.runPromise(
+      handleSauceMessage(item).pipe(Effect.provide(httpLayer)),
+    );
+
+    const replies = getQuotedReplies();
+    expect(replies.length).toBe(1);
+    expect(replies[0]).toEqual({
+      type: "text",
+      data: {
+        text: "[CQ:at,qq=all] Dangerous Title\nhttps://example.com/pic",
+      },
+    });
   });
 });

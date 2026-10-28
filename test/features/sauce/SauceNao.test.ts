@@ -231,4 +231,26 @@ describe("searchSauce", () => {
       "url=" + encodeURIComponent("https://example.com/pic.png"),
     );
   });
+
+  it("fails with SauceNaoError when request times out", async () => {
+    const layer = makeTestHttpClient(() => {
+      const stream = new ReadableStream({
+        start() {
+          // Intentionally stalls without emitting data
+        },
+      });
+      return new Response(stream, { status: 200 });
+    });
+
+    const error = await Effect.runPromise(
+      searchSauce(
+        "https://example.com/stalled.jpg",
+        undefined,
+        "50 millis",
+      ).pipe(Effect.provide(layer), Effect.flip),
+    );
+
+    expect(error).toBeInstanceOf(SauceNaoError);
+    expect(error.message).toContain("timed out");
+  });
 });

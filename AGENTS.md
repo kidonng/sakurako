@@ -8,6 +8,7 @@ Key features include:
 
 - **Echo Bot**: Matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"`.
 - **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, applies site-specific custom displays (e.g. GitHub, Hacker News), truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
+- **Image Sauce**: Matches incoming messages strictly equaling `"/sauce"` replying to an image, queries SauceNao API, and replies with work title, author, and source link.
 
 ## Architecture & Data Flow
 
@@ -25,21 +26,21 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 [Message Stream] (Stream.Stream<IncomingMessage>)
        │
        ▼ Stream.runForEach (concurrent dispatch)
-  ┌────┴───────────────────────────┐
-  ▼                                ▼
-[EchoBot]                      [LinkPreview]
-(src/EchoBot.ts)               (src/LinkPreview.ts)
-  - Match: === "喵喵喵"           - Extract: get-urls
-  - Reply: context.reply         - Scrape: metascraper
-                                 - Format: single/multi preview
-                                 - Reply: context.quote
-       │                           │
-       └─────────────┬─────────────┘
-                     ▼
+  ┌────┴───────────────────────────┬───────────────────────────────┐
+  ▼                                ▼                               ▼
+[EchoBot]                      [LinkPreview]                   [Sauce]
+(src/features/echo/EchoBot.ts)  (src/features/link-preview/     (src/features/sauce/
+  - Match: === "喵喵喵"            LinkPreview.ts)                 Sauce.ts)
+  - Reply: context.reply         - Extract: get-urls             - Match: === "/sauce"
+                                 - Scrape: metascraper           - Query: SauceNao API
+                                 - Reply: context.quote          - Reply: context.quote
+       │                           │                               │
+       └───────────────────────────┼───────────────────────────────┘
+                                   ▼
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
-- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL` and `SNOWLUMA_ACCESS_TOKEN` using Effect's `Config` module.
+- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket message callbacks offer items to an unbounded `Queue`, exposed downstream as a typed `Stream`.
 - **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot` and `LinkPreview`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
@@ -92,14 +93,16 @@ All development tasks use Bun:
 
 ## Important Files
 
-- `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage` and `handleLinkPreviewMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
-- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL` and `SNOWLUMA_ACCESS_TOKEN` (`Redacted`).
+- `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage`, `handleLinkPreviewMessage`, and `handleSauceMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
+- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), and optional `SAUCENAO_API_KEY` (`Redacted`).
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
-- `src/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
-- `src/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
-- `src/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
+- `src/features/echo/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
+- `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
+- `src/features/link-preview/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
+- `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
+- `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
+- `src/utils/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `test/TestHttpClient.ts`: Test layer helper (`makeTestHttpClient`) bridging mock responses into `HttpClient.HttpClient`.
-- `src/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `.env.example`: Public template for environment configuration.
 - `package.json` & `tsconfig.json`: Project setup configured for TypeScript 7, Bundler module resolution, and tsgo.
 - `.oxlintrc.json`: Oxlint configuration extending `@effect/tsgo/oxlint-presets/recommended.json`.

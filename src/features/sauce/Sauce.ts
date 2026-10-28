@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { parseSegments } from "@snowluma/sdk/messages";
+import { parseSegments, segments } from "@snowluma/sdk/messages";
 import type { AnyMessageSegment } from "@snowluma/sdk/types";
 import { Effect } from "effect";
 import { HttpClient } from "effect/http";
@@ -133,7 +133,9 @@ export function handleSauceMessage(
       return;
     }
 
-    yield* Effect.tryPromise(() => item.context.quote(result.formattedText));
+    yield* Effect.tryPromise(() =>
+      item.context.quote(segments.text(result.formattedText)),
+    );
     yield* Effect.logInfo("Sauce reply sent successfully.");
   }).pipe(
     Effect.catch((error) =>

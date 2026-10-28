@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Data, Effect, Redacted } from "effect";
+import { Data, type Duration, Effect, Redacted } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
 export interface SauceResult {
@@ -12,7 +12,11 @@ export interface SauceResult {
 
 export class SauceNaoError extends Data.TaggedError("SauceNaoError")<{
   readonly cause: unknown;
-}> {}
+}> {
+  override get message(): string {
+    return `SauceNaoError: ${String(this.cause)}`;
+  }
+}
 
 interface SauceNaoHeader {
   readonly status?: number;
@@ -118,6 +122,7 @@ function extractUrl(data: SauceNaoItemData | undefined): string | undefined {
 export function searchSauce(
   imageUrl: string,
   apiKey?: Redacted.Redacted<string>,
+  timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.Effect<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
@@ -134,20 +139,33 @@ export function searchSauce(
 
     const request = HttpClientRequest.get(requestUrl.toString());
 
-    const response = yield* client
-      .execute(request)
-      .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
+    const executeAndRead = Effect.gen(function* () {
+      const response = yield* client
+        .execute(request)
+        .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
 
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new SauceNaoError({
-        cause: `SauceNao HTTP returned status ${response.status}`,
-      });
-    }
+      if (response.status < 200 || response.status >= 300) {
+        return yield* new SauceNaoError({
+          cause: `SauceNao HTTP returned status ${response.status}`,
+        });
+      }
 
-    const json = (yield* response.json.pipe(
-      Effect.mapError((cause) => new SauceNaoError({ cause })),
-    )) as SauceNaoResponse;
+      const json = (yield* response.json.pipe(
+        Effect.mapError((cause) => new SauceNaoError({ cause })),
+      )) as SauceNaoResponse;
 
+      return json;
+    });
+
+    const json = yield* executeAndRead.pipe(
+      Effect.timeoutOrElse({
+        duration: timeoutDuration,
+        orElse: () =>
+          new SauceNaoError({
+            cause: "SauceNao request timed out",
+          }),
+      }),
+    );
     const status = json.header?.status ?? 0;
     if (status !== 0) {
       return yield* new SauceNaoError({
