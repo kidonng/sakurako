@@ -17,13 +17,6 @@ import {
 import type { IncomingMessage } from "./SnowLuma.ts";
 import { truncate } from "./TextWidth.ts";
 
-const scraper = createMetascraper([
-  siteMetascraperPlugin(),
-  metascraperTitle(),
-  metascraperDescription(),
-  metascraperImage(),
-]);
-
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
 
 export function extractFirstParagraph(
@@ -49,13 +42,21 @@ export function extractFirstParagraph(
   );
 }
 
-export function firstParagraphPlugin(): () => createMetascraper.Rules {
-  return () => ({
+export function firstParagraphPlugin(): createMetascraper.Rules {
+  return {
     description: [
       ({ htmlDom }: MetascraperRuleContext) => extractFirstParagraph(htmlDom),
     ],
-  });
+  };
 }
+
+const scraper = createMetascraper([
+  siteMetascraperPlugin(),
+  metascraperTitle(),
+  metascraperDescription(),
+  firstParagraphPlugin(),
+  metascraperImage(),
+]);
 
 export interface PageMetadata {
   readonly url: string;

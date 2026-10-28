@@ -141,6 +141,57 @@ describe("LinkPreviewEngine", () => {
     expect(result.image).toBeUndefined();
   });
 
+  it("falls back to first paragraph when description metadata is missing", async () => {
+    const mockHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>No Description Page</title></head>
+        <body>
+          <nav><p>Menu</p></nav>
+          <article>
+            <p>This is the first real paragraph of the page content.</p>
+          </article>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(mockHtml, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://example.com/no-desc",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.title).toBe("No Description Page");
+    expect(result.description).toBe(
+      "This is the first real paragraph of the page content.",
+    );
+  });
+
+  it("prefers meta description over first paragraph fallback", async () => {
+    const mockHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Meta Priority</title>
+          <meta name="description" content="Official meta description">
+        </head>
+        <body>
+          <main><p>Body paragraph content.</p></main>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(mockHtml, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://example.com/meta-priority",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.description).toBe("Official meta description");
+  });
+
   it("fails when HTTP status is not 200", async () => {
     const mockFetch = async () =>
       new Response("Not Found", { status: 404, statusText: "Not Found" });
