@@ -194,9 +194,13 @@ function trimTrailingUrlPunctuation(url: string): string {
   }
 }
 
+function stripCqCodes(text: string): string {
+  return text.replace(/\[CQ:[^\]]+\]/g, " ");
+}
+
 export function extractUrls(text: string): ReadonlyArray<string> {
   const urls = new Set<string>();
-  for (const url of getUrls(text, {
+  for (const url of getUrls(stripCqCodes(text), {
     requireSchemeOrWww: true,
     stripWWW: false,
   })) {

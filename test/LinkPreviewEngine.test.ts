@@ -35,6 +35,24 @@ describe("LinkPreviewEngine", () => {
     expect(urls).toEqual([]);
   });
 
+  it("ignores URLs embedded inside CQ codes (image, record, video, json, etc.)", () => {
+    const text =
+      "[CQ:image,file=0D09E17787BF2D57986E4271AA599A6D.jpg,url=https://multimedia.nt.qq.com.cn/download?appid=1407&amp;fileid=test]";
+    expect(extractUrls(text)).toEqual([]);
+
+    const multiCq =
+      "[CQ:image,url=https://example.com/pic.jpg][CQ:video,url=https://example.com/video.mp4]";
+    expect(extractUrls(multiCq)).toEqual([]);
+  });
+
+  it("extracts URLs from messages containing both CQ codes and plain text URLs", () => {
+    const text =
+      "[CQ:reply,id=-1804965225] https://news.ycombinator.com/item?id=50261319 [CQ:image,file=test.jpg,url=https://example.com/ignore.png]";
+    expect(extractUrls(text)).toEqual([
+      "https://news.ycombinator.com/item?id=50261319",
+    ]);
+  });
+
   it("scrapes metadata from HTML successfully", async () => {
     const mockHtml = `
       <!DOCTYPE html>

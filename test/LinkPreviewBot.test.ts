@@ -96,6 +96,36 @@ describe("handleLinkPreviewMessage", () => {
     expect(quoted).toBe(false);
   });
 
+  it("ignores messages that only contain CQ image codes with URLs", async () => {
+    let fetchCalled = false;
+    let quoted = false;
+    const item: IncomingMessage = {
+      event: {
+        raw_message:
+          "[CQ:image,file=0D09E17787BF2D57986E4271AA599A6D.jpg,url=https://multimedia.nt.qq.com.cn/download?appid=1407&amp;fileid=test]",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async () => {
+          quoted = true;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const mockFetch = async () => {
+      fetchCalled = true;
+      return new Response("ok", { status: 200 });
+    };
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+    );
+    expect(fetchCalled).toBe(false);
+    expect(quoted).toBe(false);
+  });
+
   it("remains silent when all links fail to scrape", async () => {
     let quoted = false;
     const item: IncomingMessage = {
