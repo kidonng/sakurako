@@ -12,6 +12,7 @@
     "@snowluma/sdk": "^2.2.1",
     "effect": "^4.0.6",
     "get-urls": "^12.1.0",
+    "ip-address": "^10.7.5",
     "metascraper": "^5.58.5",
     "metascraper-description": "^5.58.4",
     "metascraper-image": "^5.58.4",

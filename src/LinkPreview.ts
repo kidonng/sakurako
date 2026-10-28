@@ -2,6 +2,7 @@ import { segments } from "@snowluma/sdk/messages"
 import type { OutgoingMessage } from "@snowluma/sdk/types"
 import { Effect } from "effect"
 import getUrls from "get-urls"
+import { Address4, Address6 } from "ip-address"
 import createMetascraper from "metascraper"
 import metascraperDescription from "metascraper-description"
 import metascraperImage from "metascraper-image"
@@ -122,20 +123,13 @@ export function isPrivateHost(hostname: string): boolean {
     return true
   }
 
-  const ipv4Parts = lower.split(".").map(Number)
-  if (ipv4Parts.length === 4 && ipv4Parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
-    const b0 = ipv4Parts[0]
-    const b1 = ipv4Parts[1]
-    if (b0 === 0) return true
-    if (b0 === 127) return true
-    if (b0 === 10) return true
-    if (b0 === 172 && (b1 ?? 0) >= 16 && (b1 ?? 0) <= 31) return true
-    if (b0 === 192 && b1 === 168) return true
-    if (b0 === 169 && b1 === 254) return true
+  if (Address4.isValid(lower)) {
+    return !new Address4(lower).isGlobal()
   }
 
-  if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true
-  if (lower.startsWith("fe80:") || lower.startsWith("fc00:") || lower.startsWith("fd00:")) return true
+  if (Address6.isValid(lower)) {
+    return !new Address6(lower).isGlobal()
+  }
 
   return false
 }

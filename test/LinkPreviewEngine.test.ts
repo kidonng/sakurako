@@ -78,6 +78,10 @@ describe("LinkPreviewEngine", () => {
     const programPrivate = scrapeMetadata("http://192.168.1.1/admin")
     const errorPrivate = await Effect.runPromise(programPrivate.pipe(Effect.flip))
     expect(errorPrivate).toContain("Blocked private or local address")
+
+    const programIpv6 = scrapeMetadata("http://[::1]:8080")
+    const errorIpv6 = await Effect.runPromise(programIpv6.pipe(Effect.flip))
+    expect(errorIpv6).toContain("Blocked private or local address")
   })
 
 
