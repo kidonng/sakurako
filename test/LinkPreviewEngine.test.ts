@@ -20,6 +20,12 @@ describe("LinkPreviewEngine", () => {
     const urls = extractUrls(text)
     expect(urls).toEqual(["https://example.com", "https://test.org"])
   })
+  it("ignores scheme-less tokens such as filenames, e-mails, and bare domains", () => {
+    const text = "Email me at kid@example.com or read README.md and check config.sh or example.com"
+    const urls = extractUrls(text)
+    expect(urls).toEqual([])
+  })
+
 
   it("scrapes metadata from HTML successfully", async () => {
     const mockHtml = `
@@ -60,6 +66,20 @@ describe("LinkPreviewEngine", () => {
 
     expect(error).toContain("HTTP 404")
   })
+  it("blocks SSRF attempts on localhost and private IP addresses", async () => {
+    const programLocalhost = scrapeMetadata("http://localhost:3000")
+    const errorLocalhost = await Effect.runPromise(programLocalhost.pipe(Effect.flip))
+    expect(errorLocalhost).toContain("Blocked private or local address")
+
+    const programIp = scrapeMetadata("http://127.0.0.1:8080/secret")
+    const errorIp = await Effect.runPromise(programIp.pipe(Effect.flip))
+    expect(errorIp).toContain("Blocked private or local address")
+
+    const programPrivate = scrapeMetadata("http://192.168.1.1/admin")
+    const errorPrivate = await Effect.runPromise(programPrivate.pipe(Effect.flip))
+    expect(errorPrivate).toContain("Blocked private or local address")
+  })
+
 
   it("scrapeAll aggregates successes and failures concurrently", async () => {
     const mockFetch = async (input: unknown) => {

@@ -85,15 +85,59 @@ export function formatPreview(
   }
 }
 
+function trimTrailingUrlPunctuation(url: string): string {
+  let cleaned = url
+  while (true) {
+    const stripped = cleaned.replace(/[.,;!?]+$/, "")
+    const balanced =
+      (stripped.match(/\(/g)?.length ?? 0) >= (stripped.match(/\)/g)?.length ?? 0) &&
+      (stripped.match(/\[/g)?.length ?? 0) >= (stripped.match(/\]/g)?.length ?? 0)
+    const next = balanced ? stripped : stripped.replace(/[)\]]$/, "")
+    if (next === cleaned) {
+      return cleaned
+    }
+    cleaned = next
+  }
+}
+
 export function extractUrls(text: string): ReadonlyArray<string> {
-  const urlSet = getUrls(text, { stripWWW: false })
-  const result: string[] = []
-  for (const url of urlSet) {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      result.push(url)
+  const urls = new Set<string>()
+  for (const url of getUrls(text, { requireSchemeOrWww: true, stripWWW: false })) {
+    const cleaned = trimTrailingUrlPunctuation(url)
+    if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
+      urls.add(cleaned)
     }
   }
-  return result
+  return [...urls]
+}
+
+export function isPrivateHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (
+    lower === "localhost" ||
+    lower.endsWith(".localhost") ||
+    lower.endsWith(".local") ||
+    lower.endsWith(".internal")
+  ) {
+    return true
+  }
+
+  const ipv4Parts = lower.split(".").map(Number)
+  if (ipv4Parts.length === 4 && ipv4Parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
+    const b0 = ipv4Parts[0]
+    const b1 = ipv4Parts[1]
+    if (b0 === 0) return true
+    if (b0 === 127) return true
+    if (b0 === 10) return true
+    if (b0 === 172 && (b1 ?? 0) >= 16 && (b1 ?? 0) <= 31) return true
+    if (b0 === 192 && b1 === 168) return true
+    if (b0 === 169 && b1 === 254) return true
+  }
+
+  if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true
+  if (lower.startsWith("fe80:") || lower.startsWith("fc00:") || lower.startsWith("fd00:")) return true
+
+  return false
 }
 
 export function scrapeMetadata(
@@ -101,6 +145,15 @@ export function scrapeMetadata(
   fetchFn: typeof fetch = fetch
 ): Effect.Effect<PageMetadata, string> {
   return Effect.gen(function*() {
+    const urlObj = yield* Effect.try({
+      try: () => new URL(url),
+      catch: (e) => `Invalid URL: ${String(e)}`
+    })
+
+    if (isPrivateHost(urlObj.hostname)) {
+      return yield* Effect.fail("Blocked private or local address")
+    }
+
     const response = yield* Effect.tryPromise({
       try: () =>
         fetchFn(url, {
