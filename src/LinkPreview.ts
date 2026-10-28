@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Data, Effect } from "effect";
+import { Data, type Duration, Effect } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -324,6 +324,7 @@ export function isPrivateHost(hostname: string): boolean {
 
 export function scrapeMetadata(
   url: string,
+  timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.Effect<PageMetadata, ScrapeMetadataError, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
@@ -343,43 +344,38 @@ export function scrapeMetadata(
     const request = HttpClientRequest.get(url).pipe(
       HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
     );
-
-    const response = yield* client.execute(request).pipe(
-      Effect.timeout("10 seconds"),
-      Effect.mapError(
-        (error) =>
-          new HttpFetchError({
-            url,
-            detail: error.message,
-          }),
+    const { html, targetUrl } = yield* Effect.gen(function* () {
+      const response = yield* client.execute(request);
+      if (response.status < 200 || response.status >= 300) {
+        const webRes = HttpClientResponse.toWeb(response);
+        const statusText =
+          webRes._tag === "Some" && webRes.value.statusText
+            ? webRes.value.statusText
+            : undefined;
+        if (webRes._tag === "Some") {
+          void webRes.value.body?.cancel().catch(() => {});
+        }
+        return yield* new HttpFetchError({
+          url,
+          status: response.status,
+          statusText,
+          detail: `HTTP status ${response.status}`,
+        });
+      }
+      const html = yield* response.text;
+      const targetUrl = response.url || url;
+      return { html, targetUrl };
+    }).pipe(
+      Effect.timeout(timeoutDuration),
+      Effect.mapError((error) =>
+        error._tag === "HttpFetchError"
+          ? error
+          : new HttpFetchError({
+              url,
+              detail: error.message,
+            }),
       ),
     );
-
-    if (response.status < 200 || response.status >= 300) {
-      const webRes = HttpClientResponse.toWeb(response);
-      const statusText =
-        webRes._tag === "Some" && webRes.value.statusText
-          ? webRes.value.statusText
-          : undefined;
-      return yield* new HttpFetchError({
-        url,
-        status: response.status,
-        statusText,
-        detail: `HTTP status ${response.status}`,
-      });
-    }
-
-    const html = yield* response.text.pipe(
-      Effect.mapError(
-        (error) =>
-          new HttpFetchError({
-            url,
-            detail: `Failed to read response body: ${error.message}`,
-          }),
-      ),
-    );
-
-    const targetUrl = response.url || url;
     const metadata = yield* Effect.tryPromise({
       try: () => scraper({ html, url: targetUrl }),
       catch: (cause) => new ParseMetadataError({ url, cause }),
@@ -401,6 +397,7 @@ export function scrapeMetadata(
 
 export function prepareOutgoingImage(
   imageUrl: string,
+  timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const urlObj = yield* Effect.try({
@@ -433,15 +430,16 @@ export function prepareOutgoingImage(
     );
 
     const downloadEffect = Effect.gen(function* () {
-      const response = yield* client.execute(request).pipe(
-        Effect.timeout("10 seconds"),
-      );
+      const response = yield* client.execute(request);
       if (response.status < 200 || response.status >= 300) {
         const webRes = HttpClientResponse.toWeb(response);
         const statusText =
           webRes._tag === "Some" && webRes.value.statusText
             ? webRes.value.statusText
             : "";
+        if (webRes._tag === "Some") {
+          void webRes.value.body?.cancel().catch(() => {});
+        }
         return yield* new DownloadImageAsBase64Error({
           cause: new Error(
             `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
@@ -452,6 +450,7 @@ export function prepareOutgoingImage(
       const base64 = Buffer.from(buffer).toString("base64");
       return `base64://${base64}` as string | undefined;
     }).pipe(
+      Effect.timeout(timeoutDuration),
       Effect.catchTag("DownloadImageAsBase64Error", (error) =>
         Effect.logWarning(
           `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
