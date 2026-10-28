@@ -26,11 +26,12 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const layer = makeTestHttpClient(() =>
-      new Response(
-        '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
-        { status: 200 },
-      ),
+    const layer = makeTestHttpClient(
+      () =>
+        new Response(
+          '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
+          { status: 200 },
+        ),
     );
 
     await Effect.runPromise(
@@ -188,7 +189,9 @@ describe("handleLinkPreviewMessage", () => {
         <body>GitHub</body>
       </html>
     `;
-    const layer = makeTestHttpClient(() => new Response(githubHtml, { status: 200 }));
+    const layer = makeTestHttpClient(
+      () => new Response(githubHtml, { status: 200 }),
+    );
 
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
@@ -230,11 +233,12 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const layer = makeTestHttpClient(() =>
-      new Response(
-        '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
-        { status: 200 },
-      ),
+    const layer = makeTestHttpClient(
+      () =>
+        new Response(
+          '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
+          { status: 200 },
+        ),
     );
 
     await Effect.runPromise(
@@ -280,7 +284,9 @@ describe("handleLinkPreviewMessage", () => {
         </body>
       </html>
     `;
-    const layer = makeTestHttpClient(() => new Response(hnHtml, { status: 200 }));
+    const layer = makeTestHttpClient(
+      () => new Response(hnHtml, { status: 200 }),
+    );
 
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
@@ -289,7 +295,7 @@ describe("handleLinkPreviewMessage", () => {
     expect(quotedMessage).toEqual({
       type: "text",
       data: {
-        text: "Genie 4 | Hacker News\nhttps://deepmind.google/blog/genie-4",
+        text: "Genie 4 | Hacker News\n> https://deepmind.google/blog/genie-4",
       },
     });
   });
@@ -315,11 +321,12 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const layer = makeTestHttpClient(() =>
-      new Response(
-        '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
-        { status: 200 },
-      ),
+    const layer = makeTestHttpClient(
+      () =>
+        new Response(
+          '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
+          { status: 200 },
+        ),
     );
 
     await Effect.runPromise(

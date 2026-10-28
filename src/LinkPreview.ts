@@ -2,11 +2,7 @@
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
 import { Data, type Duration, Effect } from "effect";
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "effect/http";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
 import createMetascraper from "metascraper";
@@ -44,10 +40,7 @@ export function extractFirstParagraph(
     return undefined;
   };
 
-  return (
-    findIn("article p, main p, [role=\"main\"] p") ??
-    findIn("p")
-  );
+  return findIn('article p, main p, [role="main"] p') ?? findIn("p");
 }
 
 export function firstParagraphPlugin(): createMetascraper.Rules {
@@ -113,14 +106,15 @@ export class ParseMetadataError extends Data.TaggedError("ParseMetadataError")<{
 }
 
 export type ScrapeMetadataError =
-  | InvalidUrlError
-  | BlockedHostError
-  | HttpFetchError
-  | ParseMetadataError;
+  InvalidUrlError | BlockedHostError | HttpFetchError | ParseMetadataError;
 
 export type ScrapingResult =
   | { readonly _tag: "Success"; readonly data: PageMetadata }
-  | { readonly _tag: "Failure"; readonly url: string; readonly error: ScrapeMetadataError };
+  | {
+      readonly _tag: "Failure";
+      readonly url: string;
+      readonly error: ScrapeMetadataError;
+    };
 export interface FormattedPreview {
   readonly text: string;
   readonly image?: string;
@@ -203,7 +197,7 @@ export function formatPreview(
     if (!options?.hideDescription) {
       const rawDescription = options?.description ?? item.description;
       if (rawDescription) {
-        lines.push(truncate(rawDescription));
+        lines.push(`> ${truncate(rawDescription)}`);
       }
     }
 
@@ -242,7 +236,7 @@ export function formatPreview(
       if (!options?.hideDescription) {
         const rawDescription = options?.description ?? data.description;
         if (rawDescription) {
-          block += `\n${truncate(rawDescription)}`;
+          block += `\n> ${truncate(rawDescription)}`;
         }
       }
       blocks.push(block);

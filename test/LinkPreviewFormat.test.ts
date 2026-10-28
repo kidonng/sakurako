@@ -12,7 +12,12 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://a.com",
-        error: new HttpFetchError({ url: "https://a.com", status: 404, statusText: "Not Found", detail: "HTTP status 404" }),
+        error: new HttpFetchError({
+          url: "https://a.com",
+          status: 404,
+          statusText: "Not Found",
+          detail: "HTTP status 404",
+        }),
       },
       {
         _tag: "Failure",
@@ -37,7 +42,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "My Title\nMy Description",
+      text: "My Title\n> My Description",
       image: "https://example.com/pic.jpg",
     });
   });
@@ -54,7 +59,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "（无标题）\nMy Description",
+      text: "（无标题）\n> My Description",
       image: undefined,
     });
   });
@@ -99,7 +104,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "1. First Title\nFirst Desc\n2. Second Title\nSecond Desc",
+      text: "1. First Title\n> First Desc\n2. Second Title\n> Second Desc",
       image: "https://first.com/img1.png",
     });
   });
@@ -181,7 +186,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted?.text).toContain("1. " + "中".repeat(48) + "...");
-    expect(formatted?.text).toContain("a".repeat(97) + "...");
+    expect(formatted?.text).toContain("> " + "a".repeat(97) + "...");
     expect(formatted?.text).toContain("2. Short");
   });
 
@@ -240,7 +245,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "1. GitHub - kidonng/sakurako\n2. Example Domain\nExample Description",
+      text: "1. GitHub - kidonng/sakurako\n2. Example Domain\n> Example Description",
       image: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
     });
   });
@@ -259,7 +264,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "Git for the US Code | Hacker News\nhttps://lexifina.com/blog/git-for-the-us-code",
+      text: "Git for the US Code | Hacker News\n> https://lexifina.com/blog/git-for-the-us-code",
       image: undefined,
     });
   });

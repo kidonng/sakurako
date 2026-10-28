@@ -22,7 +22,6 @@ describe("LinkPreviewEngine", () => {
     expect(urls).toEqual(["https://tree-sitter.github.io/tree-sitter/"]);
   });
 
-
   it("strips trailing punctuation and parentheses from URLs", () => {
     const text = "Visit (https://example.com/doc) and https://example.com/end.";
     const urls = extractUrls(text);
@@ -140,9 +139,7 @@ describe("LinkPreviewEngine", () => {
       ),
     );
 
-    expect(capturedUserAgent).toBe(
-      "Sakurako/1.0  (user #898759)",
-    );
+    expect(capturedUserAgent).toBe("Sakurako/1.0  (user #898759)");
   });
 
   it("handles missing title, description, image gracefully", async () => {
@@ -212,8 +209,8 @@ describe("LinkPreviewEngine", () => {
   });
 
   it("fails when HTTP status is not 200", async () => {
-    const layer = makeTestHttpClient(() =>
-      new Response("Not Found", { status: 404, statusText: "Not Found" }),
+    const layer = makeTestHttpClient(
+      () => new Response("Not Found", { status: 404, statusText: "Not Found" }),
     );
     const error = await Effect.runPromise(
       scrapeMetadata("https://example.com/missing").pipe(
@@ -292,7 +289,10 @@ describe("LinkPreviewEngine", () => {
   it("scrapeAll aggregates successes and failures concurrently", async () => {
     const layer = makeTestHttpClient((req) => {
       if (req.url.includes("fail")) {
-        return new Response("Error", { status: 500, statusText: "Internal Server Error" });
+        return new Response("Error", {
+          status: 500,
+          statusText: "Internal Server Error",
+        });
       }
       return new Response(
         "<html><head><title>Success Title</title></head></html>",
@@ -445,11 +445,12 @@ describe("LinkPreviewEngine", () => {
 
     it("downloads and encodes image to base64 for Danbooru URLs", async () => {
       const mockBytes = new Uint8Array([1, 2, 3, 4]);
-      const layer = makeTestHttpClient(() =>
-        new Response(mockBytes, {
-          status: 200,
-          headers: { "Content-Type": "image/jpeg" },
-        }),
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(mockBytes, {
+            status: 200,
+            headers: { "Content-Type": "image/jpeg" },
+          }),
       );
       const result = await Effect.runPromise(
         prepareOutgoingImage("https://cdn.donmai.us/original/123.jpg").pipe(
@@ -462,11 +463,12 @@ describe("LinkPreviewEngine", () => {
     });
 
     it("returns undefined when image download fails", async () => {
-      const layer = makeTestHttpClient(() =>
-        new Response("Not Found", {
-          status: 404,
-          statusText: "Not Found",
-        }),
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("Not Found", {
+            status: 404,
+            statusText: "Not Found",
+          }),
       );
       const result = await Effect.runPromise(
         prepareOutgoingImage("https://cdn.donmai.us/original/missing.jpg").pipe(
