@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-Sakurako is a QQ bot built with TypeScript, running on Bun and powered by the Effect 4 framework (`effect`, `@effect/platform-bun`). It integrates with a SnowLuma OneBot v11 backend (running via OrbStack at `snowluma.orb.local`) via `@snowluma/sdk`. The primary feature matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"` across both group and private chats while guarding against self-reply loops.
+Sakurako is a QQ bot built with TypeScript, running on Bun and powered by the Effect 4 framework (`effect`, `@effect/platform-bun`). It integrates with a SnowLuma OneBot v11 backend (running via OrbStack at `snowluma.orb.local`) via `@snowluma/sdk`.
+
+Key features include:
+- **Echo Bot**: Matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"`.
+- **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
 
 ## Architecture & Data Flow
 
@@ -19,26 +23,32 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
        ▼ Stream.fromQueue
 [Message Stream] (Stream.Stream<IncomingMessage>)
        │
-       ▼ Stream.runForEach
-[EchoBot] (src/EchoBot.ts: handleIncomingMessage)
-  - Guards: raw_message === "喵喵喵" && post_type !== "message_sent" && user_id !== self_id
-  - Reply: Effect.tryPromise(() => context.reply("喵喵喵")) + Effect.catch
-       │
-       ▼
+       ▼ Stream.runForEach (concurrent dispatch)
+  ┌────┴───────────────────────────┐
+  ▼                                ▼
+[EchoBot]                      [LinkPreview]
+(src/EchoBot.ts)               (src/LinkPreview.ts)
+  - Match: === "喵喵喵"           - Extract: get-urls
+  - Reply: context.reply         - Scrape: metascraper
+                                 - Format: single/multi preview
+                                 - Reply: context.quote
+       │                           │
+       └─────────────┬─────────────┘
+                     ▼
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
 - **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL` and `SNOWLUMA_ACCESS_TOKEN` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket message callbacks offer items to an unbounded `Queue`, exposed downstream as a typed `Stream`.
-- **Consumer Layer**: `EchoBot` consumes the stream, isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
-
+- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot` and `LinkPreview`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
 ## Key Directories
 
 - `src/`: Core application source files (services, handlers, entrypoint, configuration).
 - `test/`: Unit and integration test suites using `bun:test`.
 - `.superpowers/specs/`: Architecture specifications and design documents.
 - `.superpowers/plans/`: Implementation plans and task breakdowns.
+- `docs/`: User-facing feature documentation (e.g. `docs/link-preview.md`).
 - `packages/`: Nix packaging derivations (pinned Bun runtime).
 
 ## Development Commands
@@ -78,10 +88,12 @@ All development tasks use Bun:
 
 ## Important Files
 
-- `src/index.ts`: Application entry point executing `runEchoBot` with `SnowLumaClient.layer` via `BunRuntime.runMain`.
+- `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage` and `handleLinkPreviewMessage` with `SnowLumaClient.layer` via `BunRuntime.runMain`.
 - `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL` and `SNOWLUMA_ACCESS_TOKEN` (`Redacted`).
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
-- `src/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch.
+- `src/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
+- `src/LinkPreview.ts`: URL extraction, metadata scraping, East Asian Width formatting, SSRF guard, and quote reply dispatch.
+- `src/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `.env.example`: Public template for environment configuration.
 - `package.json` & `tsconfig.json`: Project setup configured for TypeScript 7, Bundler module resolution, and tsgo.
 - `.oxlintrc.json`: Oxlint configuration extending `@effect/tsgo/oxlint-presets/recommended.json`.
