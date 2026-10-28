@@ -198,7 +198,7 @@ describe("formatPreview", () => {
     });
   });
 
-  it("formats news.ycombinator.com link displaying description as external link", () => {
+  it("formats news.ycombinator.com link displaying description as external link without image", () => {
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
@@ -213,7 +213,22 @@ describe("formatPreview", () => {
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
       text: "Git for the US Code | Hacker News\nhttps://lexifina.com/blog/git-for-the-us-code",
-      image: "https://news.ycombinator.com/y18.svg",
+      image: undefined,
     });
+  });
+
+  it("filters out SVG image in single and multi-link formatPreview even if present in metadata", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/page",
+          title: "Example Title",
+          image: "https://example.com/vector.svg?query=1",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.image).toBeUndefined();
   });
 });

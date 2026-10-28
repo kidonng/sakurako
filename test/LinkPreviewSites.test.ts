@@ -143,5 +143,17 @@ describe("LinkPreviewSites", () => {
 
       expect(desc).toBeUndefined();
     });
+
+    it("hides image via formatItem", () => {
+      const options = hackerNewsCustomizer.formatItem?.({
+        metadata: {
+          url: "https://news.ycombinator.com/item?id=50268380",
+          title: "Git for the US Code | Hacker News",
+        },
+        isSingle: true,
+      });
+
+      expect(options?.hideImage).toBe(true);
+    });
   });
 });

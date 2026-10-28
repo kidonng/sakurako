@@ -225,4 +225,26 @@ describe("LinkPreviewEngine", () => {
     expect(result.title).toBe("Comment Title | Hacker News");
     expect(result.description).toBeUndefined();
   });
+
+  it("ignores SVG images when scraping metadata", async () => {
+    const htmlWithSvg = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>SVG Site</title>
+          <meta property="og:image" content="https://example.com/logo.svg">
+        </head>
+        <body><img src="y18.svg"></body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(htmlWithSvg, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://example.com",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.image).toBeUndefined();
+  });
 });

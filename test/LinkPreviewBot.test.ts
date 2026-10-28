@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
-import { Effect } from "effect";
+import { Effect, Logger } from "effect";
 import { handleLinkPreviewMessage } from "../src/LinkPreview.ts";
 import type { IncomingMessage } from "../src/SnowLuma.ts";
 
@@ -160,5 +160,94 @@ describe("handleLinkPreviewMessage", () => {
         },
       },
     ]);
+  });
+
+  it("logs the failed URL and error details when sending link preview reply fails", async () => {
+    const loggedMessages: string[] = [];
+    const testLogger = Logger.make((options) => {
+      if (options.logLevel === "Error") {
+        const msg = Array.isArray(options.message)
+          ? options.message.map(String).join(" ")
+          : String(options.message);
+        loggedMessages.push(msg);
+      }
+    });
+
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://news.ycombinator.com/item?id=50261319",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async () => {
+          throw new Error("OneBot API failed to send media");
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const mockFetch = async () =>
+      new Response(
+        '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
+        { status: 200 },
+      );
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch).pipe(
+        Effect.provide(Logger.layer([testLogger])),
+      ),
+    );
+
+    expect(loggedMessages.length).toBe(1);
+    expect(loggedMessages[0]).toContain(
+      "https://news.ycombinator.com/item?id=50261319",
+    );
+    expect(loggedMessages[0]).toContain("OneBot API failed to send media");
+    expect(loggedMessages[0]).not.toContain("UnknownError");
+  });
+
+  it("quotes with text-only reply for Hacker News item containing y18.svg", async () => {
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://news.ycombinator.com/item?id=50261319",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotedMessage = msg;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const hnHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Genie 4 | Hacker News</title></head>
+        <body>
+          <img src="y18.svg" width="18" height="18">
+          <span class="titleline">
+            <a href="https://deepmind.google/blog/genie-4">Genie 4</a>
+          </span>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(hnHtml, { status: 200 });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+    );
+
+    expect(quotedMessage).toEqual({
+      type: "text",
+      data: {
+        text: "Genie 4 | Hacker News\nhttps://deepmind.google/blog/genie-4",
+      },
+    });
   });
 });

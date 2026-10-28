@@ -6,6 +6,7 @@ export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
 export interface SiteFormatOptions {
   readonly hideTitle?: boolean;
   readonly hideDescription?: boolean;
+  readonly hideImage?: boolean;
   readonly title?: string;
   readonly description?: string;
 }
@@ -46,6 +47,9 @@ export const hackerNewsCustomizer: SiteCustomizer = {
       host === "news.ycombinator.com" || host === "www.news.ycombinator.com"
     );
   },
+  formatItem: () => ({
+    hideImage: true,
+  }),
   metascraperRules: {
     description: ({ htmlDom, url }) => {
       try {

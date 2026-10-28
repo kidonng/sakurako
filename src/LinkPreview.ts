@@ -1,6 +1,6 @@
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
 import createMetascraper from "metascraper";
@@ -37,6 +37,48 @@ export interface FormattedPreview {
   readonly image?: string;
 }
 
+export class SendLinkPreviewReplyError extends Data.TaggedError(
+  "SendLinkPreviewReplyError",
+)<{
+  readonly cause: unknown;
+}> {}
+
+export function isSvgUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "data:") {
+      return parsed.pathname.toLowerCase().startsWith("image/svg+xml");
+    }
+    const pathname = parsed.pathname.toLowerCase();
+    return pathname.endsWith(".svg") || pathname.endsWith(".svgz");
+  } catch {
+    const lower = url.toLowerCase();
+    return (
+      lower.startsWith("data:image/svg+xml") ||
+      lower.endsWith(".svg") ||
+      lower.endsWith(".svgz")
+    );
+  }
+}
+
+export function formatErrorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.cause instanceof Error) {
+      return `${error.stack ?? error.message}\nCaused by: ${error.cause.stack ?? error.cause.message}`;
+    }
+    return error.stack ?? error.message;
+  }
+  if (
+    error &&
+    typeof error === "object" &&
+    "cause" in error &&
+    error.cause instanceof Error
+  ) {
+    return error.cause.stack ?? error.cause.message;
+  }
+  return String(error);
+}
+
 export function formatPreview(
   results: ReadonlyArray<ScrapingResult>,
 ): FormattedPreview | null {
@@ -70,14 +112,17 @@ export function formatPreview(
       }
     }
 
+    const rawImage = options?.hideImage ? undefined : item.image;
+    const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
+
     const text = lines.join("\n");
-    if (!text && !item.image) {
+    if (!text && !image) {
       return null;
     }
 
     return {
       text,
-      image: item.image,
+      image,
     };
   }
 
@@ -107,7 +152,12 @@ export function formatPreview(
       }
       blocks.push(block);
 
-      if (!firstImage && data.image) {
+      if (
+        !firstImage &&
+        !options?.hideImage &&
+        data.image &&
+        !isSvgUrl(data.image)
+      ) {
         firstImage = data.image;
       }
     }
@@ -216,7 +266,8 @@ export function scrapeMetadata(
 
     const title = metadata.title?.trim() || undefined;
     const description = metadata.description?.trim() || undefined;
-    const image = metadata.image?.trim() || undefined;
+    const rawImage = metadata.image?.trim() || undefined;
+    const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
 
     return {
       url,
@@ -286,11 +337,16 @@ export function handleLinkPreviewMessage(
         : [segments.image(formatted.image)]
       : segments.text(formatted.text);
 
-    yield* Effect.tryPromise(() => item.context.quote(outgoing));
+    yield* Effect.tryPromise({
+      try: () => item.context.quote(outgoing),
+      catch: (cause) => new SendLinkPreviewReplyError({ cause }),
+    });
     yield* Effect.logInfo("Link preview quote reply sent.");
   }).pipe(
     Effect.catch((error) =>
-      Effect.logError(`Failed to send link preview reply: ${String(error)}`),
+      Effect.logError(
+        `Failed to send link preview reply for ${urls.join(", ")}: ${formatErrorDetail(error.cause)}`,
+      ),
     ),
   );
 }
