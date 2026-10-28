@@ -137,4 +137,92 @@ describe("LinkPreviewEngine", () => {
       expect(second.reason).toContain("HTTP 500");
     }
   });
+
+  it("scrapes news.ycombinator.com top-level submission and extracts link as description", async () => {
+    const hnHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Git for the US Code | Hacker News</title></head>
+        <body>
+          <tr class="athing submission" id="50268380">
+            <td class="title">
+              <span class="titleline">
+                <a href="https://lexifina.com/blog/git-for-the-us-code">Git for the US Code</a>
+              </span>
+            </td>
+          </tr>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(hnHtml, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://news.ycombinator.com/item?id=50268380",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.title).toBe("Git for the US Code | Hacker News");
+    expect(result.description).toBe(
+      "https://lexifina.com/blog/git-for-the-us-code",
+    );
+  });
+
+  it("scrapes news.ycombinator.com Ask HN without setting link description", async () => {
+    const askHnHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Ask HN: What are you working on? | Hacker News</title></head>
+        <body>
+          <tr class="athing submission" id="50260146">
+            <td class="title">
+              <span class="titleline">
+                <a href="item?id=50260146">Ask HN: What are you working on?</a>
+              </span>
+            </td>
+          </tr>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(askHnHtml, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://news.ycombinator.com/item?id=50260146",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.title).toBe("Ask HN: What are you working on? | Hacker News");
+    expect(result.description).toBeUndefined();
+  });
+
+  it("scrapes news.ycombinator.com comment without setting link description", async () => {
+    const commentHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Comment Title | Hacker News</title></head>
+        <body>
+          <table class="fatitem">
+            <tr class="athing" id="43180000">
+              <td class="default">
+                <div class="comment">
+                  <a href="https://example.com">https://example.com</a>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(commentHtml, { status: 200 });
+    const result = await Effect.runPromise(
+      scrapeMetadata(
+        "https://news.ycombinator.com/item?id=43180000",
+        mockFetch as unknown as typeof fetch,
+      ),
+    );
+
+    expect(result.title).toBe("Comment Title | Hacker News");
+    expect(result.description).toBeUndefined();
+  });
 });

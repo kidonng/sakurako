@@ -118,4 +118,47 @@ describe("handleLinkPreviewMessage", () => {
     );
     expect(quoted).toBe(false);
   });
+
+  it("quotes with only image segment for single github.com link with image", async () => {
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://github.com/kidonng/sakurako",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotedMessage = msg;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const githubHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>kidonng/sakurako</title>
+          <meta name="description" content="A QQ bot">
+          <meta property="og:image" content="https://opengraph.githubassets.com/repo/kidonng/sakurako">
+        </head>
+        <body>GitHub</body>
+      </html>
+    `;
+    const mockFetch = async () => new Response(githubHtml, { status: 200 });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item, mockFetch as unknown as typeof fetch),
+    );
+
+    expect(quotedMessage).toEqual([
+      {
+        type: "image",
+        data: {
+          file: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+        },
+      },
+    ]);
+  });
 });

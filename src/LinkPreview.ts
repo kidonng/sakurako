@@ -7,10 +7,15 @@ import createMetascraper from "metascraper";
 import metascraperDescription from "metascraper-description";
 import metascraperImage from "metascraper-image";
 import metascraperTitle from "metascraper-title";
+import {
+  findSiteCustomizer,
+  siteMetascraperPlugin,
+} from "./LinkPreviewSites.ts";
 import type { IncomingMessage } from "./SnowLuma.ts";
 import { truncate } from "./TextWidth.ts";
 
 const scraper = createMetascraper([
+  siteMetascraperPlugin(),
   metascraperTitle(),
   metascraperDescription(),
   metascraperImage(),
@@ -47,13 +52,31 @@ export function formatPreview(
   const firstResult = results[0];
   if (results.length === 1 && firstResult && firstResult._tag === "Success") {
     const item = firstResult.data;
-    const title = truncate(item.title ?? "（无标题）");
-    const lines = [title];
-    if (item.description) {
-      lines.push(truncate(item.description));
+    const customizer = findSiteCustomizer(item.url);
+    const options = customizer?.formatItem?.({
+      metadata: item,
+      isSingle: true,
+    });
+
+    const lines: string[] = [];
+    if (!options?.hideTitle) {
+      const rawTitle = options?.title ?? item.title;
+      lines.push(truncate(rawTitle ?? "（无标题）"));
     }
+    if (!options?.hideDescription) {
+      const rawDescription = options?.description ?? item.description;
+      if (rawDescription) {
+        lines.push(truncate(rawDescription));
+      }
+    }
+
+    const text = lines.join("\n");
+    if (!text && !item.image) {
+      return null;
+    }
+
     return {
-      text: lines.join("\n"),
+      text,
       image: item.image,
     };
   }
@@ -67,10 +90,20 @@ export function formatPreview(
       blocks.push(`${num}. [提取失败：${item.reason}]`);
     } else {
       const data = item.data;
-      const title = truncate(data.title ?? "（无标题）");
+      const customizer = findSiteCustomizer(data.url);
+      const options = customizer?.formatItem?.({
+        metadata: data,
+        isSingle: false,
+      });
+
+      const rawTitle = options?.title ?? data.title;
+      const title = truncate(rawTitle ?? "（无标题）");
       let block = `${num}. ${title}`;
-      if (data.description) {
-        block += `\n${truncate(data.description)}`;
+      if (!options?.hideDescription) {
+        const rawDescription = options?.description ?? data.description;
+        if (rawDescription) {
+          block += `\n${truncate(rawDescription)}`;
+        }
       }
       blocks.push(block);
 
@@ -237,7 +270,7 @@ export function handleLinkPreviewMessage(
     );
     const results = yield* scrapeAll(urls, fetchFn);
     const formatted = formatPreview(results);
-    if (!formatted) {
+    if (!formatted || (!formatted.text && !formatted.image)) {
       yield* Effect.logInfo(
         "All URL scrapes failed or produced no preview, remaining silent.",
       );
@@ -245,10 +278,12 @@ export function handleLinkPreviewMessage(
     }
 
     const outgoing: OutgoingMessage = formatted.image
-      ? [
-          segments.text(formatted.text + (formatted.text ? "\n" : "")),
-          segments.image(formatted.image),
-        ]
+      ? formatted.text
+        ? [
+            segments.text(formatted.text + "\n"),
+            segments.image(formatted.image),
+          ]
+        : [segments.image(formatted.image)]
       : segments.text(formatted.text);
 
     yield* Effect.tryPromise(() => item.context.quote(outgoing));

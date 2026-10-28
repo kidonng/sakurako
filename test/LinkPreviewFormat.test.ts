@@ -137,4 +137,83 @@ describe("formatPreview", () => {
     expect(formatted?.text).toContain("a".repeat(97) + "...");
     expect(formatted?.text).toContain("2. Short");
   });
+
+  it("formats single github.com link hiding title and description when image is present", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://github.com/kidonng/sakurako",
+          title: "GitHub - kidonng/sakurako",
+          description: "A QQ bot",
+          image: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "",
+      image: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+    });
+  });
+
+  it("returns null for single github.com link without image", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://github.com/kidonng/sakurako",
+          title: "GitHub - kidonng/sakurako",
+          description: "A QQ bot",
+        },
+      },
+    ];
+    expect(formatPreview(results)).toBeNull();
+  });
+
+  it("formats multi-link containing github.com by hiding description but keeping title", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://github.com/kidonng/sakurako",
+          title: "GitHub - kidonng/sakurako",
+          description: "A QQ bot",
+          image: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+        },
+      },
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com",
+          title: "Example Domain",
+          description: "Example Description",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "1. GitHub - kidonng/sakurako\n2. Example Domain\nExample Description",
+      image: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+    });
+  });
+
+  it("formats news.ycombinator.com link displaying description as external link", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.ycombinator.com/item?id=50268380",
+          title: "Git for the US Code | Hacker News",
+          description: "https://lexifina.com/blog/git-for-the-us-code",
+          image: "https://news.ycombinator.com/y18.svg",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "Git for the US Code | Hacker News\nhttps://lexifina.com/blog/git-for-the-us-code",
+      image: "https://news.ycombinator.com/y18.svg",
+    });
+  });
 });
