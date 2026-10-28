@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import { makeTestHttpClient } from "./TestHttpClient.ts";
 import * as cheerio from "cheerio";
 import {
   extractFirstParagraph,
@@ -60,6 +61,20 @@ describe("LinkPreviewEngine", () => {
       "https://news.ycombinator.com/item?id=50261319",
     ]);
   });
+  it("fetches metadata using HttpClient service layer", async () => {
+    const layer = makeTestHttpClient(() =>
+      new Response(
+        "<html><head><title>Effect Http Title</title><meta name=\"description\" content=\"Effect Http Desc\"></head></html>",
+        { status: 200 },
+      ),
+    );
+    const result = await Effect.runPromise(
+      scrapeMetadata("https://example.com/effect").pipe(Effect.provide(layer)),
+    );
+    expect(result.title).toBe("Effect Http Title");
+    expect(result.description).toBe("Effect Http Desc");
+  });
+
 
   it("scrapes metadata from HTML successfully", async () => {
     const mockHtml = `

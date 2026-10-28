@@ -1,6 +1,12 @@
+/* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
 import { Data, Effect } from "effect";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
 import createMetascraper from "metascraper";
@@ -318,44 +324,66 @@ export function isPrivateHost(hostname: string): boolean {
 
 export function scrapeMetadata(
   url: string,
-  fetchFn: typeof fetch = fetch,
-): Effect.Effect<PageMetadata, string> {
+): Effect.Effect<PageMetadata, ScrapeMetadataError, HttpClient.HttpClient> {
   return Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+
     const urlObj = yield* Effect.try({
       try: () => new URL(url),
-      catch: (e) => `Invalid URL: ${String(e)}`,
+      catch: (cause) => new InvalidUrlError({ url, cause }),
     });
 
     if (isPrivateHost(urlObj.hostname)) {
-      return yield* Effect.fail("Blocked private or local address");
-    }
-
-    const response = yield* Effect.tryPromise({
-      try: () =>
-        fetchFn(url, {
-          headers: {
-            "User-Agent": getUserAgent(urlObj),
-          },
-          signal: AbortSignal.timeout(10000),
-        }),
-      catch: (error) => `Network error: ${String(error)}`,
-    });
-
-    if (!response.ok) {
       return yield* Effect.fail(
-        `HTTP ${response.status} ${response.statusText}`.trim(),
+        new BlockedHostError({ url, hostname: urlObj.hostname }),
       );
     }
 
-    const html = yield* Effect.tryPromise({
-      try: () => response.text(),
-      catch: (error) => `Failed to read response body: ${String(error)}`,
-    });
+    const request = HttpClientRequest.get(url).pipe(
+      HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+    );
+
+    const response = yield* client.execute(request).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.mapError(
+        (error) =>
+          new HttpFetchError({
+            url,
+            detail: error.message,
+          }),
+      ),
+    );
+
+    if (response.status < 200 || response.status >= 300) {
+      const webRes = HttpClientResponse.toWeb(response);
+      const statusText =
+        webRes._tag === "Some" && webRes.value.statusText
+          ? webRes.value.statusText
+          : undefined;
+      return yield* Effect.fail(
+        new HttpFetchError({
+          url,
+          status: response.status,
+          statusText,
+          detail: `HTTP status ${response.status}`,
+        }),
+      );
+    }
+
+    const html = yield* response.text.pipe(
+      Effect.mapError(
+        (error) =>
+          new HttpFetchError({
+            url,
+            detail: `Failed to read response body: ${error.message}`,
+          }),
+      ),
+    );
 
     const targetUrl = response.url || url;
     const metadata = yield* Effect.tryPromise({
       try: () => scraper({ html, url: targetUrl }),
-      catch: (error) => `Failed to parse metadata: ${String(error)}`,
+      catch: (cause) => new ParseMetadataError({ url, cause }),
     });
 
     const title = metadata.title?.trim() || undefined;
@@ -374,8 +402,7 @@ export function scrapeMetadata(
 
 export function prepareOutgoingImage(
   imageUrl: string,
-  fetchFn: typeof fetch = fetch,
-): Effect.Effect<string | undefined, never> {
+): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const urlObj = yield* Effect.try({
       try: () => new URL(imageUrl),
@@ -401,23 +428,32 @@ export function prepareOutgoingImage(
       return imageUrl;
     }
 
-    const downloadEffect = Effect.tryPromise({
-      try: async () => {
-        const response = await fetchFn(imageUrl, {
-          headers: {
-            "User-Agent": getUserAgent(urlObj),
-          },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status} ${response.statusText}`);
-        }
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString("base64");
-        return `base64://${base64}` as string | undefined;
-      },
-      catch: (cause) => new DownloadImageAsBase64Error({ cause }),
+    const client = yield* HttpClient.HttpClient;
+    const request = HttpClientRequest.get(imageUrl).pipe(
+      HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+    );
+
+    const downloadEffect = Effect.gen(function* () {
+      const response = yield* client.execute(request).pipe(
+        Effect.timeout("10 seconds"),
+      );
+      if (response.status < 200 || response.status >= 300) {
+        const webRes = HttpClientResponse.toWeb(response);
+        const statusText =
+          webRes._tag === "Some" && webRes.value.statusText
+            ? webRes.value.statusText
+            : "";
+        return yield* Effect.fail(
+          new Error(
+            `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
+          ),
+        );
+      }
+      const buffer = yield* response.arrayBuffer;
+      const base64 = Buffer.from(buffer).toString("base64");
+      return `base64://${base64}` as string | undefined;
     }).pipe(
+      Effect.mapError((cause) => new DownloadImageAsBase64Error({ cause })),
       Effect.catch((error) =>
         Effect.logWarning(
           `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
@@ -431,15 +467,14 @@ export function prepareOutgoingImage(
 
 export function scrapeAll(
   urls: ReadonlyArray<string>,
-  fetchFn: typeof fetch = fetch,
-): Effect.Effect<ReadonlyArray<ScrapingResult>, never> {
+): Effect.Effect<ReadonlyArray<ScrapingResult>, never, HttpClient.HttpClient> {
   const effects = urls.map((url) =>
-    scrapeMetadata(url, fetchFn).pipe(
+    scrapeMetadata(url).pipe(
       Effect.match({
-        onFailure: (reason): ScrapingResult => ({
+        onFailure: (error): ScrapingResult => ({
           _tag: "Failure",
           url,
-          error: new HttpFetchError({ url, detail: reason }),
+          error,
         }),
         onSuccess: (data): ScrapingResult => ({ _tag: "Success", data }),
       }),
@@ -450,8 +485,7 @@ export function scrapeAll(
 
 export function handleLinkPreviewMessage(
   item: IncomingMessage,
-  fetchFn?: typeof fetch,
-): Effect.Effect<void, never> {
+): Effect.Effect<void, never, HttpClient.HttpClient> {
   const { event } = item;
   if (
     event.post_type === "message_sent" ||
@@ -470,7 +504,7 @@ export function handleLinkPreviewMessage(
     yield* Effect.logInfo(
       `Found ${urls.length} URL(s) in message from user ${event.user_id}, scraping preview...`,
     );
-    const results = yield* scrapeAll(urls, fetchFn);
+    const results = yield* scrapeAll(urls);
     const formatted = formatPreview(results);
     if (!formatted || (!formatted.text && !formatted.image)) {
       yield* Effect.logInfo(
@@ -480,7 +514,7 @@ export function handleLinkPreviewMessage(
     }
 
     const resolvedImage = formatted.image
-      ? yield* prepareOutgoingImage(formatted.image, fetchFn)
+      ? yield* prepareOutgoingImage(formatted.image)
       : undefined;
 
     const buildOutgoing = (image?: string): OutgoingMessage =>
