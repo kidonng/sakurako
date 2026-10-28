@@ -1,6 +1,20 @@
 {
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@effect/tsgo": "0.62.0",
+    "@types/bun": "latest",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "^4.0.6",
+    "effect": "^4.0.6"
+  },
+  "scripts": {
+    "check": "tsc",
+    "format": "bun fmt",
+    "lint": "oxlint",
+    "prepare": "effect-tsgo patch --typescript --oxlint"
   }
 }
