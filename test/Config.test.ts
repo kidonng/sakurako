@@ -65,4 +65,38 @@ describe("BotConfig", () => {
     );
     expect(config.sauceNaoApiKey).toBeUndefined();
   });
+
+  it("reads optional OPENROUTER_API_KEY when provided", async () => {
+    const config = await Effect.runPromise(
+      BotConfig.pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnvRecord({
+              SNOWLUMA_WS_URL: "ws://localhost:3001",
+              SNOWLUMA_ACCESS_TOKEN: "token",
+              OPENROUTER_API_KEY: "test_openrouter_key",
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(config.openrouterApiKey).toBeDefined();
+    expect(Redacted.value(config.openrouterApiKey!)).toBe("test_openrouter_key");
+  });
+
+  it("defaults openrouterApiKey to undefined when omitted", async () => {
+    const config = await Effect.runPromise(
+      BotConfig.pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnvRecord({
+              SNOWLUMA_WS_URL: "ws://localhost:3001",
+              SNOWLUMA_ACCESS_TOKEN: "token",
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(config.openrouterApiKey).toBeUndefined();
+  });
 });
