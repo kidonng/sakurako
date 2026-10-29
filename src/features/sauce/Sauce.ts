@@ -57,7 +57,7 @@ export function handleSauceMessage(
 
   const replyData = replySegment.data as { id?: unknown } | undefined;
   const messageId = Number(replyData?.id);
-  if (!replyData?.id || isNaN(messageId) || messageId <= 0) {
+  if (!replyData?.id || !Number.isInteger(messageId) || messageId === 0) {
     return Effect.tryPromise(() =>
       item.context.quote("未在引用的消息中找到图片"),
     ).pipe(

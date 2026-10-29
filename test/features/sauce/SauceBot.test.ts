@@ -15,7 +15,8 @@ function createMockItem(params: {
   self_id?: number;
   getMessageResponse?: unknown;
   getMessageError?: boolean;
-}): { item: IncomingMessage; getQuotedReplies: () => unknown[] } {
+  onGetMessage?: (id: number) => void;
+}) {
   const quotedReplies: unknown[] = [];
 
   const item: IncomingMessage = {
@@ -29,7 +30,8 @@ function createMockItem(params: {
     } as unknown as OneBotMessageEvent,
     context: {
       client: {
-        getMessage: async (_id: number) => {
+        getMessage: async (id: number) => {
+          params.onGetMessage?.(id);
           if (params.getMessageError) {
             throw new Error("OneBot get_msg error");
           }
@@ -93,6 +95,39 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
+    const replies = getQuotedReplies();
+    expect(replies.length).toBe(1);
+    expect(replies[0]).toEqual({
+      type: "text",
+      data: {
+        text: "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
+      },
+    });
+  });
+
+  it("quotes reply with formatted text when quoting a message with a negative message ID", async () => {
+    let queriedMessageId: number | undefined;
+    const { item, getQuotedReplies } = createMockItem({
+      raw_message: "[CQ:reply,id=-1946661968] /sauce",
+      getMessageResponse: {
+        message: [
+          {
+            type: "image",
+            data: {
+              url: "https://example.com/target.jpg",
+            },
+          },
+        ],
+      },
+      onGetMessage: (id) => {
+        queriedMessageId = id;
+      },
+    });
+    await Effect.runPromise(
+      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+    );
+
+    expect(queriedMessageId).toBe(-1946661968);
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toEqual({
