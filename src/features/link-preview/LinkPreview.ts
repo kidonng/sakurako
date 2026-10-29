@@ -110,6 +110,7 @@ export type ScrapeMetadataError =
 
 export type ScrapingResult =
   | { readonly _tag: "Success"; readonly data: PageMetadata }
+  | { readonly _tag: "Filtered"; readonly url: string }
   | {
       readonly _tag: "Failure";
       readonly url: string;
@@ -175,8 +176,8 @@ export function formatPreview(
     return null;
   }
 
-  const allFailed = results.every((r) => r._tag === "Failure");
-  if (allFailed) {
+  const hasSuccess = results.some((r) => r._tag === "Success");
+  if (!hasSuccess) {
     return null;
   }
 
@@ -220,7 +221,9 @@ export function formatPreview(
 
   results.forEach((item, index) => {
     const num = index + 1;
-    if (item._tag === "Failure") {
+    if (item._tag === "Filtered") {
+      blocks.push(`${num}. （已过滤）`);
+    } else if (item._tag === "Failure") {
       blocks.push(`${num}. [提取失败：${item.error.message}]`);
     } else {
       const data = item.data;

@@ -304,4 +304,73 @@ describe("formatPreview", () => {
         "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
     });
   });
+
+  it("returns null when single link is filtered", () => {
+    const results: ScrapingResult[] = [
+      { _tag: "Filtered", url: "https://example.com" },
+    ];
+    expect(formatPreview(results)).toBeNull();
+  });
+
+  it("returns null when all multiple links are filtered or failed", () => {
+    const results: ScrapingResult[] = [
+      { _tag: "Filtered", url: "https://example1.com" },
+      {
+        _tag: "Failure",
+        url: "https://example2.com",
+        error: new HttpFetchError({
+          url: "https://example2.com",
+          detail: "Timeout",
+        }),
+      },
+      { _tag: "Filtered", url: "https://example3.com" },
+    ];
+    expect(formatPreview(results)).toBeNull();
+  });
+
+  it("formats multiple links with partial filtered placeholders and preserves valid image", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Filtered",
+        url: "https://filtered-news.com",
+      },
+      {
+        _tag: "Success",
+        data: {
+          url: "https://useful-blog.com",
+          title: "Useful Title",
+          description: "Useful Desc",
+          image: "https://useful-blog.com/cover.png",
+        },
+      },
+      {
+        _tag: "Filtered",
+        url: "https://t.me/promo",
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "1. （已过滤）\n2. Useful Title\n> Useful Desc\n3. （已过滤）",
+      image: "https://useful-blog.com/cover.png",
+    });
+  });
+
+  it("does not use image from a filtered link even if first in list", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Filtered",
+        url: "https://ad-banner.com",
+      },
+      {
+        _tag: "Success",
+        data: {
+          url: "https://valid.com",
+          title: "Valid Title",
+          image: "https://valid.com/picture.jpg",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.image).toBe("https://valid.com/picture.jpg");
+  });
 });
