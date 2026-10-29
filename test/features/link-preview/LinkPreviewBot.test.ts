@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
-import { Effect, Layer, Logger } from "effect";
+import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { handleLinkPreviewMessage } from "../../../src/features/link-preview/LinkPreview.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
@@ -348,5 +348,120 @@ describe("handleLinkPreviewMessage", () => {
         text: "Title",
       },
     });
+  });
+
+  it("silences reply when single link preview is filtered by Jev", async () => {
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "Please see https://example.com/test",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotedMessage = msg;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        return new Response(
+          JSON.stringify({
+            answers: {
+              preview_0: { type: "noul", noul: 0.15 },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        '<html><head><title>Preview Title</title></head></html>',
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(quotedMessage).toBeNull();
+  });
+
+  it("outputs placeholder when one of multiple links is filtered by Jev", async () => {
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message:
+          "Check https://example.com/one and https://example.com/two",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotedMessage = msg;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        return new Response(
+          JSON.stringify({
+            answers: {
+              preview_0: { type: "noul", noul: 0.2 },
+              preview_1: { type: "noul", noul: 0.9 },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (req.url.includes("/one")) {
+        return new Response(
+          '<html><head><title>Title One</title></head></html>',
+          { status: 200 },
+        );
+      }
+      return new Response(
+        '<html><head><title>Title Two</title></head></html>',
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(quotedMessage).toBeDefined();
+    const textSegment = quotedMessage as {
+      type: string;
+      data: { text: string };
+    };
+    expect(textSegment.data.text).toBe("1. （已过滤）\n2. Title Two");
   });
 });

@@ -16,6 +16,8 @@ import {
   shouldSendImageAsBase64,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
+import { filterPreviewResults } from "./JevFilter.ts";
+import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
@@ -504,7 +506,15 @@ export function handleLinkPreviewMessage(
       `Found ${urls.length} URL(s) in message from user ${event.user_id}, scraping preview...`,
     );
     const results = yield* scrapeAll(urls);
-    const formatted = formatPreview(results);
+    const config = yield* Effect.option(BotConfig);
+    const openrouterApiKey =
+      config._tag === "Some" ? config.value.openrouterApiKey : undefined;
+    const filteredResults = yield* filterPreviewResults(
+      event.raw_message,
+      results,
+      openrouterApiKey,
+    );
+    const formatted = formatPreview(filteredResults);
     if (!formatted || (!formatted.text && !formatted.image)) {
       yield* Effect.logInfo(
         "All URL scrapes failed or produced no preview, remaining silent.",
