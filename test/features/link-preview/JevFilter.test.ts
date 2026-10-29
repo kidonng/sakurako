@@ -255,4 +255,74 @@ describe("filterPreviewResults", () => {
 
     expect(filtered[0]?._tag).toBe("Filtered");
   });
+
+  it("falls back to original results when OpenRouter returns 429 rate limit", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: { url: "https://example.com", title: "Test" },
+      },
+    ];
+
+    const rateLimitLayer = makeTestHttpClient(
+      () =>
+        new Response(
+          JSON.stringify({ error: { message: "Rate limit exceeded" } }),
+          { status: 429, headers: { "content-type": "application/json" } },
+        ),
+    );
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(rateLimitLayer)),
+    );
+
+    expect(filtered).toEqual(results);
+  });
+
+  it("falls back to original results when OpenRouter response body is null or lacks answers", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: { url: "https://example.com", title: "Test" },
+      },
+    ];
+
+    const nullLayer = makeTestHttpClient(
+      () =>
+        new Response("null", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    const filteredNull = await Effect.runPromise(
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(nullLayer)),
+    );
+    expect(filteredNull).toEqual(results);
+
+    const noAnswersLayer = makeTestHttpClient(
+      () =>
+        new Response(JSON.stringify({ model: "typesafe/jev" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    const filteredNoAnswers = await Effect.runPromise(
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(noAnswersLayer)),
+    );
+    expect(filteredNoAnswers).toEqual(results);
+  });
 });

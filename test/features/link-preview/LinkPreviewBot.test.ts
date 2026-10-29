@@ -464,4 +464,56 @@ describe("handleLinkPreviewMessage", () => {
     };
     expect(textSegment.data.text).toBe("1. （已过滤）\n2. Title Two");
   });
+
+  it("does not contact OpenRouter when OPENROUTER_API_KEY is omitted", async () => {
+    let quotedMessage: unknown = null;
+    let openrouterContacted = false;
+
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "Please see https://example.com/test",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (msg: unknown) => {
+          quotedMessage = msg;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        openrouterContacted = true;
+        return new Response("", { status: 500 });
+      }
+      return new Response(
+        '<html><head><title>Unfiltered Title</title></head></html>',
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(openrouterContacted).toBe(false);
+    expect(quotedMessage).toBeDefined();
+    const textSegment = quotedMessage as {
+      type: string;
+      data: { text: string };
+    };
+    expect(textSegment.data.text).toBe("Unfiltered Title");
+  });
 });

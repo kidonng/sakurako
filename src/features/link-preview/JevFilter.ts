@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Data, type Duration, Effect, Redacted } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import type { PageMetadata, ScrapingResult } from "./LinkPreview.ts";
 
 export const OPENROUTER_SYSTEMONE_URL =
@@ -137,22 +137,40 @@ export function filterPreviewResults(
       HttpClientRequest.bodyJson(payload),
     );
 
-    const response = yield* client.execute(request).pipe(
+    const responseData = yield* Effect.gen(function* () {
+      const response = yield* client.execute(request);
+      if (response.status < 200 || response.status >= 300) {
+        const webRes = HttpClientResponse.toWeb(response);
+        if (webRes._tag === "Some") {
+          void webRes.value.body?.cancel().catch(() => {});
+        }
+        return yield* new JevFilterError({
+          cause: `HTTP status ${response.status}`,
+        });
+      }
+
+      const responseBody = yield* response.json;
+      if (
+        !responseBody ||
+        typeof responseBody !== "object" ||
+        !("answers" in responseBody) ||
+        typeof (responseBody as Record<string, unknown>).answers !== "object" ||
+        (responseBody as Record<string, unknown>).answers === null
+      ) {
+        return yield* new JevFilterError({
+          cause: "Missing or invalid 'answers' envelope in System One response",
+        });
+      }
+
+      return responseBody as SystemOneResponse;
+    }).pipe(
       Effect.timeout(timeoutDuration),
-      Effect.mapError((cause) => new JevFilterError({ cause })),
+      Effect.mapError((cause) =>
+        cause instanceof JevFilterError ? cause : new JevFilterError({ cause }),
+      ),
     );
 
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new JevFilterError({
-        cause: `HTTP status ${response.status}`,
-      });
-    }
-
-    const responseBody = yield* response.json.pipe(
-      Effect.mapError((cause) => new JevFilterError({ cause })),
-    );
-    const data = responseBody as SystemOneResponse;
-    const answers = data.answers ?? {};
+    const answers = responseData.answers ?? {};
 
     const updated = results.map((item, index): ScrapingResult => {
       if (item._tag !== "Success") {
