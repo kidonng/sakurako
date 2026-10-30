@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Effect, Redacted } from "effect";
+import { Effect, Layer, Logger, Redacted } from "effect";
 import {
   DEFAULT_JEV_MODEL,
   filterPreviewResults,
@@ -160,6 +160,63 @@ describe("filterPreviewResults", () => {
       _tag: "Filtered",
       url: "https://t.me/promo",
     });
+  });
+
+  it("logs filtered URL and score when an item is filtered, without logging for passing items", async () => {
+    const loggedMessages: Array<{ level: string; message: string }> = [];
+    const testLogger = Logger.make((options) => {
+      const msg = Array.isArray(options.message)
+        ? options.message.map(String).join(" ")
+        : String(options.message);
+      loggedMessages.push({ level: options.logLevel, message: msg });
+    });
+
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.com",
+          title: "News Title",
+        },
+      },
+      {
+        _tag: "Success",
+        data: {
+          url: "https://t.me/promo",
+          title: "Telegram Promo",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0: { type: "noul", noul: 0.95 },
+            preview_1: { type: "noul", noul: 0.12 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    await Effect.runPromise(
+      filterPreviewResults(
+        "some user message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(Layer.merge(layer, Logger.layer([testLogger])))),
+    );
+
+    const infoLogs = loggedMessages.filter((l) => l.level === "Info");
+    expect(infoLogs).toHaveLength(1);
+    expect(infoLogs[0]?.message).toContain("https://t.me/promo");
+    expect(infoLogs[0]?.message).toContain("0.12");
+
+    const passedLogs = loggedMessages.filter((l) =>
+      l.message.includes("https://news.com"),
+    );
+    expect(passedLogs).toHaveLength(0);
   });
 
   it("preserves failure items and maps indexes correctly", async () => {

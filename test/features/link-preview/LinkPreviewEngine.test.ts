@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import * as cheerio from "cheerio";
 import {
@@ -326,6 +326,45 @@ describe("LinkPreviewEngine", () => {
       }
       expect(second.error.message).toContain("HTTP 500");
     }
+  });
+
+  it("logs warning on scrape failure with URL and reason, without logging on success", async () => {
+    const loggedMessages: Array<{ level: string; message: string }> = [];
+    const testLogger = Logger.make((options) => {
+      const msg = Array.isArray(options.message)
+        ? options.message.map(String).join(" ")
+        : String(options.message);
+      loggedMessages.push({ level: options.logLevel, message: msg });
+    });
+
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("fail")) {
+        return new Response("Not Found", {
+          status: 404,
+          statusText: "Not Found",
+        });
+      }
+      return new Response(
+        "<html><head><title>Success Title</title></head></html>",
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      scrapeAll(["https://ok.com", "https://fail.com"]).pipe(
+        Effect.provide(Layer.merge(layer, Logger.layer([testLogger]))),
+      ),
+    );
+
+    const warnLogs = loggedMessages.filter((l) => l.level === "Warn");
+    expect(warnLogs).toHaveLength(1);
+    expect(warnLogs[0]?.message).toContain("https://fail.com");
+    expect(warnLogs[0]?.message).toContain("HTTP 404 Not Found");
+
+    const okLogs = loggedMessages.filter((l) =>
+      l.message.includes("https://ok.com"),
+    );
+    expect(okLogs).toHaveLength(0);
   });
 
   it("scrapes news.ycombinator.com top-level submission and extracts link as description", async () => {

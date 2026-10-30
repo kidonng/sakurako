@@ -493,13 +493,19 @@ export function scrapeAll(
 ): Effect.Effect<ReadonlyArray<ScrapingResult>, never, HttpClient.HttpClient> {
   const effects = urls.map((url) =>
     scrapeMetadata(url).pipe(
-      Effect.match({
-        onFailure: (error): ScrapingResult => ({
-          _tag: "Failure",
-          url,
-          error,
-        }),
-        onSuccess: (data): ScrapingResult => ({ _tag: "Success", data }),
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.logWarning(
+            `Failed to scrape metadata for ${url}: ${error.message}`,
+          ).pipe(
+            Effect.as({
+              _tag: "Failure",
+              url,
+              error,
+            } as ScrapingResult),
+          ),
+        onSuccess: (data) =>
+          Effect.succeed({ _tag: "Success", data } as ScrapingResult),
       }),
     ),
   );

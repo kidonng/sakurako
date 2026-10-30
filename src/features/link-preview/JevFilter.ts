@@ -172,24 +172,31 @@ export function filterPreviewResults(
 
     const answers = responseData.answers ?? {};
 
-    const updated = results.map((item, index): ScrapingResult => {
+    const updated: ScrapingResult[] = [];
+    for (let index = 0; index < results.length; index++) {
+      const item = results[index]!;
       if (item._tag !== "Success") {
-        return item;
+        updated.push(item);
+        continue;
       }
       const key = `preview_${index}`;
       const answer = answers[key];
-      const passed =
-        typeof answer?.noul === "number" && answer.noul >= threshold;
+      const score = typeof answer?.noul === "number" ? answer.noul : undefined;
+      const passed = score !== undefined && score >= threshold;
 
       if (passed) {
-        return item;
+        updated.push(item);
+      } else {
+        const scoreText = score !== undefined ? String(score) : "unknown";
+        yield* Effect.logInfo(
+          `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
+        );
+        updated.push({
+          _tag: "Filtered",
+          url: item.data.url,
+        });
       }
-
-      return {
-        _tag: "Filtered",
-        url: item.data.url,
-      };
-    });
+    }
 
     return updated;
   }).pipe(
