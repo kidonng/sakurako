@@ -155,7 +155,12 @@ describe("filterPreviewResults", () => {
     expect(captured.requestBody?.questions?.preview_1?.type).toBe("noul");
 
     expect(filtered).toHaveLength(2);
-    expect(filtered[0]).toEqual(results[0]!);
+    const firstItem = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: firstItem.data,
+      expanded: false,
+    });
     expect(filtered[1]).toEqual({
       _tag: "Filtered",
       url: "https://t.me/promo",
@@ -372,5 +377,144 @@ describe("filterPreviewResults", () => {
       ),
     );
     expect(filteredNoAnswers).toEqual(results);
+  });
+
+  it("requests standard_is_sufficient and marks expanded: true when standard is insufficient", async () => {
+    const longDesc =
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.com/binance",
+          title: "币安被盗事件追踪",
+          description: longDesc,
+        },
+      },
+    ];
+
+    type CapturedPayload = {
+      state?: {
+        previews?: Record<string, { standard_truncated?: string }>;
+      };
+      questions?: Record<string, unknown>;
+    };
+    const captured: { body?: CapturedPayload } = {};
+    const layer = makeTestHttpClient((req) => {
+      captured.body = extractJsonBody(req) as CapturedPayload;
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0: { type: "noul", noul: 0.9 },
+            preview_0_standard_is_sufficient: { type: "noul", noul: 0.2 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "Bobby Lee认为币安被盗比特币大概率无法追回",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(captured.body?.state?.previews?.preview_0?.standard_truncated).toBeDefined();
+    expect(captured.body?.questions?.preview_0_standard_is_sufficient).toBeDefined();
+    expect(filtered).toHaveLength(1);
+    const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: first.data,
+      expanded: true,
+    });
+  });
+
+  it("marks expanded: false when standard_is_sufficient is above threshold", async () => {
+    const longDesc =
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.com/binance",
+          title: "币安被盗事件追踪",
+          description: longDesc,
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0: { type: "noul", noul: 0.95 },
+            preview_0_standard_is_sufficient: { type: "noul", noul: 0.85 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "用户仅发送了链接",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(filtered).toHaveLength(1);
+    const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: first.data,
+      expanded: false,
+    });
+  });
+
+  it("skips standard_is_sufficient question when description is short (<= 100 width)", async () => {
+    const shortDesc = "简短摘要内容";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.com/short",
+          title: "简短新闻",
+          description: shortDesc,
+        },
+      },
+    ];
+
+    const captured: { body?: { questions?: Record<string, unknown> } } = {};
+    const layer = makeTestHttpClient((req) => {
+      captured.body = extractJsonBody(req) as { questions?: Record<string, unknown> };
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0: { type: "noul", noul: 0.9 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "用户消息",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+    expect(captured.body?.questions?.preview_0).toBeDefined();
+    expect(captured.body?.questions?.preview_0_standard_is_sufficient).toBeUndefined();
+    const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: first.data,
+      expanded: false,
+    });
   });
 });

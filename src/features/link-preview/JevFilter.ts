@@ -1,7 +1,13 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Data, type Duration, Effect, Redacted } from "effect";
+import stringWidth from "string-width";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import type { PageMetadata, ScrapingResult } from "./LinkPreview.ts";
+import {
+  DEFAULT_DESCRIPTION_MAX_WIDTH,
+  type PageMetadata,
+  type ScrapingResult,
+} from "./LinkPreview.ts";
+import { truncate } from "../../utils/TextWidth.ts";
 
 export const OPENROUTER_SYSTEMONE_URL =
   "https://openrouter.ai/api/v1/systemone";
@@ -30,6 +36,7 @@ export interface SystemOneRequest {
         readonly url: string;
         readonly title?: string;
         readonly description?: string;
+        readonly standard_truncated?: string;
       }
     >;
   };
@@ -68,6 +75,11 @@ const NOUL_CRITERIA: SystemOneNoulCriteria = {
     "The preview merely repeats information already stated in the user message, or consists of generic site slogans, channel/group promo links, submission bots, or empty boilerplate.",
 };
 
+const NOUL_SUFFICIENT_CRITERIA: SystemOneNoulCriteria = {
+  true: "The standard truncated excerpt already conveys meaningful new facts not present in user_message.",
+  false:
+    "The standard truncated excerpt merely repeats what was in user_message, while any new facts only exist further down in description or are absent entirely.",
+};
 export function filterPreviewResults(
   rawMessage: string,
   results: ReadonlyArray<ScrapingResult>,
@@ -103,24 +115,43 @@ export function filterPreviewResults(
         readonly url: string;
         readonly title?: string;
         readonly description?: string;
+        readonly standard_truncated?: string;
       }
     > = {};
     const questions: Record<string, SystemOneNoulQuestion> = {};
+    const sufficiencyAskedKeys = new Set<string>();
 
     for (const entry of successEntries) {
       const key = `preview_${entry.index}`;
+      const description = entry.data.description;
+      const isLongDescription =
+        description !== undefined &&
+        stringWidth(description) > DEFAULT_DESCRIPTION_MAX_WIDTH;
+      const standardTruncated = description
+        ? truncate(description, DEFAULT_DESCRIPTION_MAX_WIDTH)
+        : undefined;
+
       previews[key] = {
         url: entry.data.url,
         title: entry.data.title,
-        description: entry.data.description,
+        description,
+        standard_truncated: standardTruncated,
       };
       questions[key] = {
         type: "noul",
         instructions: NOUL_INSTRUCTIONS,
         criteria: NOUL_CRITERIA,
       };
-    }
 
+      if (isLongDescription) {
+        sufficiencyAskedKeys.add(key);
+        questions[`${key}_standard_is_sufficient`] = {
+          type: "noul",
+          instructions: `Does \`previews.${key}.standard_truncated\` convey the substantive new facts not in \`user_message\`?`,
+          criteria: NOUL_SUFFICIENT_CRITERIA,
+        };
+      }
+    }
     const payload: SystemOneRequest = {
       model: DEFAULT_JEV_MODEL,
       state: {
@@ -180,12 +211,28 @@ export function filterPreviewResults(
         continue;
       }
       const key = `preview_${index}`;
-      const answer = answers[key];
-      const score = typeof answer?.noul === "number" ? answer.noul : undefined;
+      const primaryAnswer =
+        answers[`${key}_has_substantive_info`] ?? answers[key];
+      const score =
+        typeof primaryAnswer?.noul === "number" ? primaryAnswer.noul : undefined;
       const passed = score !== undefined && score >= threshold;
 
       if (passed) {
-        updated.push(item);
+        let expanded = false;
+        if (sufficiencyAskedKeys.has(key)) {
+          const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
+          const sufficiencyScore =
+            typeof sufficiencyAnswer?.noul === "number"
+              ? sufficiencyAnswer.noul
+              : undefined;
+          if (sufficiencyScore !== undefined && sufficiencyScore < threshold) {
+            expanded = true;
+          }
+        }
+        updated.push({
+          ...item,
+          expanded,
+        });
       } else {
         const scoreText = score !== undefined ? String(score) : "unknown";
         yield* Effect.logInfo(
