@@ -20,7 +20,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
        ▼ (WebSocket events)
 [SnowLumaClient] (src/SnowLuma.ts: Context.Service + Layer.effect)
   - Lifecycle: Effect.acquireRelease with exponential connection retry
-  - Bridges events to an unbounded Queue via Effect.runForkWith
+  - Bridges events to an unbounded Queue via Queue.offerUnsafe
        │
        ▼ Stream.fromQueue
 [Message Stream] (Stream.Stream<IncomingMessage>)
@@ -76,10 +76,9 @@ All development tasks use Bun:
 
 ### Effect 4 Patterns
 
-- **Services**: Define services extending `Context.Service<Tag, Shape>()("package/Id")`.
-- **Layer Construction**: Use `Layer.effect(Service, Effect.gen(...))` combining `Effect.acquireRelease` for resource lifecycle management.
-- **Async Execution in Callbacks**: Capture surrounding context with `const context = yield* Effect.context()` and dispatch tasks via `const runFork = Effect.runForkWith(context)` to prevent `effecttsgo(run-effect-inside-effect)` warnings.
-- **Tagged Errors**: For internal domain failure channels that do not require Schema serialization, use `Data.TaggedError`. For serialized/wire errors, subclass `Schema.TaggedError` with a brand type parameter:
+General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `DateTime`, etc.) follow `@node_modules/effect/AGENTS.md`. Note the repository-specific requirements:
+
+- **Branded Schema Errors**: Due to `effecttsgo/schema-class-missing-brand`, always provide `{ readonly brand: unique symbol }` as the second type argument to `Schema.TaggedError`:
   ```ts
   export class WebSocketConnectionError extends Schema.TaggedError<
     WebSocketConnectionError,
@@ -88,9 +87,7 @@ All development tasks use Bun:
     }
   >()("WebSocketConnectionError", { message: Schema.String }) {}
   ```
-- **Error Handling**: Use `Effect.tryPromise` for promise-based APIs and attach `Effect.catch` to handle typed errors. `Effect.promise` defects on rejection; avoid unless defects are expected.
-- **Retries**: Compose schedules with `Schedule.exponential(...)` and `Schedule.upTo({ duration: ... })`.
-- **Logging**: Use `Effect.logInfo` and `Effect.logError` instead of `console.log`.
+- **Callback Ingestion**: In non-Effect callbacks (e.g. WebSocket listeners), offer items synchronously via `Queue.offerUnsafe` rather than creating fibers.
 
 ## Important Files
 
@@ -128,3 +125,4 @@ All development tasks use Bun:
   - Test default fallbacks when optional configs are omitted.
 
 @docs/troubleshooting.md
+@node_modules/effect/AGENTS.md
