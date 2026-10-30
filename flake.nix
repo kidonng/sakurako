@@ -18,6 +18,8 @@
 
       devTools = pkgs: [
         (bun pkgs)
+        # For JetBrains IDE only
+        pkgs.nodejs
       ];
     in
     {
