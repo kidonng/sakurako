@@ -1,6 +1,6 @@
 import { Effect, Stream } from "effect";
 import { type IncomingMessage, SnowLumaClient } from "../../SnowLuma.ts";
-
+import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 export const handleIncomingMessage = (
   item: IncomingMessage,
 ): Effect.Effect<void, never> => {
@@ -11,14 +11,17 @@ export const handleIncomingMessage = (
     event.user_id !== event.self_id
   ) {
     return Effect.gen(function* () {
+      const prefix = formatLogMessagePrefix(event);
       yield* Effect.logInfo(
-        `Received '喵喵喵' from user ${event.user_id} (${event.message_type}), replying...`,
+        `${prefix} Received '喵喵喵' (${event.message_type}), replying...`,
       );
       yield* Effect.tryPromise(() => item.context.reply("喵喵喵"));
-      yield* Effect.logInfo("Reply sent: 喵喵喵");
+      yield* Effect.logInfo(`${prefix} Reply sent: 喵喵喵`);
     }).pipe(
       Effect.catch((error) =>
-        Effect.logError(`Failed to reply to message: ${String(error)}`),
+        Effect.logError(
+          `${formatLogMessagePrefix(event)} Failed to reply to message: ${String(error)}`,
+        ),
       ),
     );
   }

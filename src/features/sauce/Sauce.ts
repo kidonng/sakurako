@@ -5,8 +5,8 @@ import { Effect } from "effect";
 import { HttpClient } from "effect/http";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
+import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { searchSauce } from "./SauceNao.ts";
-
 export function handleSauceMessage(
   item: IncomingMessage,
 ): Effect.Effect<void, never, HttpClient.HttpClient> {
@@ -69,10 +69,10 @@ export function handleSauceMessage(
   }
 
   return Effect.gen(function* () {
+    const prefix = formatLogMessagePrefix(event);
     yield* Effect.logInfo(
-      `Received '/sauce' from user ${event.user_id}, retrieving quoted message ${messageId}...`,
+      `${prefix} Received '/sauce', retrieving quoted message ${messageId}...`,
     );
-
     const client = item.context.client;
     if (!client) {
       yield* Effect.tryPromise(() =>
@@ -122,7 +122,7 @@ export function handleSauceMessage(
       config._tag === "Some" ? config.value.sauceNaoApiKey : undefined;
 
     yield* Effect.logInfo(
-      `Searching SauceNao for image in message ${messageId}...`,
+      `${prefix} Searching SauceNao for image in message ${messageId}...`,
     );
     const result = yield* searchSauce(imageUrl, apiKey);
 
@@ -136,11 +136,14 @@ export function handleSauceMessage(
     yield* Effect.tryPromise(() =>
       item.context.quote(segments.text(result.formattedText)),
     );
-    yield* Effect.logInfo("Sauce reply sent successfully.");
+    yield* Effect.logInfo(`${prefix} Sauce reply sent successfully.`);
   }).pipe(
     Effect.catch((error) =>
       Effect.gen(function* () {
-        yield* Effect.logError(`Sauce handler failed: ${String(error)}`);
+        const prefix = formatLogMessagePrefix(event);
+        yield* Effect.logError(
+          `${prefix} Sauce handler failed: ${String(error)}`,
+        );
         yield* Effect.tryPromise(() =>
           item.context.quote("查询失败，请稍后重试"),
         ).pipe(

@@ -19,6 +19,10 @@ import {
 import { filterPreviewResults } from "./JevFilter.ts";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
+import {
+  formatLogMessagePrefix,
+  formatLogSnippet,
+} from "../../utils/LogFormat.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
@@ -502,8 +506,10 @@ export function handleLinkPreviewMessage(
   }
 
   return Effect.gen(function* () {
+    const prefix = formatLogMessagePrefix(event);
+    const snippet = formatLogSnippet(event.raw_message);
     yield* Effect.logInfo(
-      `Found ${urls.length} URL(s) in message from user ${event.user_id}, scraping preview...`,
+      `${prefix} Found ${urls.length} URL(s) in message "${snippet}", scraping preview...`,
     );
     const results = yield* scrapeAll(urls);
     const config = yield* Effect.option(BotConfig);
@@ -517,7 +523,7 @@ export function handleLinkPreviewMessage(
     const formatted = formatPreview(filteredResults);
     if (!formatted || (!formatted.text && !formatted.image)) {
       yield* Effect.logInfo(
-        "All URL scrapes failed or produced no preview, remaining silent.",
+        `${prefix} All URL scrapes failed or produced no preview, remaining silent.`,
       );
       return;
     }
@@ -556,11 +562,11 @@ export function handleLinkPreviewMessage(
         return Effect.fail(error);
       }),
     );
-    yield* Effect.logInfo("Link preview quote reply sent.");
+    yield* Effect.logInfo(`${prefix} Link preview quote reply sent.`);
   }).pipe(
     Effect.catch((error) =>
       Effect.logError(
-        `Failed to send link preview reply for ${urls.join(", ")}: ${formatErrorDetail(error.cause)}`,
+        `${formatLogMessagePrefix(event)} Failed to send link preview reply for ${urls.join(", ")}: ${formatErrorDetail(error.cause)}`,
       ),
     ),
   );
