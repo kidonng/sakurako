@@ -5,6 +5,7 @@ import * as cheerio from "cheerio";
 import {
   extractFirstParagraph,
   extractUrls,
+  MAX_IMAGE_BYTES,
   prepareOutgoingImage,
   scrapeAll,
   scrapeMetadata,
@@ -538,6 +539,111 @@ describe("LinkPreviewEngine", () => {
         ),
       );
       expect(result).toBeUndefined();
+    });
+    it("blocks image when declared Content-Length exceeds MAX_IMAGE_BYTES", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(new Uint8Array([1, 2, 3]), {
+            status: 200,
+            headers: {
+              "Content-Type": "image/jpeg",
+              "Content-Length": "15000000",
+            },
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/huge.jpg").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks image when body size exceeds MAX_IMAGE_BYTES without Content-Length", async () => {
+      const oversizedBytes = new Uint8Array(11 * 1024 * 1024);
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(oversizedBytes, {
+            status: 200,
+            headers: { "Content-Type": "image/jpeg" },
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/oversized.jpg").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks non-image Content-Type (e.g. text/html)", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("<html>Error</html>", {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/error-page.png").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks missing Content-Type", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(new Uint8Array([1, 2, 3]), {
+            status: 200,
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/no-content-type.png").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks SVG images by Content-Type (image/svg+xml)", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("<svg></svg>", {
+            status: 200,
+            headers: { "Content-Type": "image/svg+xml" },
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/vector.svg").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("accepts valid image with Content-Type parameters", async () => {
+      const mockBytes = new Uint8Array([1, 2, 3]);
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(mockBytes, {
+            status: 200,
+            headers: { "Content-Type": "image/png; charset=binary" },
+          }),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://example.com/photo.png").pipe(
+          Effect.provide(layer),
+        ),
+      );
+      expect(result).toBe(
+        "base64://" + Buffer.from(mockBytes).toString("base64"),
+      );
+    });
+
+    it("exports MAX_IMAGE_BYTES constant as 10 MiB", () => {
+      expect(MAX_IMAGE_BYTES).toBe(10 * 1024 * 1024);
     });
   });
 

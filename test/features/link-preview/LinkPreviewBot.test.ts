@@ -331,13 +331,18 @@ describe("handleLinkPreviewMessage", () => {
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
-    const layer = makeTestHttpClient(
-      () =>
-        new Response(
-          '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
-          { status: 200 },
-        ),
-    );
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("cover.png")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response(
+        '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
+        { status: 200, headers: { "Content-Type": "text/html" } },
+      );
+    });
 
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),

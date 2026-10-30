@@ -141,9 +141,9 @@ export class SendLinkPreviewReplyError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-export class DownloadImageAsBase64Error extends Data.TaggedError(
-  "DownloadImageAsBase64Error",
-)<{
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
+
+export class FetchImageError extends Data.TaggedError("FetchImageError")<{
   readonly cause: unknown;
 }> {}
 
@@ -465,34 +465,76 @@ export function prepareOutgoingImage(
 
     const downloadEffect = Effect.gen(function* () {
       const response = yield* client.execute(request);
+      const cancelBody = () => {
+        const webRes = HttpClientResponse.toWeb(response);
+        if (webRes._tag === "Some") {
+          void webRes.value.body?.cancel().catch(() => {});
+        }
+      };
+
       if (response.status < 200 || response.status >= 300) {
         const webRes = HttpClientResponse.toWeb(response);
         const statusText =
           webRes._tag === "Some" && webRes.value.statusText
             ? webRes.value.statusText
             : "";
-        if (webRes._tag === "Some") {
-          void webRes.value.body?.cancel().catch(() => {});
-        }
-        return yield* new DownloadImageAsBase64Error({
+        cancelBody();
+        return yield* new FetchImageError({
           cause: new Error(
             `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
           ),
         });
       }
+
+      const rawContentType = response.headers["content-type"];
+      const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
+      if (
+        !contentType ||
+        !contentType.startsWith("image/") ||
+        contentType === "image/svg+xml"
+      ) {
+        cancelBody();
+        yield* Effect.logWarning(
+          `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
+        );
+        return undefined;
+      }
+
+      const declaredLengthStr = response.headers["content-length"];
+      if (declaredLengthStr) {
+        const declaredLength = Number(declaredLengthStr);
+        if (
+          Number.isFinite(declaredLength) &&
+          declaredLength > MAX_IMAGE_BYTES
+        ) {
+          cancelBody();
+          yield* Effect.logWarning(
+            `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+          );
+          return undefined;
+        }
+      }
+
       const buffer = yield* response.arrayBuffer;
+      if (buffer.byteLength > MAX_IMAGE_BYTES) {
+        yield* Effect.logWarning(
+          `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+        );
+        return undefined;
+      }
+
       const base64 = Buffer.from(buffer).toString("base64");
       return `base64://${base64}` as string | undefined;
     }).pipe(
       Effect.timeout(timeoutDuration),
-      Effect.catchTag("DownloadImageAsBase64Error", (error) =>
+      Effect.catchTag("FetchImageError", (error) =>
         Effect.logWarning(
-          `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
+          `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
         ).pipe(Effect.as(undefined as string | undefined)),
       ),
       Effect.catch((error) =>
         Effect.logWarning(
-          `Failed to download image as base64 for ${imageUrl}: ${formatErrorDetail(error)}`,
+          `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error)}`,
         ).pipe(Effect.as(undefined as string | undefined)),
       ),
     );
