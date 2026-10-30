@@ -1,10 +1,16 @@
+import { BunRuntime } from "@effect/platform-bun";
 import { createWebSocketClient } from "@snowluma/sdk";
-import { Data, Effect, Redacted } from "effect";
+import { DateTime, Effect, Redacted, Schema } from "effect";
 import { BotConfig } from "../src/Config.ts";
 
-export class InspectError extends Data.TaggedError("InspectError")<{
-  readonly message: string;
-}> {}
+export class InspectError extends Schema.TaggedError<
+  InspectError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("InspectError", {
+  message: Schema.String,
+}) {}
 
 export function parseMessageId(args: readonly string[]): number | undefined {
   if (args.length === 0) return undefined;
@@ -46,7 +52,7 @@ export function formatMessageReport(data: RawMessageData): string {
   lines.push(`Sender: ${senderName} (${senderId})`);
 
   if (data.time) {
-    const dateStr = new Date(data.time * 1000).toISOString();
+    const dateStr = DateTime.formatIso(DateTime.makeUnsafe(data.time * 1000));
     lines.push(`Time: ${dateStr} (${data.time})`);
   }
 
@@ -54,52 +60,48 @@ export function formatMessageReport(data: RawMessageData): string {
   return lines.join("\n");
 }
 
-const mainProgram = (messageId: number) =>
-  Effect.gen(function* () {
-    const config = yield* BotConfig;
-    const ws = createWebSocketClient({
-      url: config.wsUrl,
-      accessToken: Redacted.value(config.accessToken),
-    });
+export const mainProgram = Effect.fnUntraced(function* (messageId: number) {
+  const config = yield* BotConfig;
+  const ws = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      createWebSocketClient({
+        url: config.wsUrl,
+        accessToken: Redacted.value(config.accessToken),
+      }),
+    ),
+    (client) => Effect.sync(() => client.close()),
+  );
 
-    yield* Effect.tryPromise({
-      try: () => ws.connect(),
-      catch: (err) =>
-        new InspectError({
-          message: `WebSocket connection failed: ${String(err)}`,
-        }),
-    });
-
-    try {
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          ws.request("get_msg", {
-            message_id: messageId,
-          }),
-        catch: (err) =>
-          new InspectError({
-            message: `Failed to call OneBot get_msg: ${String(err)}`,
-          }),
-      });
-
-      if (
-        response.status !== "ok" ||
-        response.retcode !== 0 ||
-        !response.data
-      ) {
-        return yield* new InspectError({
-          message: `OneBot returned error (retcode: ${response.retcode}, wording: ${response.wording ?? "unknown"})`,
-        });
-      }
-
-      console.log("=== Message Metadata ===");
-      console.log(formatMessageReport(response.data as RawMessageData));
-      console.log("\n=== Raw JSON Payload ===");
-      console.log(JSON.stringify(response.data, null, 2));
-    } finally {
-      ws.close();
-    }
+  yield* Effect.tryPromise({
+    try: () => ws.connect(),
+    catch: (err) =>
+      new InspectError({
+        message: `WebSocket connection failed: ${String(err)}`,
+      }),
   });
+
+  const response = yield* Effect.tryPromise({
+    try: () =>
+      ws.request("get_msg", {
+        message_id: messageId,
+      }),
+    catch: (err) =>
+      new InspectError({
+        message: `Failed to call OneBot get_msg: ${String(err)}`,
+      }),
+  });
+
+  if (response.status !== "ok" || response.retcode !== 0 || !response.data) {
+    return yield* new InspectError({
+      message: `OneBot returned error (retcode: ${response.retcode}, wording: ${response.wording ?? "unknown"})`,
+    });
+  }
+
+  console.log("=== Message Metadata ===");
+  console.log(formatMessageReport(response.data as RawMessageData));
+  console.log("\n=== Raw JSON Payload ===");
+  console.log(JSON.stringify(response.data, null, 2));
+});
 
 if (import.meta.main) {
   const messageId = parseMessageId(process.argv.slice(2));
@@ -109,8 +111,6 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  Effect.runPromise(mainProgram(messageId)).catch((error) => {
-    console.error("Execution failed:", error.message || error);
-    process.exit(1);
-  });
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage
+  BunRuntime.runMain(mainProgram(messageId).pipe(Effect.scoped));
 }

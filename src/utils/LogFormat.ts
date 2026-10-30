@@ -1,4 +1,5 @@
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
+import { Predicate } from "effect";
 import { truncate } from "./TextWidth.ts";
 export function formatLogMessagePrefix(event: OneBotMessageEvent): string {
   const msgId = event.message_id !== undefined ? event.message_id : "unknown";
@@ -7,7 +8,7 @@ export function formatLogMessagePrefix(event: OneBotMessageEvent): string {
 }
 
 export function formatLogSnippet(text: unknown, maxWidth = 30): string {
-  if (typeof text !== "string" || !text) return "";
+  if (!Predicate.isString(text) || !text) return "";
   const collapsed = text.replace(/\s+/g, " ").trim();
   return truncate(collapsed, maxWidth);
 }

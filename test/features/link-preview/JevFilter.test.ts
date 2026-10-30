@@ -155,7 +155,10 @@ describe("filterPreviewResults", () => {
     expect(captured.requestBody?.questions?.preview_1?.type).toBe("noul");
 
     expect(filtered).toHaveLength(2);
-    const firstItem = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
+    const firstItem = results[0] as Extract<
+      ScrapingResult,
+      { _tag: "Success" }
+    >;
     expect(filtered[0]).toEqual({
       _tag: "Success",
       data: firstItem.data,
@@ -421,8 +424,12 @@ describe("filterPreviewResults", () => {
       ).pipe(Effect.provide(layer)),
     );
 
-    expect(captured.body?.state?.previews?.preview_0?.standard_truncated).toBeDefined();
-    expect(captured.body?.questions?.preview_0_standard_is_sufficient).toBeDefined();
+    expect(
+      captured.body?.state?.previews?.preview_0?.standard_truncated,
+    ).toBeDefined();
+    expect(
+      captured.body?.questions?.preview_0_standard_is_sufficient,
+    ).toBeDefined();
     expect(filtered).toHaveLength(1);
     const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
     expect(filtered[0]).toEqual({
@@ -490,7 +497,9 @@ describe("filterPreviewResults", () => {
 
     const captured: { body?: { questions?: Record<string, unknown> } } = {};
     const layer = makeTestHttpClient((req) => {
-      captured.body = extractJsonBody(req) as { questions?: Record<string, unknown> };
+      captured.body = extractJsonBody(req) as {
+        questions?: Record<string, unknown>;
+      };
       return new Response(
         JSON.stringify({
           answers: {
@@ -502,14 +511,14 @@ describe("filterPreviewResults", () => {
     });
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults(
-        "用户消息",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(layer)),
+      filterPreviewResults("用户消息", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(layer),
+      ),
     );
     expect(captured.body?.questions?.preview_0).toBeDefined();
-    expect(captured.body?.questions?.preview_0_standard_is_sufficient).toBeUndefined();
+    expect(
+      captured.body?.questions?.preview_0_standard_is_sufficient,
+    ).toBeUndefined();
     const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
     expect(filtered[0]).toEqual({
       _tag: "Success",

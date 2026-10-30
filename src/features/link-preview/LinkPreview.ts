@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Data, type Duration, Effect } from "effect";
+import { type Duration, Effect, Option, Predicate, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
@@ -73,45 +73,66 @@ export interface PageMetadata {
   readonly image?: string;
 }
 
-export class InvalidUrlError extends Data.TaggedError("InvalidUrlError")<{
-  readonly url: string;
-  readonly cause: unknown;
-}> {
+export class InvalidUrlError extends Schema.TaggedError<
+  InvalidUrlError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("InvalidUrlError", {
+  url: Schema.String,
+  cause: Schema.Defect(),
+}) {
   override get message(): string {
-    return `Invalid URL: ${String(this.cause)}`;
+    return `Invalid URL: ${this.url} (${String(this.cause)})`;
   }
 }
 
-export class BlockedHostError extends Data.TaggedError("BlockedHostError")<{
-  readonly url: string;
-  readonly hostname: string;
-}> {
-  override readonly message = "Blocked private or local address";
+export class BlockedHostError extends Schema.TaggedError<
+  BlockedHostError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("BlockedHostError", {
+  url: Schema.String,
+  hostname: Schema.String,
+}) {
+  override get message(): string {
+    return "Blocked private or local address";
+  }
 }
 
-export class HttpFetchError extends Data.TaggedError("HttpFetchError")<{
-  readonly url: string;
-  readonly status?: number;
-  readonly statusText?: string;
-  readonly detail: string;
-}> {
+export class HttpFetchError extends Schema.TaggedError<
+  HttpFetchError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("HttpFetchError", {
+  url: Schema.String,
+  status: Schema.optional(Schema.Finite),
+  statusText: Schema.optional(Schema.String),
+  detail: Schema.optional(Schema.String),
+}) {
   override get message(): string {
     if (this.status !== undefined) {
       return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
     }
-    return `Network error: ${this.detail}`;
+    return `Network error: ${this.detail ?? "unknown"}`;
   }
 }
 
-export class ParseMetadataError extends Data.TaggedError("ParseMetadataError")<{
-  readonly url: string;
-  readonly cause: unknown;
-}> {
+export class ParseMetadataError extends Schema.TaggedError<
+  ParseMetadataError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("ParseMetadataError", {
+  url: Schema.String,
+  cause: Schema.Defect(),
+}) {
   override get message(): string {
     return `Failed to parse metadata: ${String(this.cause)}`;
   }
 }
-
 export type ScrapeMetadataError =
   InvalidUrlError | BlockedHostError | HttpFetchError | ParseMetadataError;
 
@@ -135,17 +156,25 @@ export interface FormattedPreview {
   readonly image?: string;
 }
 
-export class SendLinkPreviewReplyError extends Data.TaggedError(
-  "SendLinkPreviewReplyError",
-)<{
-  readonly cause: unknown;
-}> {}
+export class SendLinkPreviewReplyError extends Schema.TaggedError<
+  SendLinkPreviewReplyError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("SendLinkPreviewReplyError", {
+  cause: Schema.Defect(),
+}) {}
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
 
-export class FetchImageError extends Data.TaggedError("FetchImageError")<{
-  readonly cause: unknown;
-}> {}
+export class FetchImageError extends Schema.TaggedError<
+  FetchImageError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("FetchImageError", {
+  cause: Schema.Defect(),
+}) {}
 
 export function isSvgUrl(url: string): boolean {
   try {
@@ -173,8 +202,7 @@ export function formatErrorDetail(error: unknown): string {
     return error.stack ?? error.message;
   }
   if (
-    error &&
-    typeof error === "object" &&
+    Predicate.isObject(error) &&
     "cause" in error &&
     error.cause instanceof Error
   ) {
@@ -355,11 +383,15 @@ export function isPrivateHost(hostname: string): boolean {
   return false;
 }
 
-export function scrapeMetadata(
-  url: string,
-  timeoutDuration: Duration.Input = "10 seconds",
-): Effect.Effect<PageMetadata, ScrapeMetadataError, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
+export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
+  function* (
+    url: string,
+    timeoutDuration: Duration.Input = "10 seconds",
+  ): Effect.fn.Return<
+    PageMetadata,
+    ScrapeMetadataError,
+    HttpClient.HttpClient
+  > {
     const client = yield* HttpClient.HttpClient;
 
     const urlObj = yield* Effect.try({
@@ -426,165 +458,164 @@ export function scrapeMetadata(
       description,
       image,
     };
-  });
-}
+  },
+);
 
-export function prepareOutgoingImage(
+export const prepareOutgoingImage = Effect.fn(
+  "LinkPreview.prepareOutgoingImage",
+)(function* (
   imageUrl: string,
   timeoutDuration: Duration.Input = "10 seconds",
-): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    const urlObj = yield* Effect.try({
-      try: () => new URL(imageUrl),
-      catch: (e) => `Invalid URL: ${String(e)}`,
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Blocked private or invalid image URL: ${imageUrl} (${error})`,
-        ).pipe(Effect.as(undefined)),
-      ),
-    );
+): Effect.fn.Return<string | undefined, never, HttpClient.HttpClient> {
+  const urlObj = yield* Effect.try({
+    try: () => new URL(imageUrl),
+    catch: (e) => `Invalid URL: ${String(e)}`,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Blocked private or invalid image URL: ${imageUrl} (${error})`,
+      ).pipe(Effect.as(undefined)),
+    ),
+  );
 
-    if (!urlObj || isPrivateHost(urlObj.hostname)) {
-      if (urlObj) {
-        yield* Effect.logWarning(
-          `Blocked private or invalid image URL: ${imageUrl}`,
-        );
+  if (!urlObj || isPrivateHost(urlObj.hostname)) {
+    if (urlObj) {
+      yield* Effect.logWarning(
+        `Blocked private or invalid image URL: ${imageUrl}`,
+      );
+    }
+    return undefined;
+  }
+
+  if (!shouldFetchImageLocally(imageUrl)) {
+    return imageUrl;
+  }
+
+  const client = yield* HttpClient.HttpClient;
+  const request = HttpClientRequest.get(imageUrl).pipe(
+    HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+  );
+
+  const downloadEffect = Effect.gen(function* () {
+    const response = yield* client.execute(request);
+    const cancelBody = () => {
+      const webRes = HttpClientResponse.toWeb(response);
+      if (webRes._tag === "Some") {
+        void webRes.value.body?.cancel().catch(() => {});
       }
+    };
+
+    if (response.status < 200 || response.status >= 300) {
+      const webRes = HttpClientResponse.toWeb(response);
+      const statusText =
+        webRes._tag === "Some" && webRes.value.statusText
+          ? webRes.value.statusText
+          : "";
+      cancelBody();
+      return yield* new FetchImageError({
+        cause: new Error(
+          `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
+        ),
+      });
+    }
+
+    const rawContentType = response.headers["content-type"];
+    const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
+    if (
+      !contentType ||
+      !contentType.startsWith("image/") ||
+      contentType === "image/svg+xml"
+    ) {
+      cancelBody();
+      yield* Effect.logWarning(
+        `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
+      );
       return undefined;
     }
 
-    if (!shouldFetchImageLocally(imageUrl)) {
-      return imageUrl;
+    const declaredLengthStr = response.headers["content-length"];
+    if (declaredLengthStr) {
+      const declaredLength = Number(declaredLengthStr);
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
+        cancelBody();
+        yield* Effect.logWarning(
+          `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+        );
+        return undefined;
+      }
     }
 
-    const client = yield* HttpClient.HttpClient;
-    const request = HttpClientRequest.get(imageUrl).pipe(
-      HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
-    );
+    const buffer = yield* response.arrayBuffer;
+    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+      yield* Effect.logWarning(
+        `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+      );
+      return undefined;
+    }
 
-    const downloadEffect = Effect.gen(function* () {
-      const response = yield* client.execute(request);
-      const cancelBody = () => {
-        const webRes = HttpClientResponse.toWeb(response);
-        if (webRes._tag === "Some") {
-          void webRes.value.body?.cancel().catch(() => {});
-        }
-      };
+    const base64 = Buffer.from(buffer).toString("base64");
+    return `base64://${base64}` as string | undefined;
+  }).pipe(
+    Effect.timeout(timeoutDuration),
+    Effect.catchTag("FetchImageError", (error) =>
+      Effect.logWarning(
+        `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
+      ).pipe(Effect.as(undefined as string | undefined)),
+    ),
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error)}`,
+      ).pipe(Effect.as(undefined as string | undefined)),
+    ),
+  );
 
-      if (response.status < 200 || response.status >= 300) {
-        const webRes = HttpClientResponse.toWeb(response);
-        const statusText =
-          webRes._tag === "Some" && webRes.value.statusText
-            ? webRes.value.statusText
-            : "";
-        cancelBody();
-        return yield* new FetchImageError({
-          cause: new Error(
-            `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
-          ),
-        });
-      }
-
-      const rawContentType = response.headers["content-type"];
-      const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
-      if (
-        !contentType ||
-        !contentType.startsWith("image/") ||
-        contentType === "image/svg+xml"
-      ) {
-        cancelBody();
-        yield* Effect.logWarning(
-          `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
-        );
-        return undefined;
-      }
-
-      const declaredLengthStr = response.headers["content-length"];
-      if (declaredLengthStr) {
-        const declaredLength = Number(declaredLengthStr);
-        if (
-          Number.isFinite(declaredLength) &&
-          declaredLength > MAX_IMAGE_BYTES
-        ) {
-          cancelBody();
-          yield* Effect.logWarning(
-            `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
-          );
-          return undefined;
-        }
-      }
-
-      const buffer = yield* response.arrayBuffer;
-      if (buffer.byteLength > MAX_IMAGE_BYTES) {
-        yield* Effect.logWarning(
-          `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
-        );
-        return undefined;
-      }
-
-      const base64 = Buffer.from(buffer).toString("base64");
-      return `base64://${base64}` as string | undefined;
-    }).pipe(
-      Effect.timeout(timeoutDuration),
-      Effect.catchTag("FetchImageError", (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      ),
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error)}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      ),
-    );
-
-    return yield* downloadEffect;
-  });
-}
+  return yield* downloadEffect;
+});
 
 export function scrapeAll(
   urls: ReadonlyArray<string>,
 ): Effect.Effect<ReadonlyArray<ScrapingResult>, never, HttpClient.HttpClient> {
-  const effects = urls.map((url) =>
-    scrapeMetadata(url).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.logWarning(
-            `Failed to scrape metadata for ${url}: ${error.message}`,
-          ).pipe(
-            Effect.as({
-              _tag: "Failure",
-              url,
-              error,
-            } as ScrapingResult),
-          ),
-        onSuccess: (data) =>
-          Effect.succeed({ _tag: "Success", data } as ScrapingResult),
-      }),
-    ),
+  return Effect.forEach(
+    urls,
+    (url) =>
+      scrapeMetadata(url).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning(
+              `Failed to scrape metadata for ${url}: ${error.message}`,
+            ).pipe(
+              Effect.as({
+                _tag: "Failure",
+                url,
+                error,
+              } as ScrapingResult),
+            ),
+          onSuccess: (data) =>
+            Effect.succeed({ _tag: "Success", data } as ScrapingResult),
+        }),
+      ),
+    { concurrency: "unbounded" },
   );
-  return Effect.all(effects, { concurrency: "unbounded" });
 }
 
-export function handleLinkPreviewMessage(
+export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
-): Effect.Effect<void, never, HttpClient.HttpClient> {
+) {
   const { event } = item;
   if (
     event.post_type === "message_sent" ||
     event.user_id === event.self_id ||
     !event.raw_message
   ) {
-    return Effect.void;
+    return;
   }
 
   const urls = extractUrls(event.raw_message);
   if (urls.length === 0) {
-    return Effect.void;
+    return;
   }
 
-  return Effect.gen(function* () {
+  const sendPreview = Effect.gen(function* () {
     const prefix = formatLogMessagePrefix(event);
     const snippet = formatLogSnippet(event.raw_message);
     yield* Effect.logInfo(
@@ -592,8 +623,7 @@ export function handleLinkPreviewMessage(
     );
     const results = yield* scrapeAll(urls);
     const config = yield* Effect.option(BotConfig);
-    const openrouterApiKey =
-      config._tag === "Some" ? config.value.openrouterApiKey : undefined;
+    const openrouterApiKey = Option.getOrUndefined(config)?.openrouterApiKey;
     const filteredResults = yield* filterPreviewResults(
       event.raw_message,
       results,
@@ -649,4 +679,6 @@ export function handleLinkPreviewMessage(
       ),
     ),
   );
-}
+
+  yield* sendPreview;
+});

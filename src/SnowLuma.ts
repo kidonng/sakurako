@@ -39,8 +39,6 @@ export class SnowLumaClient extends Context.Service<
   static readonly layer = Layer.effect(
     SnowLumaClient,
     Effect.gen(function* () {
-      const context = yield* Effect.context();
-      const runFork = Effect.runForkWith(context);
       const config = yield* BotConfig;
       const queue = yield* Queue.unbounded<IncomingMessage>();
 
@@ -52,7 +50,7 @@ export class SnowLumaClient extends Context.Service<
             reconnect: true,
           });
           ws.onMessage((event, eventContext) => {
-            runFork(Queue.offer(queue, { event, context: eventContext }));
+            Queue.offerUnsafe(queue, { event, context: eventContext });
           });
           return ws;
         }),

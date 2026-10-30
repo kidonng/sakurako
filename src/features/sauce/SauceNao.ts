@@ -1,6 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Data, type Duration, Effect, Redacted } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import { type Duration, Effect, Redacted, Schema } from "effect";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+  Url,
+} from "effect/http";
 
 export interface SauceResult {
   readonly title: string;
@@ -10,49 +15,66 @@ export interface SauceResult {
   readonly similarity: number;
 }
 
-export class SauceNaoError extends Data.TaggedError("SauceNaoError")<{
-  readonly cause: unknown;
-}> {
+export class SauceNaoError extends Schema.TaggedError<
+  SauceNaoError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("SauceNaoError", {
+  cause: Schema.Defect(),
+}) {
   override get message(): string {
     return `SauceNaoError: ${String(this.cause)}`;
   }
 }
 
-interface SauceNaoHeader {
-  readonly status?: number;
-  readonly message?: string;
-  readonly minimum_similarity?: number | string;
-}
+export const SauceNaoHeaderSchema = Schema.Struct({
+  status: Schema.optional(Schema.Finite),
+  message: Schema.optional(Schema.String),
+  minimum_similarity: Schema.optional(
+    Schema.Union([Schema.Finite, Schema.FiniteFromString]),
+  ),
+});
 
-interface SauceNaoItemHeader {
-  readonly similarity?: string | number;
-  readonly index_id?: number;
-}
+export const SauceNaoItemHeaderSchema = Schema.Struct({
+  similarity: Schema.optional(
+    Schema.Union([Schema.Finite, Schema.FiniteFromString]),
+  ),
+  index_id: Schema.optional(Schema.Finite),
+});
 
-interface SauceNaoItemData {
-  readonly title?: string;
-  readonly source?: string;
-  readonly part?: string;
-  readonly year?: string;
-  readonly material?: string;
-  readonly jp_name?: string;
-  readonly member_name?: string;
-  readonly author_name?: string;
-  readonly creator?: string | string[];
-  readonly twitter_user_name?: string;
-  readonly ext_urls?: string[];
-  readonly pixiv_id?: number | string;
-}
+export const SauceNaoItemDataSchema = Schema.Struct({
+  title: Schema.optional(Schema.String),
+  source: Schema.optional(Schema.String),
+  part: Schema.optional(Schema.String),
+  year: Schema.optional(Schema.String),
+  material: Schema.optional(Schema.String),
+  jp_name: Schema.optional(Schema.String),
+  member_name: Schema.optional(Schema.String),
+  author_name: Schema.optional(Schema.String),
+  creator: Schema.optional(
+    Schema.Union([Schema.String, Schema.Array(Schema.String)]),
+  ),
+  twitter_user_name: Schema.optional(Schema.String),
+  ext_urls: Schema.optional(Schema.Array(Schema.String)),
+  pixiv_id: Schema.optional(
+    Schema.Union([Schema.Finite, Schema.FiniteFromString, Schema.String]),
+  ),
+});
 
-interface SauceNaoItem {
-  readonly header?: SauceNaoItemHeader;
-  readonly data?: SauceNaoItemData;
-}
+export type SauceNaoItemData = typeof SauceNaoItemDataSchema.Type;
 
-interface SauceNaoResponse {
-  readonly header?: SauceNaoHeader;
-  readonly results?: SauceNaoItem[];
-}
+export const SauceNaoItemSchema = Schema.Struct({
+  header: Schema.optional(SauceNaoItemHeaderSchema),
+  data: Schema.optional(SauceNaoItemDataSchema),
+});
+
+export const SauceNaoResponseSchema = Schema.Struct({
+  header: Schema.optional(SauceNaoHeaderSchema),
+  results: Schema.optional(Schema.Array(SauceNaoItemSchema)),
+});
+
+export type SauceNaoResponse = typeof SauceNaoResponseSchema.Type;
 
 const SAUCENAO_API_URL = "https://saucenao.com/search.php";
 
@@ -119,101 +141,90 @@ function extractUrl(data: SauceNaoItemData | undefined): string | undefined {
   return undefined;
 }
 
-export function searchSauce(
+export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   imageUrl: string,
   apiKey?: Redacted.Redacted<string>,
   timeoutDuration: Duration.Input = "10 seconds",
-): Effect.Effect<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
+): Effect.fn.Return<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
+  const client = yield* HttpClient.HttpClient;
 
-    const requestUrl = new URL(SAUCENAO_API_URL);
-    requestUrl.searchParams.set("output_type", "2");
-    requestUrl.searchParams.set("numres", "1");
-    requestUrl.searchParams.set("db", "999");
-    requestUrl.searchParams.set("url", imageUrl);
+  const urlParams: Record<string, string> = {
+    output_type: "2",
+    numres: "1",
+    db: "999",
+    url: imageUrl,
+  };
+  if (apiKey) {
+    urlParams.api_key = Redacted.value(apiKey);
+  }
 
-    if (apiKey) {
-      requestUrl.searchParams.set("api_key", Redacted.value(apiKey));
-    }
+  const request = HttpClientRequest.get(
+    Url.setUrlParams(new URL(SAUCENAO_API_URL), urlParams).toString(),
+  );
+  const executeAndRead = Effect.gen(function* () {
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
 
-    const request = HttpClientRequest.get(requestUrl.toString());
-
-    const executeAndRead = Effect.gen(function* () {
-      const response = yield* client
-        .execute(request)
-        .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
-
-      if (response.status < 200 || response.status >= 300) {
-        return yield* new SauceNaoError({
-          cause: `SauceNao HTTP returned status ${response.status}`,
-        });
-      }
-
-      const json = (yield* response.json.pipe(
-        Effect.mapError((cause) => new SauceNaoError({ cause })),
-      )) as SauceNaoResponse;
-
-      return json;
-    });
-
-    const json = yield* executeAndRead.pipe(
-      Effect.timeoutOrElse({
-        duration: timeoutDuration,
-        orElse: () =>
-          new SauceNaoError({
-            cause: "SauceNao request timed out",
-          }),
-      }),
-    );
-    const status = json.header?.status ?? 0;
-    if (status !== 0) {
+    if (response.status < 200 || response.status >= 300) {
       return yield* new SauceNaoError({
-        cause:
-          json.header?.message ??
-          `SauceNao API returned non-zero status: ${status}`,
+        cause: `SauceNao HTTP returned status ${response.status}`,
       });
     }
 
-    const results = json.results;
-    if (!Array.isArray(results) || results.length === 0) {
-      return null;
-    }
-    const first = results[0];
-    if (!first) {
-      return null;
-    }
-    const similarityRaw = first.header?.similarity;
-    const similarity =
-      typeof similarityRaw === "number"
-        ? similarityRaw
-        : parseFloat(similarityRaw ?? "0");
+    const json = yield* HttpClientResponse.schemaBodyJson(
+      SauceNaoResponseSchema,
+    )(response).pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
 
-    const minSimilarityRaw = json.header?.minimum_similarity;
-    const minSimilarity =
-      typeof minSimilarityRaw === "number"
-        ? minSimilarityRaw
-        : parseFloat(minSimilarityRaw ?? "0");
-
-    if (similarity < minSimilarity) {
-      return null;
-    }
-
-    const data = first.data;
-    const title = extractTitle(data);
-    const author = extractAuthor(data);
-    const url = extractUrl(data);
-
-    const titleLine =
-      author && author !== title ? `${title} by ${author}` : title;
-    const formattedText = url ? `${titleLine}\n${url}` : titleLine;
-
-    return {
-      title,
-      author,
-      url,
-      formattedText,
-      similarity,
-    };
+    return json;
   });
-}
+
+  const json = yield* executeAndRead.pipe(
+    Effect.timeoutOrElse({
+      duration: timeoutDuration,
+      orElse: () =>
+        new SauceNaoError({
+          cause: "SauceNao request timed out",
+        }),
+    }),
+  );
+  const status = json.header?.status ?? 0;
+  if (status !== 0) {
+    return yield* new SauceNaoError({
+      cause:
+        json.header?.message ??
+        `SauceNao API returned non-zero status: ${status}`,
+    });
+  }
+
+  const results = json.results;
+  if (!Array.isArray(results) || results.length === 0) {
+    return null;
+  }
+  const first = results[0];
+  if (!first) {
+    return null;
+  }
+  const similarity = first.header?.similarity ?? 0;
+  const minSimilarity = json.header?.minimum_similarity ?? 0;
+  if (similarity < minSimilarity) {
+    return null;
+  }
+
+  const data = first.data;
+  const title = extractTitle(data);
+  const author = extractAuthor(data);
+  const url = extractUrl(data);
+
+  const titleLine =
+    author && author !== title ? `${title} by ${author}` : title;
+  const formattedText = url ? `${titleLine}\n${url}` : titleLine;
+
+  return {
+    title,
+    author,
+    url,
+    formattedText,
+    similarity,
+  };
+});

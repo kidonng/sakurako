@@ -1,24 +1,23 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { parseSegments, segments } from "@snowluma/sdk/messages";
 import type { AnyMessageSegment } from "@snowluma/sdk/types";
-import { Effect } from "effect";
-import { HttpClient } from "effect/http";
+import { Effect, Option, Predicate } from "effect";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { searchSauce } from "./SauceNao.ts";
-export function handleSauceMessage(
+export const handleSauceMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
-): Effect.Effect<void, never, HttpClient.HttpClient> {
+) {
   const { event } = item;
 
   if (event.post_type === "message_sent" || event.user_id === event.self_id) {
-    return Effect.void;
+    return;
   }
 
   const rawSegments: AnyMessageSegment[] = Array.isArray(event.message)
     ? (event.message as unknown as AnyMessageSegment[])
-    : typeof event.raw_message === "string"
+    : Predicate.isString(event.raw_message)
       ? parseSegments(event.raw_message)
       : [];
 
@@ -28,48 +27,42 @@ export function handleSauceMessage(
 
   const hasNonText = nonReplyAt.some((s) => s.type !== "text");
   if (hasNonText) {
-    return Effect.void;
+    return;
   }
 
   const text = nonReplyAt
     .map((s) => {
       const data = s.data as { text?: unknown } | undefined;
-      return typeof data?.text === "string" ? data.text : "";
+      return Predicate.isString(data?.text) ? data.text : "";
     })
     .join("")
     .trim();
 
   if (text !== "/sauce") {
-    return Effect.void;
+    return;
   }
 
   const replySegment = rawSegments.find((s) => s.type === "reply");
-  if (!replySegment) {
-    return Effect.tryPromise(() =>
-      item.context.quote("[需引用包含图片的消息]"),
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.logError(`Failed to quote reply: ${String(error)}`),
-      ),
-      Effect.asVoid,
-    );
-  }
-
-  const replyData = replySegment.data as { id?: unknown } | undefined;
+  const replyData = replySegment?.data as { id?: unknown } | undefined;
   const messageId = Number(replyData?.id);
-  if (!replyData?.id || !Number.isInteger(messageId) || messageId === 0) {
-    return Effect.tryPromise(() =>
+  if (
+    !replySegment ||
+    !replyData?.id ||
+    !Number.isInteger(messageId) ||
+    messageId === 0
+  ) {
+    yield* Effect.tryPromise(() =>
       item.context.quote("[需引用包含图片的消息]"),
     ).pipe(
       Effect.catch((error) =>
         Effect.logError(`Failed to quote reply: ${String(error)}`),
       ),
-      Effect.asVoid,
     );
+    return;
   }
 
-  return Effect.gen(function* () {
-    const prefix = formatLogMessagePrefix(event);
+  const prefix = formatLogMessagePrefix(event);
+  const executeSauce = Effect.gen(function* () {
     yield* Effect.logInfo(
       `${prefix} Received '/sauce', retrieving quoted message ${messageId}...`,
     );
@@ -116,9 +109,7 @@ export function handleSauceMessage(
     }
 
     const config = yield* Effect.option(BotConfig);
-    const apiKey =
-      config._tag === "Some" ? config.value.sauceNaoApiKey : undefined;
-
+    const apiKey = Option.getOrUndefined(config)?.sauceNaoApiKey;
     yield* Effect.logInfo(
       `${prefix} Searching SauceNao for image in message ${messageId}...`,
     );
@@ -152,4 +143,6 @@ export function handleSauceMessage(
       }),
     ),
   );
-}
+
+  yield* executeSauce;
+});

@@ -19,8 +19,9 @@ const MainProgram = Effect.gen(function* () {
         ],
         {
           concurrency: "unbounded",
+          discard: true,
         },
-      ).pipe(Effect.asVoid),
+      ),
     ),
   );
 });

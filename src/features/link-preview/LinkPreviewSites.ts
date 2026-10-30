@@ -1,4 +1,5 @@
 import type createMetascraper from "metascraper";
+import { Predicate } from "effect";
 import type { PageMetadata } from "./LinkPreview.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
@@ -128,7 +129,7 @@ export function findSiteCustomizer(
   rawUrl: string | URL,
 ): SiteCustomizer | undefined {
   try {
-    const url = typeof rawUrl === "string" ? new URL(rawUrl) : rawUrl;
+    const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
     return siteCustomizers.find((c) => c.match(url));
   } catch {
     return undefined;
