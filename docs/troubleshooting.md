@@ -21,7 +21,7 @@ SnowLuma 的容器日志中会打印所有消息的简要信息。使用 `docker
 docker logs snowluma 2>&1 | grep "关键词片段"
 ```
 
-输出示例（注：以下均为脱敏演示数据）：
+输出示例：
 
 ```text
 16:30:00 OK    [2840000000] [Event] 群 [测试群(20002)] | [群友A(10001)]: ID:12345678 这是一条包含 https://example.com 的测试消息
@@ -42,49 +42,7 @@ docker logs snowluma 2>&1 | grep "关键词片段"
 bun run inspect-msg 12345678
 ```
 
-该工具会通过当前的机器人配置（`.env` 中的 `SNOWLUMA_WS_URL` 与 `SNOWLUMA_ACCESS_TOKEN`）建立临时连接，调用 OneBot 的 `get_msg` 动作，并输出格式化摘要与完整原始 JSON 结构：
-
-```text
-=== Message Metadata ===
-Message ID: 12345678
-Type: group
-Group: 测试群 (20002)
-Sender: 群友A (10001)
-Time: 2026-10-30T08:30:00.000Z (1793349000)
-Raw Message: 这是一条包含 https://example.com 的测试消息
-
-=== Raw JSON Payload ===
-{
-  "time": 1793349000,
-  "message_type": "group",
-  "sub_type": "normal",
-  "message_id": 12345678,
-  "message_seq": 10001,
-  "group_id": 20002,
-  "group_name": "测试群",
-  "user_id": 10001,
-  "message": [
-    {
-      "type": "text",
-      "data": {
-        "text": "这是一条包含 https://example.com 的测试消息"
-      }
-    }
-  ],
-  "raw_message": "这是一条包含 https://example.com 的测试消息",
-  "font": 0,
-  "sender": {
-    "user_id": 10001,
-    "nickname": "群友A",
-    "card": "",
-    "role": "member",
-    "sex": "unknown",
-    "age": 0
-  },
-  "anonymous": null,
-  "real_id": 12345678
-}
-```
+该工具会通过当前的机器人配置（`.env` 中的 `SNOWLUMA_WS_URL` 与 `SNOWLUMA_ACCESS_TOKEN`）建立临时连接，调用 OneBot 的 `get_msg` 动作，并输出格式化摘要与完整原始 JSON 结构。
 
 ---
 
@@ -95,25 +53,6 @@ Raw Message: 这是一条包含 https://example.com 的测试消息
 ```text
 [msg:<message_id>] [user:<user_id>] <操作或上下文>
 ```
-
-### 日志格式示例
-
-- **链接预览 (LinkPreview)**：
-  ```text
-  [msg:12345678] [user:10001] Found 1 URL(s) in message "这是一条包含 https://exampl...", scraping preview...
-  [msg:12345678] [user:10001] Link preview quote reply sent.
-  ```
-- **以图搜图 (Sauce)**：
-  ```text
-  [msg:12345679] [user:10001] Received '/sauce', retrieving quoted message 12345678...
-  [msg:12345679] [user:10001] Searching SauceNao for image in message 12345678...
-  [msg:12345679] [user:10001] Sauce reply sent successfully.
-  ```
-- **复读 (EchoBot)**：
-  ```text
-  [msg:12345680] [user:10001] Received '喵喵喵' (group), replying...
-  [msg:12345680] [user:10001] Reply sent: 喵喵喵
-  ```
 
 当在 Sakurako 控制台看到错误（例如抓取失败或引用发送失败）时，可以直接复制日志中的 `[msg:<id>]` 中的 ID，执行 `bun run inspect-msg <id>` 即可完整查看原消息上下文与发送者详情。
 

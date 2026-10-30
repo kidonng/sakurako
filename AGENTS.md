@@ -126,3 +126,5 @@ All development tasks use Bun:
   - Test positive and negative matches (e.g., exact `"喵喵喵"` vs whitespace `" 喵喵喵 "` or substring `"喵喵"`).
   - Verify loop prevention (`post_type: "message_sent"` and `user_id === self_id`).
   - Test default fallbacks when optional configs are omitted.
+
+@docs/troubleshooting.md
