@@ -7,19 +7,19 @@
 }:
 
 let
-  version = "1.4.4-canary.20261027.1";
+  version = "1.4.4";
   sources = {
     "aarch64-darwin" = {
       pkg = "bun-darwin-aarch64";
-      hash = "sha512-dqZdGRW4YNqBn/+KqzgUnbe1zB+vk9eI/eV1o13cXLGfMk8o3dpAvBX4HlyJHm1RumQ/zM9AQjFsQH0BlEj34A==";
+      hash = "sha512-zW/hxwc8sJAILGwB5eTC4i48ouGXf0V4lrxmEOk3JIE6JkYVW1TZh1E2pIempqsezgW1sckTIIDudFON8bJ2Mw==";
     };
     "aarch64-linux" = {
       pkg = "bun-linux-aarch64";
-      hash = "sha512-OQ25Ma34Vsa6tuTJ/ilkXTPBakbP6XbgW2AM/Yy3s26IlgCEfGbK4ZYmza+4y3WRzMLHPje4yUMPZ+lHpB+7Yw==";
+      hash = "sha512-ZTVtpf9zmHSBVPX1sBwe5agGb/rN34yPGg/Hby8e2Ax2uCUA2URZKlZH7qLntK7qaFJCMXh9v0GWNYN2zINz1w==";
     };
     "x86_64-linux" = {
       pkg = "bun-linux-x64";
-      hash = "sha512-GTKkejc85y2PEelaq9DJnbwJaVfDjJYR8bFKCeUnnbq4s/dWJFv602rp8FW/CnkxNQ/3RKUjB+lk4DTJ87cU5g==";
+      hash = "sha512-CHbbkmHVM28T1GFq+6GL4Ao4ujwwYwj1CxFFwEFzLanPfNsId9AhbIP0Q4reWuWBkGimUkoQygrK7Rgjtj3vog==";
     };
   };
   source =

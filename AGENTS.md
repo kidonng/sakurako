@@ -107,7 +107,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 
 ## Runtime/Tooling Preferences
 
-- **Runtime**: Pinned Bun `1.4.4-canary` (managed via `flake.nix` and `packages/bun.nix`). Node.js is not used for execution.
+- **Runtime**: Pinned Bun `1.4.4` (managed via `flake.nix` and `packages/bun.nix`). Node.js is not used for execution.
 - **Package Manager**: Bun (`bun install`, `bun.lock`).
 - **Linter & Type Checker**: `oxlint` with `@effect/tsgo` type-aware linting. TypeScript `tsc` runs in `noEmit` mode purely for verification.
 - **Linter Suppressions**: Use `// oxlint-disable-next-line <plugin>/<rule>` (e.g. `// oxlint-disable-next-line effecttsgo/unstable-api-usage`).
