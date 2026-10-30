@@ -130,7 +130,7 @@ Raw Message: 这是一条包含 https://example.com 的测试消息
 3. **网页无法抓取或未提供摘要**：若所有链接抓取均失败且无有效标题或图片，机器人会主动保持静默。控制台会输出 `All URL scrapes failed or produced no preview, remaining silent.`。
 4. **Jev 决策模型过滤**：若配置了 `OPENROUTER_API_KEY`，模型若判定网页摘要相比原消息无增量信息，单链接将保持静默。
 
-### 2. `/sauce` 提示“未在引用的消息中找到图片”
+### 2. `/sauce` 提示“[未在引用的消息中找到图片]”
 
 排查步骤：
 

@@ -462,7 +462,7 @@ describe("handleLinkPreviewMessage", () => {
       type: string;
       data: { text: string };
     };
-    expect(textSegment.data.text).toBe("1. （已过滤）\n2. Title Two");
+    expect(textSegment.data.text).toBe("1. [已过滤]\n2. Title Two");
   });
 
   it("does not contact OpenRouter when OPENROUTER_API_KEY is omitted", async () => {

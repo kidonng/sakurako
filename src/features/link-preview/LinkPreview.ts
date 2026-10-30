@@ -242,7 +242,7 @@ export function formatPreview(
   results.forEach((item, index) => {
     const num = index + 1;
     if (item._tag === "Filtered") {
-      blocks.push(`${num}. （已过滤）`);
+      blocks.push(`${num}. [已过滤]`);
     } else if (item._tag === "Failure") {
       blocks.push(`${num}. [提取失败：${item.error.message}]`);
     } else {

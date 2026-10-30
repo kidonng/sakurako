@@ -46,7 +46,7 @@ export function handleSauceMessage(
   const replySegment = rawSegments.find((s) => s.type === "reply");
   if (!replySegment) {
     return Effect.tryPromise(() =>
-      item.context.quote("未在引用的消息中找到图片"),
+      item.context.quote("[需引用包含图片的消息]"),
     ).pipe(
       Effect.catch((error) =>
         Effect.logError(`Failed to quote reply: ${String(error)}`),
@@ -59,7 +59,7 @@ export function handleSauceMessage(
   const messageId = Number(replyData?.id);
   if (!replyData?.id || !Number.isInteger(messageId) || messageId === 0) {
     return Effect.tryPromise(() =>
-      item.context.quote("未在引用的消息中找到图片"),
+      item.context.quote("[需引用包含图片的消息]"),
     ).pipe(
       Effect.catch((error) =>
         Effect.logError(`Failed to quote reply: ${String(error)}`),
@@ -75,9 +75,7 @@ export function handleSauceMessage(
     );
     const client = item.context.client;
     if (!client) {
-      yield* Effect.tryPromise(() =>
-        item.context.quote("查询失败，请稍后重试"),
-      );
+      yield* Effect.tryPromise(() => item.context.quote("[查询失败]"));
       return;
     }
 
@@ -96,7 +94,7 @@ export function handleSauceMessage(
     const imageSegment = quotedSegments.find((s) => s.type === "image");
     if (!imageSegment) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("未在引用的消息中找到图片"),
+        item.context.quote("[未在引用的消息中找到图片]"),
       );
       return;
     }
@@ -112,7 +110,7 @@ export function handleSauceMessage(
 
     if (!imageUrl) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("未在引用的消息中找到图片"),
+        item.context.quote("[未在引用的消息中找到图片]"),
       );
       return;
     }
@@ -128,7 +126,7 @@ export function handleSauceMessage(
 
     if (!result) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("未找到相似度较高的图片来源"),
+        item.context.quote("[未找到相似度较高的图片来源]"),
       );
       return;
     }
@@ -144,9 +142,7 @@ export function handleSauceMessage(
         yield* Effect.logError(
           `${prefix} Sauce handler failed: ${String(error)}`,
         );
-        yield* Effect.tryPromise(() =>
-          item.context.quote("查询失败，请稍后重试"),
-        ).pipe(
+        yield* Effect.tryPromise(() => item.context.quote("[查询失败]")).pipe(
           Effect.catch((quoteError) =>
             Effect.logError(
               `Failed to send failure quote: ${String(quoteError)}`,

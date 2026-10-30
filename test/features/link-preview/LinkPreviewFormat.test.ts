@@ -364,7 +364,7 @@ describe("formatPreview", () => {
     ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "1. （已过滤）\n2. Useful Title\n> Useful Desc\n3. （已过滤）",
+      text: "1. [已过滤]\n2. Useful Title\n> Useful Desc\n3. [已过滤]",
       image: "https://useful-blog.com/cover.png",
     });
   });

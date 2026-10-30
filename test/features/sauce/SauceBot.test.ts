@@ -215,7 +215,7 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe("未在引用的消息中找到图片");
+    expect(replies[0]).toBe("[需引用包含图片的消息]");
   });
 
   it("quotes reply with notice when quoted message has no image", async () => {
@@ -239,7 +239,7 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe("未在引用的消息中找到图片");
+    expect(replies[0]).toBe("[未在引用的消息中找到图片]");
   });
 
   it("quotes reply with notice when SauceNao returns null (low similarity / no match)", async () => {
@@ -282,7 +282,7 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe("未找到相似度较高的图片来源");
+    expect(replies[0]).toBe("[未找到相似度较高的图片来源]");
   });
 
   it("quotes reply with notice when SauceNao fails with an error", async () => {
@@ -310,7 +310,7 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe("查询失败，请稍后重试");
+    expect(replies[0]).toBe("[查询失败]");
   });
 
   it("quotes reply with notice when getMessage fails with an error", async () => {
@@ -325,7 +325,7 @@ describe("handleSauceMessage", () => {
 
     const replies = getQuotedReplies();
     expect(replies.length).toBe(1);
-    expect(replies[0]).toBe("查询失败，请稍后重试");
+    expect(replies[0]).toBe("[查询失败]");
   });
 
   it("does nothing when message does not strictly match /sauce", async () => {
