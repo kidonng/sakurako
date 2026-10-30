@@ -189,9 +189,19 @@ describe("handleLinkPreviewMessage", () => {
         <body>GitHub</body>
       </html>
     `;
-    const layer = makeTestHttpClient(
-      () => new Response(githubHtml, { status: 200 }),
-    );
+    const mockImageBytes = new Uint8Array([1, 2, 3]);
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("opengraph.githubassets.com")) {
+        return new Response(mockImageBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response(githubHtml, {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      });
+    });
 
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
@@ -201,7 +211,7 @@ describe("handleLinkPreviewMessage", () => {
       {
         type: "image",
         data: {
-          file: "https://opengraph.githubassets.com/repo/kidonng/sakurako",
+          file: "base64://" + Buffer.from(mockImageBytes).toString("base64"),
         },
       },
     ]);

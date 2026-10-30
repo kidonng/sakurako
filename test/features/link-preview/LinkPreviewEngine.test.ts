@@ -476,14 +476,23 @@ describe("LinkPreviewEngine", () => {
   });
 
   describe("prepareOutgoingImage", () => {
-    it("leaves regular URLs untouched when sendImageAsBase64 is false", async () => {
-      const dummyLayer = makeTestHttpClient(() => new Response(""));
+    it("downloads and encodes image to base64 by default for generic websites", async () => {
+      const mockBytes = new Uint8Array([5, 6, 7, 8]);
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(mockBytes, {
+            status: 200,
+            headers: { "Content-Type": "image/jpeg" },
+          }),
+      );
       const result = await Effect.runPromise(
         prepareOutgoingImage("https://example.com/image.png").pipe(
-          Effect.provide(dummyLayer),
+          Effect.provide(layer),
         ),
       );
-      expect(result).toBe("https://example.com/image.png");
+      expect(result).toBe(
+        "base64://" + Buffer.from(mockBytes).toString("base64"),
+      );
     });
 
     it("downloads and encodes image to base64 for Danbooru URLs", async () => {

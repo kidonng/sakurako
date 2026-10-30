@@ -20,7 +20,7 @@ export interface SiteCustomizer {
   readonly name: string;
   readonly match: (url: URL) => boolean;
   readonly userAgent?: string;
-  readonly sendImageAsBase64?: boolean;
+  readonly fetchImageLocally?: boolean;
   readonly metascraperRules?: {
     readonly description?: (
       context: MetascraperRuleContext,
@@ -113,7 +113,6 @@ export const danbooruCustomizer: SiteCustomizer = {
     return host === "donmai.us" || host.endsWith(".donmai.us");
   },
   userAgent: DANBOORU_USER_AGENT,
-  sendImageAsBase64: true,
   formatItem: () => ({
     hideDescription: true,
   }),
@@ -141,9 +140,9 @@ export function getUserAgent(rawUrl: string | URL): string {
   return customizer?.userAgent ?? DEFAULT_USER_AGENT;
 }
 
-export function shouldSendImageAsBase64(rawUrl: string | URL): boolean {
+export function shouldFetchImageLocally(rawUrl: string | URL): boolean {
   const customizer = findSiteCustomizer(rawUrl);
-  return customizer?.sendImageAsBase64 ?? false;
+  return customizer?.fetchImageLocally ?? true;
 }
 
 export function createSiteMetascraperPlugin(): () => createMetascraper.Rules {

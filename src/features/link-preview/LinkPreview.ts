@@ -14,7 +14,7 @@ import {
   findSiteCustomizer,
   getUserAgent,
   type MetascraperRuleContext,
-  shouldSendImageAsBase64,
+  shouldFetchImageLocally,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
 import { filterPreviewResults } from "./JevFilter.ts";
@@ -454,7 +454,7 @@ export function prepareOutgoingImage(
       return undefined;
     }
 
-    if (!shouldSendImageAsBase64(imageUrl)) {
+    if (!shouldFetchImageLocally(imageUrl)) {
       return imageUrl;
     }
 

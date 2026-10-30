@@ -8,7 +8,7 @@ import {
   getUserAgent,
   githubCustomizer,
   hackerNewsCustomizer,
-  shouldSendImageAsBase64,
+  shouldFetchImageLocally,
 } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewSites", () => {
@@ -177,8 +177,8 @@ describe("LinkPreviewSites", () => {
     it("has the custom userAgent for danbooru", () => {
       expect(danbooruCustomizer.userAgent).toBe("Sakurako/1.0  (user #898759)");
     });
-    it("enables sendImageAsBase64 for danbooru", () => {
-      expect(danbooruCustomizer.sendImageAsBase64).toBe(true);
+    it("does not explicitly override fetchImageLocally on danbooruCustomizer", () => {
+      expect(danbooruCustomizer.fetchImageLocally).toBeUndefined();
     });
     it("hides description via formatItem", () => {
       const options = danbooruCustomizer.formatItem?.({
@@ -212,19 +212,19 @@ describe("LinkPreviewSites", () => {
     });
   });
 
-  describe("shouldSendImageAsBase64", () => {
+  describe("shouldFetchImageLocally", () => {
+    it("returns true by default for generic websites", () => {
+      expect(shouldFetchImageLocally("https://example.com/cover.png")).toBe(
+        true,
+      );
+    });
+
     it("returns true for Danbooru image URLs", () => {
       expect(
-        shouldSendImageAsBase64(
+        shouldFetchImageLocally(
           "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
         ),
       ).toBe(true);
-    });
-
-    it("returns false for generic websites", () => {
-      expect(shouldSendImageAsBase64("https://example.com/cover.png")).toBe(
-        false,
-      );
     });
   });
 });
