@@ -113,9 +113,10 @@ describe("filterPreviewResults", () => {
       captured.url = req.url;
       captured.method = req.method;
       captured.authHeader = (req.headers["authorization"] ?? null) as
-        | string
-        | null;
-      captured.requestBody = extractJsonBody(req) as typeof captured.requestBody;
+        string | null;
+      captured.requestBody = extractJsonBody(
+        req,
+      ) as typeof captured.requestBody;
 
       return new Response(
         JSON.stringify({
@@ -178,7 +179,9 @@ describe("filterPreviewResults", () => {
     ];
 
     const layer = makeTestHttpClient((req) => {
-      const body = extractJsonBody(req) as { questions: Record<string, unknown> };
+      const body = extractJsonBody(req) as {
+        questions: Record<string, unknown>;
+      };
       // Only one question should be generated for the one Success item
       expect(Object.keys(body.questions)).toEqual(["preview_1"]);
 
@@ -193,11 +196,9 @@ describe("filterPreviewResults", () => {
     });
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(layer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(layer),
+      ),
     );
 
     expect(filtered[0]?._tag).toBe("Failure");
@@ -217,11 +218,9 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(failLayer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(failLayer),
+      ),
     );
 
     expect(filtered).toEqual(results);
@@ -246,11 +245,9 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(partialLayer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(partialLayer),
+      ),
     );
 
     expect(filtered[0]?._tag).toBe("Filtered");
@@ -273,11 +270,9 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(rateLimitLayer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(rateLimitLayer),
+      ),
     );
 
     expect(filtered).toEqual(results);
@@ -300,11 +295,9 @@ describe("filterPreviewResults", () => {
     );
 
     const filteredNull = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(nullLayer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(nullLayer),
+      ),
     );
     expect(filteredNull).toEqual(results);
 
@@ -317,11 +310,9 @@ describe("filterPreviewResults", () => {
     );
 
     const filteredNoAnswers = await Effect.runPromise(
-      filterPreviewResults(
-        "message",
-        results,
-        Redacted.make("sk-test"),
-      ).pipe(Effect.provide(noAnswersLayer)),
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(noAnswersLayer),
+      ),
     );
     expect(filteredNoAnswers).toEqual(results);
   });

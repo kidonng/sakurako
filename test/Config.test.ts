@@ -81,7 +81,9 @@ describe("BotConfig", () => {
       ),
     );
     expect(config.openrouterApiKey).toBeDefined();
-    expect(Redacted.value(config.openrouterApiKey!)).toBe("test_openrouter_key");
+    expect(Redacted.value(config.openrouterApiKey!)).toBe(
+      "test_openrouter_key",
+    );
   });
 
   it("defaults openrouterApiKey to undefined when omitted", async () => {

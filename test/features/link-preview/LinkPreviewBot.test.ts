@@ -387,7 +387,7 @@ describe("handleLinkPreviewMessage", () => {
         );
       }
       return new Response(
-        '<html><head><title>Preview Title</title></head></html>',
+        "<html><head><title>Preview Title</title></head></html>",
         { status: 200 },
       );
     });
@@ -441,12 +441,12 @@ describe("handleLinkPreviewMessage", () => {
       }
       if (req.url.includes("/one")) {
         return new Response(
-          '<html><head><title>Title One</title></head></html>',
+          "<html><head><title>Title One</title></head></html>",
           { status: 200 },
         );
       }
       return new Response(
-        '<html><head><title>Title Two</title></head></html>',
+        "<html><head><title>Title Two</title></head></html>",
         { status: 200 },
       );
     });
@@ -497,7 +497,7 @@ describe("handleLinkPreviewMessage", () => {
         return new Response("", { status: 500 });
       }
       return new Response(
-        '<html><head><title>Unfiltered Title</title></head></html>',
+        "<html><head><title>Unfiltered Title</title></head></html>",
         { status: 200 },
       );
     });
