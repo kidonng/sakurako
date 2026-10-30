@@ -9,6 +9,7 @@ import {
   scrapeAll,
   scrapeMetadata,
 } from "../../../src/features/link-preview/LinkPreview.ts";
+import { DEFAULT_ACCEPT_HEADER } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewEngine", () => {
   it("extracts and normalizes URLs from text", () => {
@@ -110,10 +111,12 @@ describe("LinkPreviewEngine", () => {
     );
   });
 
-  it("sends Sakurako/1.0 User-Agent header by default", async () => {
+  it("sends Sakurako/1.0 User-Agent and standard Accept headers by default", async () => {
     let capturedUserAgent: string | undefined;
+    let capturedAccept: string | undefined;
     const layer = makeTestHttpClient((req) => {
       capturedUserAgent = req.headers["user-agent"];
+      capturedAccept = req.headers["accept"];
       return new Response("<html><head><title>OK</title></head></html>", {
         status: 200,
       });
@@ -123,6 +126,7 @@ describe("LinkPreviewEngine", () => {
     );
 
     expect(capturedUserAgent).toBe("Sakurako/1.0");
+    expect(capturedAccept).toBe(DEFAULT_ACCEPT_HEADER);
   });
 
   it("sends custom Danbooru User-Agent header for Danbooru URLs", async () => {

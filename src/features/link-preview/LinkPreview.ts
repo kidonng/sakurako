@@ -10,6 +10,7 @@ import metascraperDescription from "metascraper-description";
 import metascraperImage from "metascraper-image";
 import metascraperTitle from "metascraper-title";
 import {
+  DEFAULT_ACCEPT_HEADER,
   findSiteCustomizer,
   getUserAgent,
   type MetascraperRuleContext,
@@ -182,8 +183,19 @@ export function formatPreview(
     return null;
   }
 
-  const hasSuccess = results.some((r) => r._tag === "Success");
-  if (!hasSuccess) {
+  const hasValidPreview = results.some((r) => {
+    if (r._tag !== "Success") return false;
+    const customizer = findSiteCustomizer(r.data.url);
+    const options = customizer?.formatItem?.({
+      metadata: r.data,
+      isSingle: results.length === 1,
+    });
+    const title = !options?.hideTitle && (options?.title ?? r.data.title);
+    const image =
+      !options?.hideImage && r.data.image && !isSvgUrl(r.data.image);
+    return Boolean(title || image);
+  });
+  if (!hasValidPreview) {
     return null;
   }
 
@@ -199,7 +211,9 @@ export function formatPreview(
     const lines: string[] = [];
     if (!options?.hideTitle) {
       const rawTitle = options?.title ?? item.title;
-      lines.push(truncate(rawTitle ?? "（无标题）"));
+      if (rawTitle) {
+        lines.push(truncate(rawTitle));
+      }
     }
     if (!options?.hideDescription) {
       const rawDescription = options?.description ?? item.description;
@@ -240,15 +254,18 @@ export function formatPreview(
       });
 
       const rawTitle = options?.title ?? data.title;
-      const title = truncate(rawTitle ?? "（无标题）");
-      let block = `${num}. ${title}`;
-      if (!options?.hideDescription) {
-        const rawDescription = options?.description ?? data.description;
-        if (rawDescription) {
-          block += `\n> ${truncate(rawDescription)}`;
+      if (rawTitle) {
+        let block = `${num}. ${truncate(rawTitle)}`;
+        if (!options?.hideDescription) {
+          const rawDescription = options?.description ?? data.description;
+          if (rawDescription) {
+            block += `\n> ${truncate(rawDescription)}`;
+          }
         }
+        blocks.push(block);
+      } else {
+        blocks.push(`${num}. [提取失败：未获取到网页标题]`);
       }
-      blocks.push(block);
 
       if (
         !firstImage &&
@@ -346,6 +363,7 @@ export function scrapeMetadata(
 
     const request = HttpClientRequest.get(url).pipe(
       HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+      HttpClientRequest.setHeader("Accept", DEFAULT_ACCEPT_HEADER),
     );
     const { html, targetUrl } = yield* Effect.gen(function* () {
       const response = yield* client.execute(request);

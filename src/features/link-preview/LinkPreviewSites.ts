@@ -13,6 +13,8 @@ export interface SiteFormatOptions {
 
 export const DEFAULT_USER_AGENT = "Sakurako/1.0";
 export const DANBOORU_USER_AGENT = "Sakurako/1.0  (user #898759)";
+export const DEFAULT_ACCEPT_HEADER =
+  "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
 export interface SiteCustomizer {
   readonly name: string;

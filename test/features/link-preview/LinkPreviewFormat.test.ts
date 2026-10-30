@@ -47,7 +47,7 @@ describe("formatPreview", () => {
     });
   });
 
-  it("formats single successful URL with missing title as （无标题）", () => {
+  it("returns null for single successful URL when title and image are missing", () => {
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
@@ -57,10 +57,24 @@ describe("formatPreview", () => {
         },
       },
     ];
+    expect(formatPreview(results)).toBeNull();
+  });
+
+  it("formats single successful URL with missing title when image is present", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com",
+          description: "My Description",
+          image: "https://example.com/pic.jpg",
+        },
+      },
+    ];
     const formatted = formatPreview(results);
     expect(formatted).toEqual({
-      text: "（无标题）\n> My Description",
-      image: undefined,
+      text: "> My Description",
+      image: "https://example.com/pic.jpg",
     });
   });
 
