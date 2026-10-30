@@ -51,7 +51,8 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 - `test/`: Unit and integration test suites using `bun:test`.
 - `.superpowers/specs/`: Architecture specifications and design documents.
 - `.superpowers/plans/`: Implementation plans and task breakdowns.
-- `docs/`: User-facing feature documentation (e.g. `docs/link-preview.md`).
+- `docs/`: Documentation and troubleshooting guides (e.g. `docs/troubleshooting.md`).
+- `docs/features/`: User-facing feature documentation (e.g. `docs/features/link-preview.md`).
 - `packages/`: Nix packaging derivations (pinned Bun runtime).
 
 ## Development Commands
