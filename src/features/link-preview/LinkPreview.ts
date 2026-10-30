@@ -115,8 +115,15 @@ export class ParseMetadataError extends Data.TaggedError("ParseMetadataError")<{
 export type ScrapeMetadataError =
   InvalidUrlError | BlockedHostError | HttpFetchError | ParseMetadataError;
 
+export const DEFAULT_DESCRIPTION_MAX_WIDTH = 100;
+export const EXPANDED_DESCRIPTION_MAX_WIDTH = 280;
+
 export type ScrapingResult =
-  | { readonly _tag: "Success"; readonly data: PageMetadata }
+  | {
+      readonly _tag: "Success";
+      readonly data: PageMetadata;
+      readonly expanded?: boolean;
+    }
   | { readonly _tag: "Filtered"; readonly url: string }
   | {
       readonly _tag: "Failure";
@@ -218,7 +225,10 @@ export function formatPreview(
     if (!options?.hideDescription) {
       const rawDescription = options?.description ?? item.description;
       if (rawDescription) {
-        lines.push(`> ${truncate(rawDescription)}`);
+        const descWidth = firstResult.expanded
+          ? EXPANDED_DESCRIPTION_MAX_WIDTH
+          : DEFAULT_DESCRIPTION_MAX_WIDTH;
+        lines.push(`> ${truncate(rawDescription, descWidth)}`);
       }
     }
 
@@ -259,7 +269,10 @@ export function formatPreview(
         if (!options?.hideDescription) {
           const rawDescription = options?.description ?? data.description;
           if (rawDescription) {
-            block += `\n> ${truncate(rawDescription)}`;
+            const descWidth = item.expanded
+              ? EXPANDED_DESCRIPTION_MAX_WIDTH
+              : DEFAULT_DESCRIPTION_MAX_WIDTH;
+            block += `\n> ${truncate(rawDescription, descWidth)}`;
           }
         }
         blocks.push(block);

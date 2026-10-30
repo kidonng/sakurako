@@ -387,4 +387,70 @@ describe("formatPreview", () => {
     const formatted = formatPreview(results);
     expect(formatted?.image).toBe("https://valid.com/picture.jpg");
   });
+
+  it("uses standard truncation (width 100) when expanded is false or undefined", () => {
+    const longDesc =
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/news",
+          title: "新闻标题",
+          description: longDesc,
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.text).toBe(
+      "新闻标题\n> 数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无...",
+    );
+  });
+
+  it("uses extended truncation (width 280) when expanded is true", () => {
+    const longDesc =
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        expanded: true,
+        data: {
+          url: "https://example.com/news",
+          title: "新闻标题",
+          description: longDesc,
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.text).toBe(`新闻标题\n> ${longDesc}`);
+  });
+
+  it("uses extended truncation for multiple items when expanded is true", () => {
+    const longDesc =
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        expanded: true,
+        data: {
+          url: "https://example.com/news1",
+          title: "新闻一",
+          description: longDesc,
+        },
+      },
+      {
+        _tag: "Success",
+        expanded: false,
+        data: {
+          url: "https://example.com/news2",
+          title: "新闻二",
+          description: longDesc,
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted?.text).toBe(
+      `1. 新闻一\n> ${longDesc}\n2. 新闻二\n> 数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无...`,
+    );
+  });
 });
