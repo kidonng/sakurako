@@ -51,7 +51,7 @@ export function extractFirstParagraph(
   return findIn('article p, main p, [role="main"] p') ?? findIn("p");
 }
 
-export function firstParagraphPlugin(): createMetascraper.Rules {
+function firstParagraphPlugin(): createMetascraper.Rules {
   return {
     description: [
       ({ htmlDom }: MetascraperRuleContext) => extractFirstParagraph(htmlDom),
@@ -74,7 +74,7 @@ export interface PageMetadata {
   readonly image?: string;
 }
 
-export class InvalidUrlError extends Schema.TaggedError<
+class InvalidUrlError extends Schema.TaggedError<
   InvalidUrlError,
   {
     readonly brand: unique symbol;
@@ -121,7 +121,7 @@ export class HttpFetchError extends Schema.TaggedError<
   }
 }
 
-export class ParseMetadataError extends Schema.TaggedError<
+class ParseMetadataError extends Schema.TaggedError<
   ParseMetadataError,
   {
     readonly brand: unique symbol;
@@ -134,11 +134,11 @@ export class ParseMetadataError extends Schema.TaggedError<
     return `Failed to parse metadata: ${String(this.cause)}`;
   }
 }
-export type ScrapeMetadataError =
+type ScrapeMetadataError =
   InvalidUrlError | BlockedHostError | HttpFetchError | ParseMetadataError;
 
 export const DEFAULT_DESCRIPTION_MAX_WIDTH = 100;
-export const EXPANDED_DESCRIPTION_MAX_WIDTH = 280;
+const EXPANDED_DESCRIPTION_MAX_WIDTH = 280;
 
 export type ScrapingResult =
   | {
@@ -157,7 +157,7 @@ export interface FormattedPreview {
   readonly image?: string;
 }
 
-export class SendLinkPreviewReplyError extends Schema.TaggedError<
+class SendLinkPreviewReplyError extends Schema.TaggedError<
   SendLinkPreviewReplyError,
   {
     readonly brand: unique symbol;
@@ -168,7 +168,7 @@ export class SendLinkPreviewReplyError extends Schema.TaggedError<
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
 
-export class FetchImageError extends Schema.TaggedError<
+class FetchImageError extends Schema.TaggedError<
   FetchImageError,
   {
     readonly brand: unique symbol;
@@ -177,7 +177,7 @@ export class FetchImageError extends Schema.TaggedError<
   cause: Schema.Defect(),
 }) {}
 
-export function isSvgUrl(url: string): boolean {
+function isSvgUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol === "data:") {
@@ -195,7 +195,7 @@ export function isSvgUrl(url: string): boolean {
   }
 }
 
-export function formatErrorDetail(error: unknown): string {
+function formatErrorDetail(error: unknown): string {
   if (error instanceof Error) {
     if (error.cause instanceof Error) {
       return `${error.stack ?? error.message}\nCaused by: ${error.cause.stack ?? error.cause.message}`;
@@ -362,7 +362,7 @@ export function extractUrls(text: string): ReadonlyArray<string> {
   return [...urls];
 }
 
-export function isPrivateHost(hostname: string): boolean {
+function isPrivateHost(hostname: string): boolean {
   const lower = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
     lower === "localhost" ||

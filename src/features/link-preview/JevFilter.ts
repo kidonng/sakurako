@@ -11,21 +11,21 @@ import { truncate } from "../../utils/TextWidth.ts";
 export const OPENROUTER_SYSTEMONE_URL =
   "https://openrouter.ai/api/v1/systemone";
 export const DEFAULT_JEV_MODEL = "~typesafe/jev-latest";
-export const DEFAULT_THRESHOLD = 0.7;
-export const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
+const DEFAULT_THRESHOLD = 0.7;
+const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
-export interface SystemOneNoulCriteria {
+interface SystemOneNoulCriteria {
   readonly true: string;
   readonly false: string;
 }
 
-export interface SystemOneNoulQuestion {
+interface SystemOneNoulQuestion {
   readonly type: "noul";
   readonly instructions: string;
   readonly criteria: SystemOneNoulCriteria;
 }
 
-export interface SystemOneRequest {
+interface SystemOneRequest {
   readonly model: string;
   readonly state: {
     readonly user_message: string;
@@ -42,11 +42,11 @@ export interface SystemOneRequest {
   readonly questions: Record<string, SystemOneNoulQuestion>;
 }
 
-export const SystemOneAnswerSchema = Schema.Struct({
+const SystemOneAnswerSchema = Schema.Struct({
   type: Schema.optional(Schema.String),
   noul: Schema.optional(Schema.Finite),
 });
-export const SystemOneResponseSchema = Schema.Struct({
+const SystemOneResponseSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
   answers: Schema.optional(Schema.Record(Schema.String, SystemOneAnswerSchema)),
   usage: Schema.optional(
@@ -58,10 +58,7 @@ export const SystemOneResponseSchema = Schema.Struct({
   ),
 });
 
-export type SystemOneAnswer = typeof SystemOneAnswerSchema.Type;
-export type SystemOneResponse = typeof SystemOneResponseSchema.Type;
-
-export class JevFilterError extends Schema.TaggedError<
+class JevFilterError extends Schema.TaggedError<
   JevFilterError,
   {
     readonly brand: unique symbol;

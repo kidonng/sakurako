@@ -20,7 +20,7 @@ export interface IncomingMessage {
   readonly context: SnowLumaEventContextWithQuote<OneBotMessageEvent>;
 }
 
-export class WebSocketConnectionError extends Schema.TaggedError<
+class WebSocketConnectionError extends Schema.TaggedError<
   WebSocketConnectionError,
   {
     readonly brand: unique symbol;

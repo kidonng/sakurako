@@ -28,7 +28,7 @@ export class SauceNaoError extends Schema.TaggedError<
   }
 }
 
-export const SauceNaoHeaderSchema = Schema.Struct({
+const SauceNaoHeaderSchema = Schema.Struct({
   status: Schema.optional(Schema.Finite),
   message: Schema.optional(Schema.String),
   minimum_similarity: Schema.optional(
@@ -36,14 +36,14 @@ export const SauceNaoHeaderSchema = Schema.Struct({
   ),
 });
 
-export const SauceNaoItemHeaderSchema = Schema.Struct({
+const SauceNaoItemHeaderSchema = Schema.Struct({
   similarity: Schema.optional(
     Schema.Union([Schema.Finite, Schema.FiniteFromString]),
   ),
   index_id: Schema.optional(Schema.Finite),
 });
 
-export const SauceNaoItemDataSchema = Schema.Struct({
+const SauceNaoItemDataSchema = Schema.Struct({
   title: Schema.optional(Schema.String),
   source: Schema.optional(Schema.String),
   part: Schema.optional(Schema.String),
@@ -62,19 +62,17 @@ export const SauceNaoItemDataSchema = Schema.Struct({
   ),
 });
 
-export type SauceNaoItemData = typeof SauceNaoItemDataSchema.Type;
+type SauceNaoItemData = typeof SauceNaoItemDataSchema.Type;
 
-export const SauceNaoItemSchema = Schema.Struct({
+const SauceNaoItemSchema = Schema.Struct({
   header: Schema.optional(SauceNaoItemHeaderSchema),
   data: Schema.optional(SauceNaoItemDataSchema),
 });
 
-export const SauceNaoResponseSchema = Schema.Struct({
+const SauceNaoResponseSchema = Schema.Struct({
   header: Schema.optional(SauceNaoHeaderSchema),
   results: Schema.optional(Schema.Array(SauceNaoItemSchema)),
 });
-
-export type SauceNaoResponse = typeof SauceNaoResponseSchema.Type;
 
 const SAUCENAO_API_URL = "https://saucenao.com/search.php";
 

@@ -63,6 +63,7 @@ All development tasks use Bun:
 - **Run Tests**: `bun test` (single file: `bun test test/EchoBot.test.ts`)
 - **Type Check**: `bun run check` (runs `tsc`, validates types and `verbatimModuleSyntax`)
 - **Lint**: `bun run lint` (runs `oxlint` with `oxlint-tsgolint` & `@effect/tsgo` rules)
+- **Unused Code & Dependency Check**: `bun run knip` (runs `knip`)
 - **Format**: `bun run format` (runs `bun fmt`)
 - **Post-Install Setup**: `bun run prepare` (`effect-tsgo patch --typescript --oxlint`)
 

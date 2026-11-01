@@ -4,7 +4,7 @@ import type { PageMetadata } from "./LinkPreview.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
 
-export interface SiteFormatOptions {
+interface SiteFormatOptions {
   readonly hideTitle?: boolean;
   readonly hideDescription?: boolean;
   readonly hideImage?: boolean;
@@ -119,7 +119,7 @@ export const danbooruCustomizer: SiteCustomizer = {
   }),
 };
 
-export const siteCustomizers: ReadonlyArray<SiteCustomizer> = [
+const siteCustomizers: ReadonlyArray<SiteCustomizer> = [
   githubCustomizer,
   hackerNewsCustomizer,
   danbooruCustomizer,
@@ -146,7 +146,7 @@ export function shouldFetchImageLocally(rawUrl: string | URL): boolean {
   return customizer?.fetchImageLocally ?? true;
 }
 
-export function createSiteMetascraperPlugin(): () => createMetascraper.Rules {
+function createSiteMetascraperPlugin(): () => createMetascraper.Rules {
   return () => ({
     description: [
       ({ htmlDom, url }: MetascraperRuleContext) => {

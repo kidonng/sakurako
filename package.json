@@ -3,6 +3,8 @@
   "devDependencies": {
     "@effect/tsgo": "0.63.0",
     "@types/bun": "^1.4.4",
+    "cheerio": "^1.2.0",
+    "knip": "^6.44.1",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
     "typescript": "7.0.2"
@@ -23,9 +25,11 @@
     "check": "tsc",
     "format": "bun fmt",
     "inspect-msg": "bun scripts/inspect-msg.ts",
+    "knip": "knip",
     "lint": "oxlint",
     "prepare": "effect-tsgo patch --typescript --oxlint",
-    "start": "bun src/index.ts"
+    "start": "bun src/index.ts",
+    "test": "bun test"
   },
   "overrides": {
     "re2": "npm:empty-npm-package@1.0.0"

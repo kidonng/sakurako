@@ -1,5 +1,5 @@
-import { Effect, Stream } from "effect";
-import { type IncomingMessage, SnowLumaClient } from "../../SnowLuma.ts";
+import { Effect } from "effect";
+import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 export const handleIncomingMessage = Effect.fnUntraced(function* (
@@ -21,10 +21,3 @@ export const handleIncomingMessage = Effect.fnUntraced(function* (
     ),
   );
 });
-
-export const runEchoBot: Effect.Effect<void, never, SnowLumaClient> =
-  Effect.gen(function* () {
-    const { messages } = yield* SnowLumaClient;
-    yield* Effect.logInfo("EchoBot listening for messages...");
-    yield* messages.pipe(Stream.runForEach(handleIncomingMessage));
-  });
