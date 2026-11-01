@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
 import {
+  formatErrorDetail,
   formatLogMessagePrefix,
   formatLogSnippet,
 } from "../../src/utils/LogFormat.ts";
@@ -43,5 +44,16 @@ describe("LogFormat", () => {
     expect(formatLogSnippet("")).toBe("");
     expect(formatLogSnippet(["array", "message"])).toBe("");
     expect(formatLogSnippet(12345)).toBe("");
+  });
+
+  it("formats error detail for simple and nested errors", () => {
+    expect(formatErrorDetail(new Error("simple error"))).toBe("simple error");
+    expect(
+      formatErrorDetail(
+        new Error("outer error", { cause: new Error("inner error") }),
+      ),
+    ).toBe("outer error (Caused by: inner error)");
+    expect(formatErrorDetail("string error")).toBe("string error");
+    expect(formatErrorDetail(500)).toBe("500");
   });
 });

@@ -12,3 +12,13 @@ export function formatLogSnippet(text: unknown, maxWidth = 30): string {
   const collapsed = text.replace(/\s+/g, " ").trim();
   return truncate(collapsed, maxWidth);
 }
+
+export function formatErrorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.cause instanceof Error) {
+      return `${error.message} (Caused by: ${error.cause.message})`;
+    }
+    return error.message;
+  }
+  return String(error);
+}

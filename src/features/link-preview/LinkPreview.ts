@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { type Duration, Effect, Option, Predicate, Schema } from "effect";
+import { type Duration, Effect, Option, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
@@ -21,6 +21,7 @@ import { filterPreviewResults } from "./JevFilter.ts";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import {
+  formatErrorDetail,
   formatLogMessagePrefix,
   formatLogSnippet,
 } from "../../utils/LogFormat.ts";
@@ -193,23 +194,6 @@ function isSvgUrl(url: string): boolean {
       lower.endsWith(".svgz")
     );
   }
-}
-
-function formatErrorDetail(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.cause instanceof Error) {
-      return `${error.stack ?? error.message}\nCaused by: ${error.cause.stack ?? error.cause.message}`;
-    }
-    return error.stack ?? error.message;
-  }
-  if (
-    Predicate.isObject(error) &&
-    "cause" in error &&
-    error.cause instanceof Error
-  ) {
-    return error.cause.stack ?? error.cause.message;
-  }
-  return String(error);
 }
 
 export function formatPreview(
