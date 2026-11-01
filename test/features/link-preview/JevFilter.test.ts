@@ -16,10 +16,7 @@ import { makeTestHttpClient } from "../../TestHttpClient.ts";
 function extractJsonBody(req: { body: unknown }): unknown {
   // oxlint-disable-next-line effecttsgo/unstable-api-usage
   if (req.body instanceof HttpBody.Uint8Array) {
-    const raw =
-      typeof req.body.body === "string"
-        ? req.body.body
-        : new TextDecoder().decode(req.body.body);
+    const raw = new TextDecoder().decode(req.body.body);
     return JSON.parse(raw);
   }
   return null;
