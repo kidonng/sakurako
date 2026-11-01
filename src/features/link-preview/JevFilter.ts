@@ -1,9 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
+import { type Duration, Effect, Option, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import {
   DEFAULT_DESCRIPTION_MAX_WIDTH,
+  isScrapingResult,
+  ScrapingFiltered,
   type ScrapingResult,
 } from "./LinkPreview.ts";
 import { truncate } from "../../utils/TextWidth.ts";
@@ -97,8 +99,9 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
       return results;
     }
 
+    const isSuccess = isScrapingResult("Success");
     const successEntries = results.flatMap((item, index) =>
-      item._tag === "Success" ? [{ index, data: item.data }] : [],
+      isSuccess(item) ? [{ index, data: item.data }] : [],
     );
 
     if (successEntries.length === 0) {
@@ -170,10 +173,8 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
       const responseData = yield* Effect.gen(function* () {
         const response = yield* client.execute(request);
         if (response.status < 200 || response.status >= 300) {
-          const webRes = HttpClientResponse.toWeb(response);
-          if (webRes._tag === "Some") {
-            void webRes.value.body?.cancel().catch(() => {});
-          }
+          const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
+          void webRes?.body?.cancel().catch(() => {});
           return yield* new JevFilterError({
             cause: `HTTP status ${response.status}`,
           });
@@ -211,7 +212,7 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
       const updated: ScrapingResult[] = [];
       for (let index = 0; index < results.length; index++) {
         const item = results[index]!;
-        if (item._tag !== "Success") {
+        if (!isSuccess(item)) {
           updated.push(item);
           continue;
         }
@@ -245,10 +246,7 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
           yield* Effect.logInfo(
             `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
           );
-          updated.push({
-            _tag: "Filtered",
-            url: item.data.url,
-          });
+          updated.push(ScrapingFiltered({ url: item.data.url }));
         }
       }
 
