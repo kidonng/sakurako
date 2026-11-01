@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent } from "@snowluma/sdk/types";
-import { Effect, Queue, Stream } from "effect";
+import { Effect, Option, Queue, Stream } from "effect";
 import { type IncomingMessage, SnowLumaClient } from "../src/SnowLuma.ts";
 
 describe("SnowLumaClient", () => {
@@ -27,8 +27,8 @@ describe("SnowLumaClient", () => {
 
     await Effect.runPromise(Queue.offer(queue, mockItem));
     const item = await Effect.runPromise(Stream.runHead(stream));
-    expect(item._tag).toBe("Some");
-    if (item._tag === "Some") {
+    expect(Option.isSome(item)).toBe(true);
+    if (Option.isSome(item)) {
       expect(item.value.event.raw_message).toBe("喵喵喵");
     }
   });

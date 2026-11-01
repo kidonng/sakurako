@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
+import { type Duration, Effect, Option, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import {
@@ -170,10 +170,8 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
       const responseData = yield* Effect.gen(function* () {
         const response = yield* client.execute(request);
         if (response.status < 200 || response.status >= 300) {
-          const webRes = HttpClientResponse.toWeb(response);
-          if (webRes._tag === "Some") {
-            void webRes.value.body?.cancel().catch(() => {});
-          }
+          const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
+          void webRes?.body?.cancel().catch(() => {});
           return yield* new JevFilterError({
             cause: `HTTP status ${response.status}`,
           });

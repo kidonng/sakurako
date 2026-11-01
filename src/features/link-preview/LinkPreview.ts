@@ -398,18 +398,12 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const { html, targetUrl } = yield* Effect.gen(function* () {
       const response = yield* client.execute(request);
       if (response.status < 200 || response.status >= 300) {
-        const webRes = HttpClientResponse.toWeb(response);
-        const statusText =
-          webRes._tag === "Some" && webRes.value.statusText
-            ? webRes.value.statusText
-            : undefined;
-        if (webRes._tag === "Some") {
-          void webRes.value.body?.cancel().catch(() => {});
-        }
+        const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
+        void webRes?.body?.cancel().catch(() => {});
         return yield* new HttpFetchError({
           url,
           status: response.status,
-          statusText,
+          statusText: webRes?.statusText,
           detail: `HTTP status ${response.status}`,
         });
       }
@@ -484,18 +478,13 @@ export const prepareOutgoingImage = Effect.fn(
   const downloadEffect = Effect.gen(function* () {
     const response = yield* client.execute(request);
     const cancelBody = () => {
-      const webRes = HttpClientResponse.toWeb(response);
-      if (webRes._tag === "Some") {
-        void webRes.value.body?.cancel().catch(() => {});
-      }
+      const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
+      void webRes?.body?.cancel().catch(() => {});
     };
 
     if (response.status < 200 || response.status >= 300) {
-      const webRes = HttpClientResponse.toWeb(response);
-      const statusText =
-        webRes._tag === "Some" && webRes.value.statusText
-          ? webRes.value.statusText
-          : "";
+      const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
+      const statusText = webRes?.statusText ?? "";
       cancelBody();
       return yield* new FetchImageError({
         cause: new Error(
