@@ -89,6 +89,10 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
   ```
 - **Callback Ingestion**: In non-Effect callbacks (e.g. WebSocket listeners), offer items synchronously via `Queue.offerUnsafe` rather than creating fibers.
 
+### Handler Guards
+
+- **Loop prevention**: every handler starts by checking `isSelfMessage(event)` from `src/utils/MessageGuard.ts`. Never re-implement the `post_type === "message_sent" || user_id === self_id` comparison inline, and never treat an event with a missing `user_id` as self-sent.
+
 ## Important Files
 
 - `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage`, `handleLinkPreviewMessage`, and `handleSauceMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
@@ -100,6 +104,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
 - `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
 - `src/utils/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
+- `src/utils/MessageGuard.ts`: `isSelfMessage`, the shared loop guard identifying events produced by the bot account itself.
 - `test/TestHttpClient.ts`: Test layer helper (`makeTestHttpClient`) bridging mock responses into `HttpClient.HttpClient`.
 - `.env.example`: Public template for environment configuration.
 - `package.json` & `tsconfig.json`: Project setup configured for TypeScript 7, Bundler module resolution, and tsgo.

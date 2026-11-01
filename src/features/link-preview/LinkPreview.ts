@@ -24,6 +24,7 @@ import {
   formatLogMessagePrefix,
   formatLogSnippet,
 } from "../../utils/LogFormat.ts";
+import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
@@ -602,11 +603,7 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
 ) {
   const { event } = item;
-  if (
-    event.post_type === "message_sent" ||
-    event.user_id === event.self_id ||
-    !event.raw_message
-  ) {
+  if (isSelfMessage(event) || !event.raw_message) {
     return;
   }
 
