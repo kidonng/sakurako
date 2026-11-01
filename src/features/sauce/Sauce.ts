@@ -5,13 +5,14 @@ import { Effect, Option, Predicate } from "effect";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
+import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { searchSauce } from "./SauceNao.ts";
 export const handleSauceMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
 ) {
   const { event } = item;
 
-  if (event.post_type === "message_sent" || event.user_id === event.self_id) {
+  if (isSelfMessage(event)) {
     return;
   }
 

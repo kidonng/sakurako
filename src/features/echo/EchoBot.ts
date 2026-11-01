@@ -1,15 +1,12 @@
 import { Effect, Stream } from "effect";
 import { type IncomingMessage, SnowLumaClient } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
+import { isSelfMessage } from "../../utils/MessageGuard.ts";
 export const handleIncomingMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
 ) {
   const { event } = item;
-  if (
-    event.raw_message !== "喵喵喵" ||
-    event.post_type === "message_sent" ||
-    event.user_id === event.self_id
-  ) {
+  if (event.raw_message !== "喵喵喵" || isSelfMessage(event)) {
     return;
   }
 
