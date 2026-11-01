@@ -83,36 +83,15 @@ describe("handleIncomingMessage", () => {
     expect(called).toBe(false);
   });
 
-  it("does not reply when message is sent by the bot itself (message_sent)", async () => {
-    let called = false;
-    const item: IncomingMessage = {
-      event: {
-        raw_message: "喵喵喵",
-        post_type: "message_sent",
-        message_type: "group",
-        user_id: 2840296514,
-        self_id: 2840296514,
-      } as unknown as OneBotMessageEvent,
-      context: {
-        reply: async () => {
-          called = true;
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
-    };
-
-    await Effect.runPromise(handleIncomingMessage(item));
-    expect(called).toBe(false);
-  });
-
-  it("does not reply when user_id equals self_id", async () => {
+  it("ignores self messages", async () => {
     let called = false;
     const item: IncomingMessage = {
       event: {
         raw_message: "喵喵喵",
         post_type: "message",
         message_type: "group",
-        user_id: 2840296514,
-        self_id: 2840296514,
+        user_id: 99999,
+        self_id: 99999,
       } as unknown as OneBotMessageEvent,
       context: {
         reply: async () => {

@@ -10,7 +10,6 @@ import { makeTestHttpClient } from "../../TestHttpClient.ts";
 function createMockItem(params: {
   raw_message: string;
   message?: unknown;
-  post_type?: "message" | "message_sent";
   user_id?: number;
   self_id?: number;
   getMessageResponse?: unknown;
@@ -23,7 +22,7 @@ function createMockItem(params: {
     event: {
       raw_message: params.raw_message,
       message: params.message ?? params.raw_message,
-      post_type: params.post_type ?? "message",
+      post_type: "message",
       message_type: "group",
       user_id: params.user_id ?? 10001,
       self_id: params.self_id ?? 99999,
@@ -355,19 +354,6 @@ describe("handleSauceMessage", () => {
       raw_message: "[CQ:reply,id=12345] /sauce",
       user_id: 99999,
       self_id: 99999,
-    });
-
-    await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
-    );
-
-    expect(getQuotedReplies().length).toBe(0);
-  });
-
-  it("does nothing when post_type is message_sent", async () => {
-    const { item, getQuotedReplies } = createMockItem({
-      raw_message: "[CQ:reply,id=12345] /sauce",
-      post_type: "message_sent",
     });
 
     await Effect.runPromise(

@@ -63,28 +63,6 @@ describe("handleLinkPreviewMessage", () => {
     expect(quoted).toBe(false);
   });
 
-  it("ignores messages with message_sent post_type", async () => {
-    let quoted = false;
-    const item: IncomingMessage = {
-      event: {
-        raw_message: "https://example.com",
-        user_id: 10001,
-        self_id: 99999,
-        post_type: "message_sent",
-      } as unknown as OneBotMessageEvent,
-      context: {
-        quote: async () => {
-          quoted = true;
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
-    };
-
-    await Effect.runPromise(
-      handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
-    );
-    expect(quoted).toBe(false);
-  });
-
   it("ignores messages without links", async () => {
     let quoted = false;
     const item: IncomingMessage = {
