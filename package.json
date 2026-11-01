@@ -1,16 +1,16 @@
 {
   "type": "module",
   "devDependencies": {
-    "@effect/tsgo": "0.62.0",
-    "@types/bun": "latest",
+    "@effect/tsgo": "0.63.0",
+    "@types/bun": "^1.4.4",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@effect/platform-bun": "^4.0.6",
-    "@snowluma/sdk": "^2.2.1",
-    "effect": "^4.0.6",
+    "@effect/platform-bun": "^4.1.1",
+    "@snowluma/sdk": "^2.3.2",
+    "effect": "^4.1.1",
     "get-urls": "^12.1.0",
     "ip-address": "^10.7.5",
     "metascraper": "^5.58.5",
