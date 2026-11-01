@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { type Duration, Effect, Option, Schema } from "effect";
+import { Data, type Duration, Effect, Match, Option, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
@@ -141,18 +141,24 @@ type ScrapeMetadataError =
 export const DEFAULT_DESCRIPTION_MAX_WIDTH = 100;
 const EXPANDED_DESCRIPTION_MAX_WIDTH = 280;
 
-export type ScrapingResult =
-  | {
-      readonly _tag: "Success";
-      readonly data: PageMetadata;
-      readonly expanded?: boolean;
-    }
-  | { readonly _tag: "Filtered"; readonly url: string }
-  | {
-      readonly _tag: "Failure";
-      readonly url: string;
-      readonly error: ScrapeMetadataError;
-    };
+export type ScrapingResult = Data.TaggedEnum<{
+  Success: {
+    readonly data: PageMetadata;
+    readonly expanded?: boolean;
+  };
+  Filtered: { readonly url: string };
+  Failure: {
+    readonly url: string;
+    readonly error: ScrapeMetadataError;
+  };
+}>;
+
+export const {
+  Success: ScrapingSuccess,
+  Filtered: ScrapingFiltered,
+  Failure: ScrapingFailure,
+  $is: isScrapingResult,
+} = Data.taggedEnum<ScrapingResult>();
 export interface FormattedPreview {
   readonly text: string;
   readonly image?: string;
@@ -203,8 +209,10 @@ export function formatPreview(
     return null;
   }
 
+  const isSuccess = isScrapingResult("Success");
+
   const hasValidPreview = results.some((r) => {
-    if (r._tag !== "Success") return false;
+    if (!isSuccess(r)) return false;
     const customizer = findSiteCustomizer(r.data.url);
     const options = customizer?.formatItem?.({
       metadata: r.data,
@@ -220,7 +228,7 @@ export function formatPreview(
   }
 
   const firstResult = results[0];
-  if (results.length === 1 && firstResult && firstResult._tag === "Success") {
+  if (results.length === 1 && firstResult && isSuccess(firstResult)) {
     const item = firstResult.data;
     const customizer = findSiteCustomizer(item.url);
     const options = customizer?.formatItem?.({
@@ -264,44 +272,46 @@ export function formatPreview(
 
   results.forEach((item, index) => {
     const num = index + 1;
-    if (item._tag === "Filtered") {
-      blocks.push(`${num}. [已过滤]`);
-    } else if (item._tag === "Failure") {
-      blocks.push(`${num}. [提取失败：${item.error.message}]`);
-    } else {
-      const data = item.data;
-      const customizer = findSiteCustomizer(data.url);
-      const options = customizer?.formatItem?.({
-        metadata: data,
-        isSingle: false,
-      });
+    const block = Match.valueTags(item, {
+      Filtered: () => `${num}. [已过滤]`,
+      Failure: ({ error }) => `${num}. [提取失败：${error.message}]`,
+      Success: ({ data, expanded }) => {
+        const customizer = findSiteCustomizer(data.url);
+        const options = customizer?.formatItem?.({
+          metadata: data,
+          isSingle: false,
+        });
 
-      const rawTitle = options?.title ?? data.title;
-      if (rawTitle) {
-        let block = `${num}. ${truncate(rawTitle)}`;
-        if (!options?.hideDescription) {
-          const rawDescription = options?.description ?? data.description;
-          if (rawDescription) {
-            const descWidth = item.expanded
-              ? EXPANDED_DESCRIPTION_MAX_WIDTH
-              : DEFAULT_DESCRIPTION_MAX_WIDTH;
-            block += `\n> ${truncate(rawDescription, descWidth)}`;
+        const rawTitle = options?.title ?? data.title;
+        let line = "";
+        if (rawTitle) {
+          line = `${num}. ${truncate(rawTitle)}`;
+          if (!options?.hideDescription) {
+            const rawDescription = options?.description ?? data.description;
+            if (rawDescription) {
+              const descWidth = expanded
+                ? EXPANDED_DESCRIPTION_MAX_WIDTH
+                : DEFAULT_DESCRIPTION_MAX_WIDTH;
+              line += `\n> ${truncate(rawDescription, descWidth)}`;
+            }
           }
+        } else {
+          line = `${num}. [提取失败：未获取到网页标题]`;
         }
-        blocks.push(block);
-      } else {
-        blocks.push(`${num}. [提取失败：未获取到网页标题]`);
-      }
 
-      if (
-        !firstImage &&
-        !options?.hideImage &&
-        data.image &&
-        !isSvgUrl(data.image)
-      ) {
-        firstImage = data.image;
-      }
-    }
+        if (
+          !firstImage &&
+          !options?.hideImage &&
+          data.image &&
+          !isSvgUrl(data.image)
+        ) {
+          firstImage = data.image;
+        }
+
+        return line;
+      },
+    });
+    blocks.push(block);
   });
 
   return {
@@ -557,15 +567,8 @@ export function scrapeAll(
           onFailure: (error) =>
             Effect.logWarning(
               `Failed to scrape metadata for ${url}: ${error.message}`,
-            ).pipe(
-              Effect.as({
-                _tag: "Failure",
-                url,
-                error,
-              } as ScrapingResult),
-            ),
-          onSuccess: (data) =>
-            Effect.succeed({ _tag: "Success", data } as ScrapingResult),
+            ).pipe(Effect.as(ScrapingFailure({ url, error }))),
+          onSuccess: (data) => Effect.succeed(ScrapingSuccess({ data })),
         }),
       ),
     { concurrency: "unbounded" },
