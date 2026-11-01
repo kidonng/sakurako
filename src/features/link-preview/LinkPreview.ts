@@ -153,12 +153,14 @@ export type ScrapingResult = Data.TaggedEnum<{
   };
 }>;
 
-export const {
+const {
   Success: ScrapingSuccess,
   Filtered: ScrapingFiltered,
   Failure: ScrapingFailure,
   $is: isScrapingResult,
 } = Data.taggedEnum<ScrapingResult>();
+
+export { isScrapingResult, ScrapingFiltered };
 export interface FormattedPreview {
   readonly text: string;
   readonly image?: string;
