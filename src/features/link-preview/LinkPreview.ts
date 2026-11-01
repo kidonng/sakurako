@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Data, type Duration, Effect, Match, Option, Schema } from "effect";
+import { Data, type Duration, Effect, Match, Option, Predicate, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
@@ -423,7 +423,7 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     }).pipe(
       Effect.timeout(timeoutDuration),
       Effect.mapError((error) =>
-        error._tag === "HttpFetchError"
+        Predicate.isTagged(error, "HttpFetchError")
           ? error
           : new HttpFetchError({
               url,

@@ -3,8 +3,11 @@ import { Effect, Layer, Logger } from "effect";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import * as cheerio from "cheerio";
 import {
+  BlockedHostError,
   extractFirstParagraph,
   extractUrls,
+  HttpFetchError,
+  isScrapingResult,
   MAX_IMAGE_BYTES,
   prepareOutgoingImage,
   scrapeAll,
@@ -224,8 +227,8 @@ describe("LinkPreviewEngine", () => {
       ),
     );
 
-    expect(error._tag).toBe("HttpFetchError");
-    if (error._tag === "HttpFetchError") {
+    expect(error).toBeInstanceOf(HttpFetchError);
+    if (error instanceof HttpFetchError) {
       expect(error.status).toBe(404);
     }
     expect(error.message).toContain("HTTP 404 Not Found");
@@ -247,7 +250,7 @@ describe("LinkPreviewEngine", () => {
       ),
     );
 
-    expect(error._tag).toBe("HttpFetchError");
+    expect(error).toBeInstanceOf(HttpFetchError);
     expect(error.message).toContain("timed out");
   });
 
@@ -260,7 +263,7 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-    expect(errorLocalhost._tag).toBe("BlockedHostError");
+    expect(errorLocalhost).toBeInstanceOf(BlockedHostError);
     expect(errorLocalhost.message).toBe("Blocked private or local address");
 
     const errorIp = await Effect.runPromise(
@@ -269,7 +272,7 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-    expect(errorIp._tag).toBe("BlockedHostError");
+    expect(errorIp).toBeInstanceOf(BlockedHostError);
     expect(errorIp.message).toBe("Blocked private or local address");
 
     const errorPrivate = await Effect.runPromise(
@@ -278,7 +281,7 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-    expect(errorPrivate._tag).toBe("BlockedHostError");
+    expect(errorPrivate).toBeInstanceOf(BlockedHostError);
     expect(errorPrivate.message).toBe("Blocked private or local address");
 
     const errorIpv6 = await Effect.runPromise(
@@ -287,7 +290,7 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-    expect(errorIpv6._tag).toBe("BlockedHostError");
+    expect(errorIpv6).toBeInstanceOf(BlockedHostError);
     expect(errorIpv6.message).toBe("Blocked private or local address");
   });
 
@@ -314,15 +317,15 @@ describe("LinkPreviewEngine", () => {
     expect(results).toHaveLength(2);
     const first = results[0];
     const second = results[1];
-    expect(first?._tag).toBe("Success");
-    if (first?._tag === "Success") {
+    expect(first && isScrapingResult("Success")(first)).toBe(true);
+    if (first && isScrapingResult("Success")(first)) {
       expect(first.data.title).toBe("Success Title");
     }
-    expect(second?._tag).toBe("Failure");
-    if (second?._tag === "Failure") {
+    expect(second && isScrapingResult("Failure")(second)).toBe(true);
+    if (second && isScrapingResult("Failure")(second)) {
       expect(second.url).toBe("https://fail.com");
-      expect(second.error._tag).toBe("HttpFetchError");
-      if (second.error._tag === "HttpFetchError") {
+      expect(second.error).toBeInstanceOf(HttpFetchError);
+      if (second.error instanceof HttpFetchError) {
         expect(second.error.status).toBe(500);
       }
       expect(second.error.message).toContain("HTTP 500");

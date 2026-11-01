@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Logger, Redacted } from "effect";
+import { HttpBody } from "effect/http";
 import {
   DEFAULT_JEV_MODEL,
   filterPreviewResults,
@@ -7,17 +8,18 @@ import {
 } from "../../../src/features/link-preview/JevFilter.ts";
 import {
   HttpFetchError,
+  isScrapingResult,
   type ScrapingResult,
 } from "../../../src/features/link-preview/LinkPreview.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 
 function extractJsonBody(req: { body: unknown }): unknown {
-  const body = req.body as { _tag?: string; body?: unknown };
-  if (body && body._tag === "Uint8Array") {
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage
+  if (req.body instanceof HttpBody.Uint8Array) {
     const raw =
-      typeof body.body === "string"
-        ? body.body
-        : new TextDecoder().decode(body.body as Uint8Array);
+      typeof req.body.body === "string"
+        ? req.body.body
+        : new TextDecoder().decode(req.body.body);
     return JSON.parse(raw);
   }
   return null;
@@ -266,8 +268,8 @@ describe("filterPreviewResults", () => {
       ),
     );
 
-    expect(filtered[0]?._tag).toBe("Failure");
-    expect(filtered[1]?._tag).toBe("Success");
+    expect(filtered[0] && isScrapingResult("Failure")(filtered[0])).toBe(true);
+    expect(filtered[1] && isScrapingResult("Success")(filtered[1])).toBe(true);
   });
 
   it("falls back to original results when OpenRouter returns 500 error", async () => {
@@ -315,7 +317,7 @@ describe("filterPreviewResults", () => {
       ),
     );
 
-    expect(filtered[0]?._tag).toBe("Filtered");
+    expect(filtered[0] && isScrapingResult("Filtered")(filtered[0])).toBe(true);
   });
 
   it("falls back to original results when OpenRouter returns 429 rate limit", async () => {

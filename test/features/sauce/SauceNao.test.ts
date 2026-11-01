@@ -173,7 +173,6 @@ describe("searchSauce", () => {
     );
 
     expect(error).toBeInstanceOf(SauceNaoError);
-    expect(error._tag).toBe("SauceNaoError");
     expect(error.cause).toBe("Problem with image");
   });
 
@@ -189,7 +188,6 @@ describe("searchSauce", () => {
     );
 
     expect(error).toBeInstanceOf(SauceNaoError);
-    expect(error._tag).toBe("SauceNaoError");
   });
 
   it("appends api_key query parameter when apiKey is provided", async () => {
