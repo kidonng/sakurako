@@ -2,7 +2,10 @@ import {
   SnowLumaWebSocketClient,
   type SnowLumaEventContextWithQuote,
 } from "@snowluma/sdk";
-import type { OneBotMessageEvent } from "@snowluma/sdk/types";
+import type {
+  OneBotMessageEvent,
+  OneBotNoticeEvent,
+} from "@snowluma/sdk/types";
 import {
   Context,
   Effect,
@@ -19,6 +22,11 @@ export interface IncomingMessage {
   readonly event: OneBotMessageEvent;
   readonly context: SnowLumaEventContextWithQuote<OneBotMessageEvent>;
 }
+export interface IncomingNotice {
+  readonly event: OneBotNoticeEvent;
+  readonly context: SnowLumaEventContextWithQuote<OneBotNoticeEvent>;
+}
+
 
 class WebSocketConnectionError extends Schema.TaggedError<
   WebSocketConnectionError,
@@ -34,13 +42,15 @@ export class SnowLumaClient extends Context.Service<
   {
     readonly client: SnowLumaWebSocketClient;
     readonly messages: Stream.Stream<IncomingMessage>;
+    readonly notices: Stream.Stream<IncomingNotice>;
   }
 >()("sakurako/SnowLumaClient") {
   static readonly layer = Layer.effect(
     SnowLumaClient,
     Effect.gen(function* () {
       const config = yield* BotConfig;
-      const queue = yield* Queue.unbounded<IncomingMessage>();
+      const messageQueue = yield* Queue.unbounded<IncomingMessage>();
+      const noticeQueue = yield* Queue.unbounded<IncomingNotice>();
 
       const client = yield* Effect.acquireRelease(
         Effect.sync(() => {
@@ -50,7 +60,10 @@ export class SnowLumaClient extends Context.Service<
             reconnect: true,
           });
           ws.onMessage((event, eventContext) => {
-            Queue.offerUnsafe(queue, { event, context: eventContext });
+            Queue.offerUnsafe(messageQueue, { event, context: eventContext });
+          });
+          ws.onNotice((event, eventContext) => {
+            Queue.offerUnsafe(noticeQueue, { event, context: eventContext });
           });
           return ws;
         }),
@@ -58,7 +71,8 @@ export class SnowLumaClient extends Context.Service<
           Effect.gen(function* () {
             yield* Effect.logInfo("Closing SnowLuma WebSocket client...");
             ws.close();
-            yield* Queue.shutdown(queue);
+            yield* Queue.shutdown(messageQueue);
+            yield* Queue.shutdown(noticeQueue);
           }),
       );
 
@@ -80,7 +94,8 @@ export class SnowLumaClient extends Context.Service<
 
       return SnowLumaClient.of({
         client,
-        messages: Stream.fromQueue(queue),
+        messages: Stream.fromQueue(messageQueue),
+        notices: Stream.fromQueue(noticeQueue),
       });
     }),
   );
