@@ -1,6 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { SqliteClient } from "@effect/sql-sqlite-bun";
+import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun";
 import { Context, Effect, Layer } from "effect";
+import { Migrator, SqlClient } from "effect/sql";
 import type { SqlError } from "effect/sql/SqlError";
 
 interface MemberStatsRow {
@@ -35,7 +36,7 @@ export interface UserStatsResult {
 export class StatsRepository extends Context.Service<
   StatsRepository,
   {
-    readonly initSchema: Effect.Effect<void, SqlError>;
+    readonly initSchema: Effect.Effect<void, SqlError | Migrator.MigrationError>;
     readonly recordMessage: (
       groupId: number,
       userId: number,
@@ -69,33 +70,41 @@ export class StatsRepository extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqliteClient.SqliteClient;
 
-      const initSchema = Effect.gen(function* () {
-        yield* sql`
-          CREATE TABLE IF NOT EXISTS member_daily_stats (
-            group_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            total_count INTEGER NOT NULL DEFAULT 0,
-            media_count INTEGER NOT NULL DEFAULT 0,
-            link_count INTEGER NOT NULL DEFAULT 0,
-            interaction_count INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (group_id, user_id, date)
-          );
-        `;
-        yield* sql`
-          CREATE INDEX IF NOT EXISTS idx_member_daily_stats_group_date
-            ON member_daily_stats(group_id, date);
-        `;
-        yield* sql`
-          CREATE TABLE IF NOT EXISTS member_profiles (
-            group_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            nickname TEXT NOT NULL,
-            updated_at INTEGER NOT NULL,
-            PRIMARY KEY (group_id, user_id)
-          );
-        `;
+      const migrations = Migrator.fromRecord({
+        "0001_initial": Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
+            CREATE TABLE IF NOT EXISTS member_daily_stats (
+              group_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              date TEXT NOT NULL,
+              total_count INTEGER NOT NULL DEFAULT 0,
+              media_count INTEGER NOT NULL DEFAULT 0,
+              link_count INTEGER NOT NULL DEFAULT 0,
+              interaction_count INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY (group_id, user_id, date)
+            );
+          `;
+          yield* sql`
+            CREATE INDEX IF NOT EXISTS idx_member_daily_stats_group_date
+              ON member_daily_stats(group_id, date);
+          `;
+          yield* sql`
+            CREATE TABLE IF NOT EXISTS member_profiles (
+              group_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              nickname TEXT NOT NULL,
+              updated_at INTEGER NOT NULL,
+              PRIMARY KEY (group_id, user_id)
+            );
+          `;
+        }),
       });
+
+      const initSchema = SqliteMigrator.run({ loader: migrations }).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.asVoid,
+      );
 
       const recordMessage = Effect.fnUntraced(function* (
         groupId: number,
