@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Data, type Duration, Effect, Match, Option, Predicate, Schema } from "effect";
+import { Data, type Duration, Effect, Match, Option, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
   cancelResponse,
@@ -110,7 +110,6 @@ export class BlockedHostError extends Schema.TaggedError<
   }
 }
 
-
 class ParseMetadataError extends Schema.TaggedError<
   ParseMetadataError,
   {
@@ -165,7 +164,6 @@ class SendLinkPreviewReplyError extends Schema.TaggedError<
 }) {}
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
-
 
 function isSvgUrl(url: string): boolean {
   try {
@@ -446,40 +444,42 @@ export const prepareOutgoingImage = Effect.fn(
     request,
     (response) =>
       Effect.gen(function* () {
+        const rawContentType = response.headers["content-type"];
+        const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
+        if (
+          !contentType ||
+          !contentType.startsWith("image/") ||
+          contentType === "image/svg+xml"
+        ) {
+          cancelResponse(response);
+          yield* Effect.logWarning(
+            `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
+          );
+          return undefined;
+        }
 
-    const rawContentType = response.headers["content-type"];
-    const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
-    if (
-      !contentType ||
-      !contentType.startsWith("image/") ||
-      contentType === "image/svg+xml"
-    ) {
-      cancelResponse(response);
-      yield* Effect.logWarning(
-        `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
-      );
-      return undefined;
-    }
+        const declaredLengthStr = response.headers["content-length"];
+        if (declaredLengthStr) {
+          const declaredLength = Number(declaredLengthStr);
+          if (
+            Number.isFinite(declaredLength) &&
+            declaredLength > MAX_IMAGE_BYTES
+          ) {
+            cancelResponse(response);
+            yield* Effect.logWarning(
+              `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+            );
+            return undefined;
+          }
+        }
 
-    const declaredLengthStr = response.headers["content-length"];
-    if (declaredLengthStr) {
-      const declaredLength = Number(declaredLengthStr);
-      if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
-        cancelResponse(response);
-        yield* Effect.logWarning(
-          `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
-        );
-        return undefined;
-      }
-    }
-
-    const buffer = yield* response.arrayBuffer;
-    if (buffer.byteLength > MAX_IMAGE_BYTES) {
-      yield* Effect.logWarning(
-        `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
-      );
-      return undefined;
-    }
+        const buffer = yield* response.arrayBuffer;
+        if (buffer.byteLength > MAX_IMAGE_BYTES) {
+          yield* Effect.logWarning(
+            `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+          );
+          return undefined;
+        }
 
         const base64 = Buffer.from(buffer).toString("base64");
         return `base64://${base64}` as string | undefined;

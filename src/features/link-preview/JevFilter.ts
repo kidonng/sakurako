@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
 import {
   DEFAULT_DESCRIPTION_MAX_WIDTH,
@@ -110,7 +110,6 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
     }
 
     const filterEffect = Effect.gen(function* () {
-
       const previews: Record<
         string,
         {
@@ -183,8 +182,7 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
 
       if (!responseData.answers) {
         return yield* new JevFilterError({
-          cause:
-            "Missing or invalid 'answers' envelope in System One response",
+          cause: "Missing or invalid 'answers' envelope in System One response",
         });
       }
 

@@ -140,7 +140,6 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   apiKey?: Redacted.Redacted<string>,
   timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.fn.Return<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
-
   const urlParams: Record<string, string> = {
     output_type: "2",
     numres: "1",

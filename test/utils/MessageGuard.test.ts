@@ -13,9 +13,7 @@ describe("isSelfMessage", () => {
   });
 
   it("treats events whose user_id equals self_id as self-sent", () => {
-    expect(
-      isSelfMessage(event({ user_id: 99999, self_id: 99999 })),
-    ).toBe(true);
+    expect(isSelfMessage(event({ user_id: 99999, self_id: 99999 }))).toBe(true);
   });
 
   it("accepts group messages from other users", () => {

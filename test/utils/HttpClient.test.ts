@@ -1,3 +1,4 @@
+/* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
 import { Effect, Schema } from "effect";
 import { HttpClientRequest } from "effect/http";
@@ -118,7 +119,7 @@ describe("HttpClient utils", () => {
 
   describe("fetchJson", () => {
     const TestSchema = Schema.Struct({
-      id: Schema.Number,
+      id: Schema.Finite,
       name: Schema.String,
     });
 
@@ -141,9 +142,12 @@ describe("HttpClient utils", () => {
 
     it("fails with HttpFetchError on schema validation failure", async () => {
       const layer = makeTestHttpClient(() => {
-        return new Response(JSON.stringify({ id: "not-a-number", name: "Sakurako" }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ id: "not-a-number", name: "Sakurako" }),
+          {
+            status: 200,
+          },
+        );
       });
 
       const program = fetchJson(
