@@ -73,3 +73,6 @@
 - **Danbooru (`danbooru.donmai.us`)**：
   - 隐藏描述信息。
   - 发送带有用户标识的专属 `User-Agent`，遵循站点 API 规范，避免触发 Cloudflare 验证拦截。
+- **Pixiv (`pixiv.net`)**：
+  - 插画作品链接（`/artworks/:id`、`/:lang/artworks/:id` 以及旧版 `/member_illust.php`）优先通过 `https://pixiv.cat/` 获取并展示原始完整插画，替代官方裁剪与装饰过的封面。
+  - 若 pixiv.cat 原图不可用（如作品受限、已删除或网络异常），自动优雅回退使用页面原有的 `og:image` 裁剪图。
