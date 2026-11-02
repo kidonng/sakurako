@@ -47,6 +47,28 @@ describe("formatPreview", () => {
     });
   });
 
+  it("preserves fallbackImage for single successful URL when provided", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://www.pixiv.net/artworks/82775556",
+          title: "Artwork Title",
+          image: "https://pixiv.cat/82775556.jpg",
+          fallbackImage:
+            "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "Artwork Title",
+      image: "https://pixiv.cat/82775556.jpg",
+      fallbackImage:
+        "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+    });
+  });
+
   it("returns null for single successful URL when title and image are missing", () => {
     const results: ScrapingResult[] = [
       {

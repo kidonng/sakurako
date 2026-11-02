@@ -1,7 +1,15 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import { Data, type Duration, Effect, Match, Option, Schema } from "effect";
+import {
+  Data,
+  Duration,
+  Effect,
+  Match,
+  Option,
+  Predicate,
+  Schema,
+} from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
   cancelResponse,
@@ -80,6 +88,7 @@ export interface PageMetadata {
   readonly title?: string;
   readonly description?: string;
   readonly image?: string;
+  readonly fallbackImage?: string;
 }
 
 class InvalidUrlError extends Schema.TaggedError<
@@ -152,6 +161,7 @@ export { isScrapingResult, ScrapingFiltered };
 export interface FormattedPreview {
   readonly text: string;
   readonly image?: string;
+  readonly fallbackImage?: string;
 }
 
 class SendLinkPreviewReplyError extends Schema.TaggedError<
@@ -237,6 +247,13 @@ export function formatPreview(
 
     const rawImage = options?.hideImage ? undefined : item.image;
     const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
+    const rawFallbackImage = options?.hideImage
+      ? undefined
+      : item.fallbackImage;
+    const fallbackImage =
+      rawFallbackImage && !isSvgUrl(rawFallbackImage)
+        ? rawFallbackImage
+        : undefined;
 
     const text = lines.join("\n");
     if (!text && !image) {
@@ -246,11 +263,13 @@ export function formatPreview(
     return {
       text,
       image,
+      ...(fallbackImage ? { fallbackImage } : {}),
     };
   }
 
   const blocks: string[] = [];
   let firstImage: string | undefined = undefined;
+  let firstFallbackImage: string | undefined = undefined;
 
   results.forEach((item, index) => {
     const num = index + 1;
@@ -288,8 +307,10 @@ export function formatPreview(
           !isSvgUrl(data.image)
         ) {
           firstImage = data.image;
+          const rawFallback = data.fallbackImage;
+          firstFallbackImage =
+            rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
         }
-
         return line;
       },
     });
@@ -299,6 +320,7 @@ export function formatPreview(
   return {
     text: blocks.join("\n"),
     image: firstImage,
+    ...(firstFallbackImage ? { fallbackImage: firstFallbackImage } : {}),
   };
 }
 
@@ -397,29 +419,38 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const description = metadata.description?.trim() || undefined;
     const rawImage = metadata.image?.trim() || undefined;
     const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
+    const rawFallback = (
+      metadata as unknown as Record<string, string | undefined>
+    ).fallbackImage?.trim() || undefined;
+    const fallbackImage =
+      rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
 
     return {
       url,
       title,
       description,
       image,
+      fallbackImage,
     };
   },
 );
 
-export const prepareOutgoingImage = Effect.fn(
-  "LinkPreview.prepareOutgoingImage",
-)(function* (
-  imageUrl: string,
-  timeoutDuration: Duration.Input = DEFAULT_IMAGE_TIMEOUT,
-): Effect.fn.Return<string | undefined, never, HttpClient.HttpClient> {
+export interface PrepareImageOptions {
+  readonly fallbackImageUrl?: string;
+  readonly timeoutDuration?: Duration.Input;
+}
+
+const downloadSingleImage = Effect.fnUntraced(function* (
+  targetUrl: string,
+  timeoutDuration: Duration.Input,
+) {
   const urlObj = yield* Effect.try({
-    try: () => new URL(imageUrl),
+    try: () => new URL(targetUrl),
     catch: (e) => `Invalid URL: ${String(e)}`,
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
-        `Blocked private or invalid image URL: ${imageUrl} (${error})`,
+        `Blocked private or invalid image URL: ${targetUrl} (${error})`,
       ).pipe(Effect.as(undefined)),
     ),
   );
@@ -427,17 +458,17 @@ export const prepareOutgoingImage = Effect.fn(
   if (!urlObj || isPrivateHost(urlObj.hostname)) {
     if (urlObj) {
       yield* Effect.logWarning(
-        `Blocked private or invalid image URL: ${imageUrl}`,
+        `Blocked private or invalid image URL: ${targetUrl}`,
       );
     }
     return undefined;
   }
 
-  if (!shouldFetchImageLocally(imageUrl)) {
-    return imageUrl;
+  if (!shouldFetchImageLocally(targetUrl)) {
+    return targetUrl;
   }
 
-  const request = HttpClientRequest.get(imageUrl).pipe(
+  const request = HttpClientRequest.get(targetUrl).pipe(
     HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
   );
 
@@ -454,7 +485,7 @@ export const prepareOutgoingImage = Effect.fn(
         ) {
           cancelResponse(response);
           yield* Effect.logWarning(
-            `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
+            `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${targetUrl}`,
           );
           return undefined;
         }
@@ -468,7 +499,7 @@ export const prepareOutgoingImage = Effect.fn(
           ) {
             cancelResponse(response);
             yield* Effect.logWarning(
-              `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+              `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${targetUrl}`,
             );
             return undefined;
           }
@@ -477,7 +508,7 @@ export const prepareOutgoingImage = Effect.fn(
         const buffer = yield* response.arrayBuffer;
         if (buffer.byteLength > MAX_IMAGE_BYTES) {
           yield* Effect.logWarning(
-            `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
+            `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${targetUrl}`,
           );
           return undefined;
         }
@@ -489,17 +520,55 @@ export const prepareOutgoingImage = Effect.fn(
   ).pipe(
     Effect.catchTag("HttpFetchError", (error) =>
       Effect.logWarning(
-        `Failed to fetch image locally for ${imageUrl}: ${error.status !== undefined ? `HTTP ${error.status}${error.statusText ? ` ${error.statusText}` : ""}`.trim() : (error.detail ?? "Unknown error")}`,
+        `Failed to fetch image locally for ${targetUrl}: ${error.status !== undefined ? `HTTP ${error.status}${error.statusText ? ` ${error.statusText}` : ""}`.trim() : (error.detail ?? "Unknown error")}`,
       ).pipe(Effect.as(undefined as string | undefined)),
     ),
     Effect.catch((error) =>
       Effect.logWarning(
-        `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error)}`,
+        `Failed to fetch image locally for ${targetUrl}: ${formatErrorDetail(error)}`,
       ).pipe(Effect.as(undefined as string | undefined)),
     ),
   );
 
   return yield* downloadEffect;
+});
+
+function isPrepareImageOptions(
+  options: unknown,
+): options is PrepareImageOptions {
+  return (
+    Predicate.isObject(options) &&
+    ("fallbackImageUrl" in options || "timeoutDuration" in options)
+  );
+}
+
+export const prepareOutgoingImage = Effect.fn(
+  "LinkPreview.prepareOutgoingImage",
+)(function* (
+  imageUrl: string,
+  options?: PrepareImageOptions | Duration.Input,
+): Effect.fn.Return<string | undefined, never, HttpClient.HttpClient> {
+  const isOptions = isPrepareImageOptions(options);
+  const timeoutDuration: Duration.Input = isOptions
+    ? (options.timeoutDuration ?? DEFAULT_IMAGE_TIMEOUT)
+    : (options ?? DEFAULT_IMAGE_TIMEOUT);
+
+  const fallbackImageUrl: string | undefined = isOptions
+    ? options.fallbackImageUrl
+    : undefined;
+  const primaryResult = yield* downloadSingleImage(imageUrl, timeoutDuration);
+  if (primaryResult) {
+    return primaryResult;
+  }
+
+  if (fallbackImageUrl) {
+    yield* Effect.logWarning(
+      `Primary image failed for ${imageUrl}, falling back to ${fallbackImageUrl}...`,
+    );
+    return yield* downloadSingleImage(fallbackImageUrl, timeoutDuration);
+  }
+
+  return undefined;
 });
 
 export function scrapeAll(
@@ -557,7 +626,9 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     }
 
     const resolvedImage = formatted.image
-      ? yield* prepareOutgoingImage(formatted.image)
+      ? yield* prepareOutgoingImage(formatted.image, {
+          fallbackImageUrl: formatted.fallbackImage,
+        })
       : undefined;
 
     const buildOutgoing = (image?: string): OutgoingMessage =>

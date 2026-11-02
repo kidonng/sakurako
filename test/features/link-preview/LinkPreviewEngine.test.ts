@@ -592,6 +592,49 @@ describe("LinkPreviewEngine", () => {
         "base64://" + Buffer.from(mockBytes).toString("base64"),
       );
     });
+
+    it("falls back to fallbackImageUrl when primary image fails with 404", async () => {
+      const fallbackBytes = new Uint8Array([1, 2, 3, 4]);
+      const layer = makeTestHttpClient((req) => {
+        if (req.url === "https://pixiv.cat/82775556.jpg") {
+          return new Response("Not Found", { status: 404 });
+        }
+        if (
+          req.url === "https://embed.pixiv.net/decorate.php?illust_id=82775556"
+        ) {
+          return new Response(fallbackBytes, {
+            status: 200,
+            headers: { "Content-Type": "image/jpeg" },
+          });
+        }
+        return new Response("", { status: 500 });
+      });
+
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://pixiv.cat/82775556.jpg", {
+          fallbackImageUrl:
+            "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+        }).pipe(Effect.provide(layer)),
+      );
+
+      const expectedBase64 = `base64://${Buffer.from(fallbackBytes).toString("base64")}`;
+      expect(result).toBe(expectedBase64);
+    });
+
+    it("returns undefined when both primary image and fallbackImageUrl fail", async () => {
+      const layer = makeTestHttpClient(
+        () => new Response("Not Found", { status: 404 }),
+      );
+
+      const result = await Effect.runPromise(
+        prepareOutgoingImage("https://pixiv.cat/82775556.jpg", {
+          fallbackImageUrl:
+            "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+        }).pipe(Effect.provide(layer)),
+      );
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("extractFirstParagraph", () => {
