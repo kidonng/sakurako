@@ -1,7 +1,8 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Option, Predicate, Redacted, Schema } from "effect";
+import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { fetchJson } from "../../utils/HttpClient.ts";
 import {
   DEFAULT_DESCRIPTION_MAX_WIDTH,
   isScrapingResult,
@@ -109,7 +110,6 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
     }
 
     const filterEffect = Effect.gen(function* () {
-      const client = yield* HttpClient.HttpClient;
 
       const previews: Record<
         string,
@@ -170,42 +170,23 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
         HttpClientRequest.bodyJson(payload),
       );
 
-      const responseData = yield* Effect.gen(function* () {
-        const response = yield* client.execute(request);
-        if (response.status < 200 || response.status >= 300) {
-          const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
-          void webRes?.body?.cancel().catch(() => {});
-          return yield* new JevFilterError({
-            cause: `HTTP status ${response.status}`,
-          });
-        }
-        const responseBody = yield* HttpClientResponse.schemaBodyJson(
-          SystemOneResponseSchema,
-        )(response).pipe(
-          Effect.mapError(
-            () =>
-              new JevFilterError({
-                cause:
-                  "Missing or invalid 'answers' envelope in System One response",
-              }),
-          ),
-        );
-
-        if (!responseBody.answers) {
-          return yield* new JevFilterError({
-            cause:
-              "Missing or invalid 'answers' envelope in System One response",
-          });
-        }
-        return responseBody;
+      const responseData = yield* fetchJson(request, SystemOneResponseSchema, {
+        timeoutDuration,
       }).pipe(
-        Effect.timeout(timeoutDuration),
-        Effect.mapError((cause) =>
-          cause instanceof JevFilterError
-            ? cause
-            : new JevFilterError({ cause }),
+        Effect.mapError(
+          (cause) =>
+            new JevFilterError({
+              cause: cause.detail ?? cause.message,
+            }),
         ),
       );
+
+      if (!responseData.answers) {
+        return yield* new JevFilterError({
+          cause:
+            "Missing or invalid 'answers' envelope in System One response",
+        });
+      }
 
       const answers = responseData.answers ?? {};
 

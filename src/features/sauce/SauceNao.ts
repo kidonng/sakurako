@@ -1,11 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { type Duration, Effect, Redacted, Schema } from "effect";
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-  Url,
-} from "effect/http";
+import { HttpClient, HttpClientRequest, Url } from "effect/http";
+import { fetchJson } from "../../utils/HttpClient.ts";
 
 export interface SauceResult {
   readonly title: string;
@@ -144,7 +140,6 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   apiKey?: Redacted.Redacted<string>,
   timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.fn.Return<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
-  const client = yield* HttpClient.HttpClient;
 
   const urlParams: Record<string, string> = {
     output_type: "2",
@@ -159,32 +154,18 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   const request = HttpClientRequest.get(
     Url.setUrlParams(new URL(SAUCENAO_API_URL), urlParams).toString(),
   );
-  const executeAndRead = Effect.gen(function* () {
-    const response = yield* client
-      .execute(request)
-      .pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
-
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new SauceNaoError({
-        cause: `SauceNao HTTP returned status ${response.status}`,
-      });
-    }
-
-    const json = yield* HttpClientResponse.schemaBodyJson(
-      SauceNaoResponseSchema,
-    )(response).pipe(Effect.mapError((cause) => new SauceNaoError({ cause })));
-
-    return json;
-  });
-
-  const json = yield* executeAndRead.pipe(
-    Effect.timeoutOrElse({
-      duration: timeoutDuration,
-      orElse: () =>
+  const json = yield* fetchJson(request, SauceNaoResponseSchema, {
+    timeoutDuration,
+  }).pipe(
+    Effect.mapError(
+      (error) =>
         new SauceNaoError({
-          cause: "SauceNao request timed out",
+          cause:
+            error.status !== undefined
+              ? `SauceNao HTTP returned status ${error.status}`
+              : (error.detail ?? error.message),
         }),
-    }),
+    ),
   );
   const status = json.header?.status ?? 0;
   if (status !== 0) {
