@@ -168,6 +168,7 @@ export class StatsRenderer extends Context.Service<
               display: "flex",
               flexDirection: "column",
               width: 620,
+              boxSizing: "border-box",
               backgroundColor: "#18191c",
               padding: 24,
               borderRadius: 12,
@@ -201,7 +202,7 @@ export class StatsRenderer extends Context.Service<
                                 fontWeight: 700,
                                 color: "#f0f6fc",
                               },
-                              children: "📊 群消息统计排行榜",
+                              children: "群消息统计排行榜",
                             },
                           },
                           {
@@ -351,7 +352,7 @@ export class StatsRenderer extends Context.Service<
         });
 
         const png = yield* Effect.tryPromise({
-          try: () => sharp(Buffer.from(svg)).png().toBuffer(),
+          try: () => sharp(Buffer.from(svg), { density: 144 }).png().toBuffer(),
           catch: (e) => new RenderError({ message: String(e) }),
         });
 

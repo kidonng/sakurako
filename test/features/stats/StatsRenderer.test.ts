@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import sharp from "sharp";
 import {
   type RenderLeaderboardOptions,
   StatsRenderer,
@@ -44,6 +45,10 @@ describe("StatsRenderer", () => {
       expect(pngBuffer[1]).toBe(0x50);
       expect(pngBuffer[2]).toBe(0x4e);
       expect(pngBuffer[3]).toBe(0x47);
+
+      const metadata = yield* Effect.promise(() => sharp(pngBuffer).metadata());
+      expect(metadata.width).toBe(1240);
+      expect(metadata.height).toBeGreaterThan(0);
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(StatsRenderer.layer)));
