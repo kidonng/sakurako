@@ -23,6 +23,7 @@ Consolidating the execution lifecycle and error reporting into a unified utility
 - Guarantee that unconsumed or failed response bodies are safely canceled (`cancel()`), preventing stream leaks.
 - Ensure that timeout constraints wrap both request dispatch and response body consumption.
 - Refactor all 4 HTTP call sites to use the new utility without breaking any existing test contracts.
+- Automatically supply `User-Agent: DEFAULT_USER_AGENT` ("Sakurako/1.0") if not already specified on the request.
 
 ### Non-Goals
 - Do not replace or wrap `HttpClientRequest` builder functions (`HttpClientRequest.get`, `HttpClientRequest.post`, `HttpClientRequest.setHeader`, etc.).
@@ -90,8 +91,13 @@ export function cancelResponse(
   }
 }
 ```
+### 3. Default User-Agent
+```ts
+export const DEFAULT_USER_AGENT = "Sakurako/1.0";
+```
+If the outgoing request does not already contain a `User-Agent` header (`request.headers["user-agent"] === undefined`), `executeWithResponse` automatically attaches `User-Agent: DEFAULT_USER_AGENT`.
 
-### 3. Core Execution Lifecycle: `executeWithResponse`
+### 4. Core Execution Lifecycle: `executeWithResponse`
 ```ts
 export interface RequestExecutionOptions {
   readonly timeoutDuration?: Duration.Input;
@@ -106,8 +112,12 @@ export const executeWithResponse = Effect.fnUntraced(function* <A, E, R>(
   const timeoutDuration = options?.timeoutDuration ?? "10 seconds";
   const url = request.url || "";
 
+  const finalRequest = request.headers["user-agent"]
+    ? request
+    : HttpClientRequest.setHeader(request, "User-Agent", DEFAULT_USER_AGENT);
+
   const run = Effect.gen(function* () {
-    const response = yield* client.execute(request).pipe(
+    const response = yield* client.execute(finalRequest).pipe(
       Effect.mapError(
         (error) =>
           new HttpFetchError({
@@ -147,13 +157,13 @@ export const executeWithResponse = Effect.fnUntraced(function* <A, E, R>(
 });
 ```
 
-### 4. Convenience Helpers
+### 5. Convenience Helpers
 - `fetchText(request, options?)`:
   Returns `{ text: string; url: string }` where `url` is `response.url || request.url`.
 - `fetchJson(request, schema, options?)`:
   Runs `HttpClientResponse.schemaBodyJson(schema)(response)` and maps decoding errors to `HttpFetchError`.
 
-### 5. Call Site Migration
+### 6. Call Site Migration
 - `LinkPreview.scrapeMetadata`: Replaced with `fetchText(request, { timeoutDuration })`.
 - `LinkPreview.prepareOutgoingImage`: Replaced with `executeWithResponse(request, (response) => ...)`. Non-image / oversized checks call `cancelResponse(response)` and return `undefined`.
 - `JevFilter.filterLinkPreviews`: Replaced with `fetchJson(request, SystemOneResponseSchema, { timeoutDuration })`. Catches `HttpFetchError` and logs warning.
