@@ -40,10 +40,10 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
-- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY` using Effect's `Config` module.
+- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY` and `OPENROUTER_API_KEY` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket message callbacks offer items to an unbounded `Queue`, exposed downstream as a typed `Stream`.
-- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot` and `LinkPreview`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
+- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, and `Sauce`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
 
 ## Key Directories
 
@@ -60,7 +60,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 All development tasks use Bun:
 
 - **Run Bot**: `bun start` (or `bun src/index.ts`)
-- **Run Tests**: `bun test` (single file: `bun test test/EchoBot.test.ts`)
+- **Run Tests**: `bun test` (single file: `bun test test/features/echo/EchoBot.test.ts`)
 - **Type Check**: `bun run check` (runs `tsc`, validates types and `verbatimModuleSyntax`)
 - **Lint**: `bun run lint` (runs `oxlint` with `oxlint-tsgolint` & `@effect/tsgo` rules)
 - **Unused Code & Dependency Check**: `bun run knip` (runs `knip`)
@@ -97,7 +97,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 ## Important Files
 
 - `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage`, `handleLinkPreviewMessage`, and `handleSauceMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
-- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), and optional `SAUCENAO_API_KEY` (`Redacted`).
+- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), and optional `OPENROUTER_API_KEY` (`Redacted`).
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
 - `src/features/echo/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
 - `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
@@ -129,6 +129,12 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
   - Test positive and negative matches (e.g., exact `"喵喵喵"` vs whitespace `" 喵喵喵 "` or substring `"喵喵"`).
   - Verify loop prevention (handlers ignore self messages via `isSelfMessage`).
   - Test default fallbacks when optional configs are omitted.
+- **Meaningful Tests & Avoiding Redundancy**:
+  - **No Tautologies or Constant Tests**: Never test bare constants, string literals, or exported timeout/size values directly (e.g. `expect(DEFAULT_USER_AGENT).toBe(...)`). Always test observable behavior exercising that constant instead.
+  - **No Framework/Service Echo Tests**: Never test Effect library primitives (like `Queue` or `Stream`) in isolation without involving actual application service logic.
+  - **Concrete Assertions**: Avoid weak assertions like `expect(result).toBeDefined()`. Assert concrete data structures and message payloads.
+  - **Tiered Testing & No Duplicate Paths**: Test detailed DOM/rule parsing branches in focused unit tests (e.g. `LinkPreviewSites.test.ts`), while keeping integration tests minimal to verify wiring without duplicating rule branches. Do not duplicate identical test execution paths with merely cosmetic variations.
+  - **Consolidate Common Setup**: Group default and fallback assertions together when testing configuration records instead of repeating identical environment setup across multiple fragmented test cases.
 
 @docs/troubleshooting.md
 @node_modules/effect/AGENTS.md

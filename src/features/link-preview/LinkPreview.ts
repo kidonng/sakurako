@@ -163,8 +163,8 @@ class SendLinkPreviewReplyError extends Schema.TaggedError<
   cause: Schema.Defect(),
 }) {}
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
-export const DEFAULT_IMAGE_TIMEOUT: Duration.Input = "5 seconds";
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
+const DEFAULT_IMAGE_TIMEOUT: Duration.Input = "5 seconds";
 
 function isSvgUrl(url: string): boolean {
   try {

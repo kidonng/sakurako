@@ -8,8 +8,6 @@ import {
   extractUrls,
   HttpFetchError,
   isScrapingResult,
-  DEFAULT_IMAGE_TIMEOUT,
-  MAX_IMAGE_BYTES,
   prepareOutgoingImage,
   scrapeAll,
   scrapeMetadata,
@@ -401,62 +399,6 @@ describe("LinkPreviewEngine", () => {
       "https://lexifina.com/blog/git-for-the-us-code",
     );
   });
-  it("scrapes news.ycombinator.com Ask HN without setting link description", async () => {
-    const askHnHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head><title>Ask HN: What are you working on? | Hacker News</title></head>
-        <body>
-          <tr class="athing submission" id="50260146">
-            <td class="title">
-              <span class="titleline">
-                <a href="item?id=50260146">Ask HN: What are you working on?</a>
-              </span>
-            </td>
-          </tr>
-        </body>
-      </html>
-    `;
-    const result = await Effect.runPromise(
-      scrapeMetadata("https://news.ycombinator.com/item?id=50260146").pipe(
-        Effect.provide(
-          makeTestHttpClient(() => new Response(askHnHtml, { status: 200 })),
-        ),
-      ),
-    );
-
-    expect(result.title).toBe("Ask HN: What are you working on? | Hacker News");
-    expect(result.description).toBeUndefined();
-  });
-  it("scrapes news.ycombinator.com comment without setting link description", async () => {
-    const commentHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head><title>Comment Title | Hacker News</title></head>
-        <body>
-          <table class="fatitem">
-            <tr class="athing" id="43180000">
-              <td class="default">
-                <div class="comment">
-                  <a href="https://example.com">https://example.com</a>
-                </div>
-              </td>
-            </tr>
-          </table>
-        </body>
-      </html>
-    `;
-    const result = await Effect.runPromise(
-      scrapeMetadata("https://news.ycombinator.com/item?id=43180000").pipe(
-        Effect.provide(
-          makeTestHttpClient(() => new Response(commentHtml, { status: 200 })),
-        ),
-      ),
-    );
-
-    expect(result.title).toBe("Comment Title | Hacker News");
-    expect(result.description).toBeUndefined();
-  });
 
   it("ignores SVG images when scraping metadata", async () => {
     const htmlWithSvg = `
@@ -500,25 +442,6 @@ describe("LinkPreviewEngine", () => {
       );
     });
 
-    it("downloads and encodes image to base64 for Danbooru URLs", async () => {
-      const mockBytes = new Uint8Array([1, 2, 3, 4]);
-      const layer = makeTestHttpClient(
-        () =>
-          new Response(mockBytes, {
-            status: 200,
-            headers: { "Content-Type": "image/jpeg" },
-          }),
-      );
-      const result = await Effect.runPromise(
-        prepareOutgoingImage("https://cdn.donmai.us/original/123.jpg").pipe(
-          Effect.provide(layer),
-        ),
-      );
-      expect(result).toBe(
-        "base64://" + Buffer.from(mockBytes).toString("base64"),
-      );
-    });
-
     it("returns undefined when image download fails", async () => {
       const layer = makeTestHttpClient(
         () =>
@@ -533,9 +456,6 @@ describe("LinkPreviewEngine", () => {
         ),
       );
       expect(result).toBeUndefined();
-    });
-    it("has a 5-second default timeout", () => {
-      expect(DEFAULT_IMAGE_TIMEOUT).toBe("5 seconds");
     });
 
     it("returns undefined when image request times out", async () => {
@@ -671,10 +591,6 @@ describe("LinkPreviewEngine", () => {
       expect(result).toBe(
         "base64://" + Buffer.from(mockBytes).toString("base64"),
       );
-    });
-
-    it("exports MAX_IMAGE_BYTES constant as 10 MiB", () => {
-      expect(MAX_IMAGE_BYTES).toBe(10 * 1024 * 1024);
     });
   });
 

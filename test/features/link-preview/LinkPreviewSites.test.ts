@@ -174,12 +174,6 @@ describe("LinkPreviewSites", () => {
   });
 
   describe("danbooruCustomizer", () => {
-    it("has the custom userAgent for danbooru", () => {
-      expect(danbooruCustomizer.userAgent).toBe("Sakurako/1.0  (user #898759)");
-    });
-    it("does not explicitly override fetchImageLocally on danbooruCustomizer", () => {
-      expect(danbooruCustomizer.fetchImageLocally).toBeUndefined();
-    });
     it("hides description via formatItem", () => {
       const options = danbooruCustomizer.formatItem?.({
         metadata: {
@@ -217,14 +211,6 @@ describe("LinkPreviewSites", () => {
       expect(shouldFetchImageLocally("https://example.com/cover.png")).toBe(
         true,
       );
-    });
-
-    it("returns true for Danbooru image URLs", () => {
-      expect(
-        shouldFetchImageLocally(
-          "https://cdn.donmai.us/original/3f/83/3f838e2c11d37cf557cf3f7ac284895b.jpg",
-        ),
-      ).toBe(true);
     });
   });
 });

@@ -5,7 +5,6 @@ import { HttpClientRequest } from "effect/http";
 import { makeTestHttpClient } from "../TestHttpClient.ts";
 import {
   cancelResponse,
-  DEFAULT_USER_AGENT,
   executeWithResponse,
   fetchJson,
   fetchText,
@@ -13,12 +12,6 @@ import {
 } from "../../src/utils/HttpClient.ts";
 
 describe("HttpClient utils", () => {
-  describe("DEFAULT_USER_AGENT", () => {
-    it("is Sakurako/1.0", () => {
-      expect(DEFAULT_USER_AGENT).toBe("Sakurako/1.0");
-    });
-  });
-
   describe("executeWithResponse / fetchText", () => {
     it("returns text and target url on 200 OK", async () => {
       const layer = makeTestHttpClient((req) => {

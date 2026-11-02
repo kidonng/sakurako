@@ -9,38 +9,6 @@ import { makeTestHttpClient } from "../../TestHttpClient.ts";
 const dummyLayer = makeTestHttpClient(() => new Response(""));
 
 describe("handleLinkPreviewMessage", () => {
-  it("quotes reply when message contains valid link", async () => {
-    let quotedMessage: unknown = null;
-    const item: IncomingMessage = {
-      event: {
-        raw_message: "Please see https://example.com/test",
-        message_type: "group",
-        user_id: 10001,
-        self_id: 99999,
-        post_type: "message",
-      } as unknown as OneBotMessageEvent,
-      context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
-    };
-
-    const layer = makeTestHttpClient(
-      () =>
-        new Response(
-          '<html><head><title>Preview Title</title><meta name="description" content="Preview Desc"></head></html>',
-          { status: 200 },
-        ),
-    );
-
-    await Effect.runPromise(
-      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
-    );
-
-    expect(quotedMessage).toBeDefined();
-  });
-
   it("ignores self messages", async () => {
     let quoted = false;
     const item: IncomingMessage = {
