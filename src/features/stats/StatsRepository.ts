@@ -1,37 +1,38 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun";
-import { Clock, Context, Effect, Layer } from "effect";
-import { Migrator, SqlClient } from "effect/sql";
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
+import { Migrator, SqlClient, SqlSchema } from "effect/sql";
 import type { SqlError } from "effect/sql/SqlError";
+const MemberStatsRow = Schema.Struct({
+  userId: Schema.Finite,
+  nickname: Schema.String,
+  totalCount: Schema.Finite,
+  mediaCount: Schema.Finite,
+  linkCount: Schema.Finite,
+  interactionCount: Schema.Finite,
+});
 
-interface MemberStatsRow {
-  readonly userId: number;
-  readonly nickname: string;
-  readonly totalCount: number;
-  readonly mediaCount: number;
-  readonly linkCount: number;
-  readonly interactionCount: number;
-}
+export const LeaderboardResult = Schema.Struct({
+  groupTotal: Schema.Finite,
+  rows: Schema.Array(MemberStatsRow),
+});
+export type LeaderboardResult = typeof LeaderboardResult.Type;
 
-export interface LeaderboardResult {
-  readonly groupTotal: number;
-  readonly rows: readonly MemberStatsRow[];
-}
+const UserPeriodStats = Schema.Struct({
+  totalCount: Schema.Finite,
+  mediaCount: Schema.Finite,
+  linkCount: Schema.Finite,
+  interactionCount: Schema.Finite,
+  rank: Schema.NullOr(Schema.Finite),
+});
 
-interface UserPeriodStats {
-  readonly totalCount: number;
-  readonly mediaCount: number;
-  readonly linkCount: number;
-  readonly interactionCount: number;
-  readonly rank: number | null;
-}
-
-export interface UserStatsResult {
-  readonly userId: number;
-  readonly nickname: string;
-  readonly stats30d: UserPeriodStats;
-  readonly statsAll: UserPeriodStats;
-}
+export const UserStatsResult = Schema.Struct({
+  userId: Schema.Finite,
+  nickname: Schema.String,
+  stats30d: UserPeriodStats,
+  statsAll: UserPeriodStats,
+});
+export type UserStatsResult = typeof UserStatsResult.Type;
 
 export class StatsRepository extends Context.Service<
   StatsRepository,
@@ -161,54 +162,121 @@ export class StatsRepository extends Context.Service<
         `;
       });
 
+      const findGroupTotal = SqlSchema.findOne({
+        Request: Schema.Struct({
+          groupId: Schema.Finite,
+          startDate: Schema.NullOr(Schema.String),
+        }),
+        Result: Schema.Struct({ total: Schema.Finite }),
+        execute: ({ groupId, startDate }) => sql`
+          SELECT COALESCE(SUM(total_count), 0) AS total
+          FROM member_daily_stats
+          WHERE group_id = ${groupId} ${startDate ? sql`AND date >= ${startDate}` : sql``};
+        `,
+      });
+
+      const findLeaderboardRows = SqlSchema.findAll({
+        Request: Schema.Struct({
+          groupId: Schema.Finite,
+          startDate: Schema.NullOr(Schema.String),
+          limit: Schema.Finite,
+        }),
+        Result: MemberStatsRow,
+        execute: ({ groupId, startDate, limit }) => sql`
+          SELECT
+            s.user_id AS userId,
+            COALESCE(p.nickname, CAST(s.user_id AS TEXT)) AS nickname,
+            SUM(s.total_count) AS totalCount,
+            SUM(s.media_count) AS mediaCount,
+            SUM(s.link_count) AS linkCount,
+            SUM(s.interaction_count) AS interactionCount
+          FROM member_daily_stats s
+          LEFT JOIN member_profiles p
+            ON s.group_id = p.group_id AND s.user_id = p.user_id
+          WHERE s.group_id = ${groupId} ${startDate ? sql`AND date >= ${startDate}` : sql``}
+          GROUP BY s.user_id
+          ORDER BY totalCount DESC, s.user_id ASC
+          LIMIT ${limit};
+        `,
+      });
+
+      const findProfileNickname = SqlSchema.findOneOption({
+        Request: Schema.Struct({
+          groupId: Schema.Finite,
+          userId: Schema.Finite,
+        }),
+        Result: Schema.Struct({ nickname: Schema.String }),
+        execute: ({ groupId, userId }) => sql`
+          SELECT nickname FROM member_profiles
+          WHERE group_id = ${groupId} AND user_id = ${userId};
+        `,
+      });
+
+      const PeriodSumRow = Schema.Struct({
+        totalCount: Schema.Finite,
+        mediaCount: Schema.Finite,
+        linkCount: Schema.Finite,
+        interactionCount: Schema.Finite,
+      });
+
+      const findPeriodSum = SqlSchema.findOne({
+        Request: Schema.Struct({
+          groupId: Schema.Finite,
+          userId: Schema.Finite,
+          startDate: Schema.NullOr(Schema.String),
+        }),
+        Result: PeriodSumRow,
+        execute: ({ groupId, userId, startDate }) => sql`
+          SELECT
+            COALESCE(SUM(total_count), 0) AS totalCount,
+            COALESCE(SUM(media_count), 0) AS mediaCount,
+            COALESCE(SUM(link_count), 0) AS linkCount,
+            COALESCE(SUM(interaction_count), 0) AS interactionCount
+          FROM member_daily_stats
+          WHERE group_id = ${groupId} AND user_id = ${userId} ${startDate ? sql`AND date >= ${startDate}` : sql``};
+        `,
+      });
+
+      const findHigherRankCount = SqlSchema.findOne({
+        Request: Schema.Struct({
+          groupId: Schema.Finite,
+          totalCount: Schema.Finite,
+          startDate: Schema.NullOr(Schema.String),
+        }),
+        Result: Schema.Struct({ higherCount: Schema.Finite }),
+        execute: ({ groupId, totalCount, startDate }) => sql`
+          SELECT COUNT(*) AS higherCount FROM (
+            SELECT user_id, SUM(total_count) AS user_total
+            FROM member_daily_stats
+            WHERE group_id = ${groupId} ${startDate ? sql`AND date >= ${startDate}` : sql``}
+            GROUP BY user_id
+            HAVING user_total > ${totalCount}
+          );
+        `,
+      });
+
       const getLeaderboard = Effect.fnUntraced(function* (
         groupId: number,
         startDate?: string,
         limit = 15,
       ) {
-        const dateCond = startDate ? sql`AND date >= ${startDate}` : sql``;
+        const { total: groupTotal } = yield* findGroupTotal({
+          groupId,
+          startDate: startDate ?? null,
+        }).pipe(
+          Effect.catchTags({
+            SchemaError: Effect.die,
+            NoSuchElementError: Effect.die,
+          }),
+        );
 
-        const totalRes = yield* sql<{ readonly total: number }>`
-          SELECT COALESCE(SUM(total_count), 0) AS total
-          FROM member_daily_stats
-          WHERE group_id = ${groupId} ${dateCond};
-        `;
-        const groupTotal = totalRes[0]?.total ?? 0;
+        const rows = yield* findLeaderboardRows({
+          groupId,
+          startDate: startDate ?? null,
+          limit,
+        }).pipe(Effect.catchTag("SchemaError", Effect.die));
 
-        const rowsRes = yield* sql<{
-          readonly user_id: number;
-          readonly nickname: string;
-          readonly total_count: number;
-          readonly media_count: number;
-          readonly link_count: number;
-          readonly interaction_count: number;
-        }>`
-          SELECT
-            s.user_id,
-            COALESCE(p.nickname, CAST(s.user_id AS TEXT)) AS nickname,
-            SUM(s.total_count) AS total_count,
-            SUM(s.media_count) AS media_count,
-            SUM(s.link_count) AS link_count,
-            SUM(s.interaction_count) AS interaction_count
-          FROM member_daily_stats s
-          LEFT JOIN member_profiles p
-            ON s.group_id = p.group_id AND s.user_id = p.user_id
-          WHERE s.group_id = ${groupId} ${dateCond}
-          GROUP BY s.user_id
-          ORDER BY total_count DESC, s.user_id ASC
-          LIMIT ${limit};
-        `;
-
-        const rows: MemberStatsRow[] = rowsRes.map((r) => ({
-          userId: Number(r.user_id),
-          nickname: String(r.nickname),
-          totalCount: Number(r.total_count),
-          mediaCount: Number(r.media_count),
-          linkCount: Number(r.link_count),
-          interactionCount: Number(r.interaction_count),
-        }));
-
-        return { groupTotal: Number(groupTotal), rows };
+        return { groupTotal, rows };
       });
 
       const getUserStats = Effect.fnUntraced(function* (
@@ -216,55 +284,47 @@ export class StatsRepository extends Context.Service<
         userId: number,
         startDate30d: string,
       ) {
-        const profileRes = yield* sql<{ readonly nickname: string }>`
-          SELECT nickname FROM member_profiles
-          WHERE group_id = ${groupId} AND user_id = ${userId};
-        `;
-        const nickname = profileRes[0]?.nickname ?? String(userId);
+        const profileOpt = yield* findProfileNickname({
+          groupId,
+          userId,
+        }).pipe(Effect.catchTag("SchemaError", Effect.die));
+        const nickname = Option.isSome(profileOpt)
+          ? profileOpt.value.nickname
+          : String(userId);
 
         const fetchPeriod = (startDate?: string) =>
           Effect.gen(function* () {
-            const dateClause = startDate
-              ? sql`AND date >= ${startDate}`
-              : sql``;
-            const sumRes = yield* sql<{
-              readonly total_count: number;
-              readonly media_count: number;
-              readonly link_count: number;
-              readonly interaction_count: number;
-            }>`
-              SELECT
-                COALESCE(SUM(total_count), 0) AS total_count,
-                COALESCE(SUM(media_count), 0) AS media_count,
-                COALESCE(SUM(link_count), 0) AS link_count,
-                COALESCE(SUM(interaction_count), 0) AS interaction_count
-              FROM member_daily_stats
-              WHERE group_id = ${groupId} AND user_id = ${userId} ${dateClause};
-            `;
-            const totalCount = Number(sumRes[0]?.total_count ?? 0);
-            const mediaCount = Number(sumRes[0]?.media_count ?? 0);
-            const linkCount = Number(sumRes[0]?.link_count ?? 0);
-            const interactionCount = Number(sumRes[0]?.interaction_count ?? 0);
+            const sum = yield* findPeriodSum({
+              groupId,
+              userId,
+              startDate: startDate ?? null,
+            }).pipe(
+              Effect.catchTags({
+                SchemaError: Effect.die,
+                NoSuchElementError: Effect.die,
+              }),
+            );
 
             let rank: number | null = null;
-            if (totalCount > 0) {
-              const rankRes = yield* sql<{ readonly higher_count: number }>`
-                SELECT COUNT(*) AS higher_count FROM (
-                  SELECT user_id, SUM(total_count) AS user_total
-                  FROM member_daily_stats
-                  WHERE group_id = ${groupId} ${dateClause}
-                  GROUP BY user_id
-                  HAVING user_total > ${totalCount}
-                );
-              `;
-              rank = Number(rankRes[0]?.higher_count ?? 0) + 1;
+            if (sum.totalCount > 0) {
+              const rankRes = yield* findHigherRankCount({
+                groupId,
+                totalCount: sum.totalCount,
+                startDate: startDate ?? null,
+              }).pipe(
+                Effect.catchTags({
+                  SchemaError: Effect.die,
+                  NoSuchElementError: Effect.die,
+                }),
+              );
+              rank = rankRes.higherCount + 1;
             }
 
             return {
-              totalCount,
-              mediaCount,
-              linkCount,
-              interactionCount,
+              totalCount: sum.totalCount,
+              mediaCount: sum.mediaCount,
+              linkCount: sum.linkCount,
+              interactionCount: sum.interactionCount,
               rank,
             };
           });
