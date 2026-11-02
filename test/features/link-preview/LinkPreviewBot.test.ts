@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
-import type { OneBotMessageEvent } from "@snowluma/sdk/types";
+import type { OneBotMessageEvent, OutgoingMessage } from "@snowluma/sdk/types";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { handleLinkPreviewMessage } from "../../../src/features/link-preview/LinkPreview.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
@@ -476,5 +476,128 @@ describe("handleLinkPreviewMessage", () => {
       data: { text: string };
     };
     expect(textSegment.data.text).toBe("Unfiltered Title");
+  });
+
+  it("sends preview with pixiv.cat original image when pixiv.cat succeeds", async () => {
+    const pixivHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Artwork Title - pixiv</title>
+          <meta name="description" content="Artwork Description">
+          <meta property="og:image" content="https://embed.pixiv.net/decorate.php?illust_id=82775556">
+        </head>
+        <body></body>
+      </html>
+    `;
+    const originalBytes = new Uint8Array([9, 8, 7]);
+    const layer = makeTestHttpClient((req) => {
+      if (req.url === "https://www.pixiv.net/artworks/82775556") {
+        return new Response(pixivHtml, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      if (req.url === "https://pixiv.cat/82775556.jpg") {
+        return new Response(originalBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }
+      return new Response("", { status: 404 });
+    });
+
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://www.pixiv.net/artworks/82775556",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (payload: OutgoingMessage) => {
+          quotedMessage = payload;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
+    );
+
+    expect(quotedMessage).toBeArray();
+    const segmentsList = quotedMessage as Array<{
+      type: string;
+      data: Record<string, string>;
+    }>;
+    expect(segmentsList[1]?.type).toBe("image");
+    expect(segmentsList[1]?.data.file).toBe(
+      `base64://${Buffer.from(originalBytes).toString("base64")}`,
+    );
+  });
+
+  it("falls back to og:image when pixiv.cat returns 404", async () => {
+    const pixivHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Artwork Title - pixiv</title>
+          <meta name="description" content="Artwork Description">
+          <meta property="og:image" content="https://embed.pixiv.net/decorate.php?illust_id=82775556">
+        </head>
+        <body></body>
+      </html>
+    `;
+    const croppedBytes = new Uint8Array([5, 4, 3]);
+    const layer = makeTestHttpClient((req) => {
+      if (req.url === "https://www.pixiv.net/artworks/82775556") {
+        return new Response(pixivHtml, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      if (req.url === "https://pixiv.cat/82775556.jpg") {
+        return new Response("Not Found", { status: 404 });
+      }
+      if (
+        req.url === "https://embed.pixiv.net/decorate.php?illust_id=82775556"
+      ) {
+        return new Response(croppedBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }
+      return new Response("", { status: 404 });
+    });
+
+    let quotedMessage: unknown = null;
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "https://www.pixiv.net/artworks/82775556",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async (payload: OutgoingMessage) => {
+          quotedMessage = payload;
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
+    );
+
+    expect(quotedMessage).toBeArray();
+    const segmentsList = quotedMessage as Array<{
+      type: string;
+      data: Record<string, string>;
+    }>;
+    expect(segmentsList[1]?.type).toBe("image");
+    expect(segmentsList[1]?.data.file).toBe(
+      `base64://${Buffer.from(croppedBytes).toString("base64")}`,
+    );
   });
 });
