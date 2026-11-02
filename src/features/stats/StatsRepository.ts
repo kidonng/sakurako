@@ -3,7 +3,7 @@ import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Context, Effect, Layer } from "effect";
 import type { SqlError } from "effect/sql/SqlError";
 
-export interface MemberStatsRow {
+interface MemberStatsRow {
   readonly userId: number;
   readonly nickname: string;
   readonly totalCount: number;
@@ -17,7 +17,7 @@ export interface LeaderboardResult {
   readonly rows: readonly MemberStatsRow[];
 }
 
-export interface UserPeriodStats {
+interface UserPeriodStats {
   readonly totalCount: number;
   readonly mediaCount: number;
   readonly linkCount: number;

@@ -1,21 +1,42 @@
+/* oxlint-disable effecttsgo/unstable-api-usage */
+import { existsSync, mkdirSync } from "node:fs";
 import { BunRuntime } from "@effect/platform-bun";
+import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Effect, Layer, Stream } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
+import {
+  handleStatsMessage,
+  handleStatsNotice,
+} from "./features/stats/StatsCollector.ts";
+import { handleStatsCommand } from "./features/stats/StatsCommand.ts";
+import { StatsRenderer } from "./features/stats/StatsRenderer.ts";
+import { StatsRepository } from "./features/stats/StatsRepository.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
 
-const MainProgram = Effect.gen(function* () {
-  const { messages } = yield* SnowLumaClient;
-  yield* Effect.logInfo("Sakurako bot listening for messages...");
-  yield* messages.pipe(
+export {
+  handleStatsMessage as handleStatsCollectorMessage,
+  handleStatsNotice as handleStatsCollectorNotice,
+};
+
+export const MainProgram = Effect.gen(function* () {
+  const repo = yield* StatsRepository;
+  yield* repo.initSchema;
+
+  const { messages, notices } = yield* SnowLumaClient;
+  yield* Effect.logInfo("Sakurako bot listening for messages and notices...");
+
+  const processMessages = messages.pipe(
     Stream.runForEach((item) =>
       Effect.all(
         [
           handleIncomingMessage(item),
           handleLinkPreviewMessage(item),
           handleSauceMessage(item),
+          handleStatsMessage(item),
+          handleStatsCommand(item),
         ],
         {
           concurrency: "unbounded",
@@ -24,16 +45,45 @@ const MainProgram = Effect.gen(function* () {
       ),
     ),
   );
+
+  const processNotices = notices.pipe(
+    Stream.runForEach((item) =>
+      Effect.all(
+        [
+          handleStatsNotice(item),
+        ],
+        {
+          concurrency: "unbounded",
+          discard: true,
+        },
+      ),
+    ),
+  );
+
+  yield* Effect.all([processMessages, processNotices], {
+    concurrency: "unbounded",
+    discard: true,
+  });
 });
 
-const MainLive = MainProgram.pipe(
+if (!existsSync("data")) {
+  mkdirSync("data", { recursive: true });
+}
+
+const SqliteLive = SqliteClient.layer({ filename: "data/stats.db" });
+const StatsRepoLive = StatsRepository.layer.pipe(Layer.provide(SqliteLive));
+
+export const MainLive = MainProgram.pipe(
   Effect.provide(
-    Layer.merge(
+    Layer.mergeAll(
       SnowLumaClient.layer,
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage
       FetchHttpClient.layer,
+      StatsRepoLive,
+      StatsRenderer.layer,
     ),
   ),
 );
-// oxlint-disable-next-line effecttsgo/unstable-api-usage
-BunRuntime.runMain(MainLive);
+
+if (import.meta.main) {
+  BunRuntime.runMain(MainLive);
+}
