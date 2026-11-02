@@ -1,11 +1,12 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { parseSegments, segments } from "@snowluma/sdk/messages";
+import { segments } from "@snowluma/sdk/messages";
 import type { AnyMessageSegment } from "@snowluma/sdk/types";
-import { Effect, Option, Predicate } from "effect";
+import { Effect, Option } from "effect";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
+import { parseCommand, parseMessageSegments } from "../../utils/Command.ts";
 import { searchSauce } from "./SauceNao.ts";
 export const handleSauceMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
@@ -16,42 +17,13 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
     return;
   }
 
-  const rawSegments: AnyMessageSegment[] = Array.isArray(event.message)
-    ? (event.message as unknown as AnyMessageSegment[])
-    : Predicate.isString(event.raw_message)
-      ? parseSegments(event.raw_message)
-      : [];
-
-  const nonReplyAt = rawSegments.filter(
-    (s) => s.type !== "reply" && s.type !== "at",
-  );
-
-  const hasNonText = nonReplyAt.some((s) => s.type !== "text");
-  if (hasNonText) {
+  const command = parseCommand(event);
+  if (!command || command.text !== "/sauce") {
     return;
   }
 
-  const text = nonReplyAt
-    .map((s) => {
-      const data = s.data as { text?: unknown } | undefined;
-      return Predicate.isString(data?.text) ? data.text : "";
-    })
-    .join("")
-    .trim();
-
-  if (text !== "/sauce") {
-    return;
-  }
-
-  const replySegment = rawSegments.find((s) => s.type === "reply");
-  const replyData = replySegment?.data as { id?: unknown } | undefined;
-  const messageId = Number(replyData?.id);
-  if (
-    !replySegment ||
-    !replyData?.id ||
-    !Number.isInteger(messageId) ||
-    messageId === 0
-  ) {
+  const messageId = command.replyMessageId;
+  if (messageId === undefined) {
     yield* Effect.tryPromise(() =>
       item.context.quote("[需引用包含图片的消息]"),
     ).pipe(
@@ -77,13 +49,10 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
       client.getMessage(messageId),
     )) as { message?: unknown; raw_message?: unknown };
 
-    const quotedSegments: AnyMessageSegment[] = Array.isArray(msgData.message)
-      ? (msgData.message as unknown as AnyMessageSegment[])
-      : typeof msgData.message === "string"
-        ? parseSegments(msgData.message)
-        : typeof msgData.raw_message === "string"
-          ? parseSegments(msgData.raw_message)
-          : [];
+    const quotedSegments: AnyMessageSegment[] = parseMessageSegments(
+      msgData.message,
+      msgData.raw_message,
+    );
 
     const imageSegment = quotedSegments.find((s) => s.type === "image");
     if (!imageSegment) {

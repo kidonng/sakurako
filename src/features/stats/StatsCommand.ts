@@ -1,8 +1,8 @@
-import { parseSegments, segments } from "@snowluma/sdk/messages";
-import type { AnyMessageSegment } from "@snowluma/sdk/types";
-import { DateTime, Effect, Predicate } from "effect";
+import { segments } from "@snowluma/sdk/messages";
+import { DateTime, Effect } from "effect";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
+import { parseCommand } from "../../utils/Command.ts";
 import { getDaysAgoShanghaiDateString } from "./StatsClassifier.ts";
 import { StatsCooldown } from "./StatsCooldown.ts";
 import { StatsRenderer } from "./StatsRenderer.ts";
@@ -23,28 +23,12 @@ export const handleStatsCommand = Effect.fnUntraced(
       return;
     }
 
-    const rawSegments: AnyMessageSegment[] = Array.isArray(event.message)
-      ? (event.message as unknown as AnyMessageSegment[])
-      : Predicate.isString(event.raw_message)
-        ? parseSegments(event.raw_message)
-        : [];
-
-    const nonReplyAt = rawSegments.filter(
-      (s) => s.type !== "reply" && s.type !== "at",
-    );
-
-    if (nonReplyAt.some((s) => s.type !== "text")) {
+    const command = parseCommand(event);
+    if (!command) {
       return;
     }
 
-    const text = nonReplyAt
-      .map((s) => {
-        const data = s.data as { text?: unknown } | undefined;
-        return Predicate.isString(data?.text) ? data.text : "";
-      })
-      .join("")
-      .trim();
-
+    const text = command.text;
     if (text === "/stat" || text === "/stat all") {
       const cooldown = yield* StatsCooldown;
       const allowed = yield* cooldown.checkAndSet(event.group_id);
