@@ -2,7 +2,14 @@
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
 import { Data, type Duration, Effect, Match, Option, Predicate, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import {
+  cancelResponse,
+  executeWithResponse,
+  fetchText,
+  HttpFetchError,
+} from "../../utils/HttpClient.ts";
+export { HttpFetchError } from "../../utils/HttpClient.ts";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
 import createMetascraper from "metascraper";
@@ -103,24 +110,6 @@ export class BlockedHostError extends Schema.TaggedError<
   }
 }
 
-export class HttpFetchError extends Schema.TaggedError<
-  HttpFetchError,
-  {
-    readonly brand: unique symbol;
-  }
->()("HttpFetchError", {
-  url: Schema.String,
-  status: Schema.optional(Schema.Finite),
-  statusText: Schema.optional(Schema.String),
-  detail: Schema.optional(Schema.String),
-}) {
-  override get message(): string {
-    if (this.status !== undefined) {
-      return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
-    }
-    return `Network error: ${this.detail ?? "unknown"}`;
-  }
-}
 
 class ParseMetadataError extends Schema.TaggedError<
   ParseMetadataError,
@@ -177,14 +166,6 @@ class SendLinkPreviewReplyError extends Schema.TaggedError<
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
 
-class FetchImageError extends Schema.TaggedError<
-  FetchImageError,
-  {
-    readonly brand: unique symbol;
-  }
->()("FetchImageError", {
-  cause: Schema.Defect(),
-}) {}
 
 function isSvgUrl(url: string): boolean {
   try {
@@ -389,8 +370,6 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     ScrapeMetadataError,
     HttpClient.HttpClient
   > {
-    const client = yield* HttpClient.HttpClient;
-
     const urlObj = yield* Effect.try({
       try: () => new URL(url),
       catch: (cause) => new InvalidUrlError({ url, cause }),
@@ -407,32 +386,9 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
       HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
       HttpClientRequest.setHeader("Accept", DEFAULT_ACCEPT_HEADER),
     );
-    const { html, targetUrl } = yield* Effect.gen(function* () {
-      const response = yield* client.execute(request);
-      if (response.status < 200 || response.status >= 300) {
-        const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
-        void webRes?.body?.cancel().catch(() => {});
-        return yield* new HttpFetchError({
-          url,
-          status: response.status,
-          statusText: webRes?.statusText,
-          detail: `HTTP status ${response.status}`,
-        });
-      }
-      const html = yield* response.text;
-      const targetUrl = response.url || url;
-      return { html, targetUrl };
-    }).pipe(
-      Effect.timeout(timeoutDuration),
-      Effect.mapError((error) =>
-        Predicate.isTagged(error, "HttpFetchError")
-          ? error
-          : new HttpFetchError({
-              url,
-              detail: error.message,
-            }),
-      ),
-    );
+    const { text: html, url: targetUrl } = yield* fetchText(request, {
+      timeoutDuration,
+    });
     const metadata = yield* Effect.tryPromise({
       try: () => scraper({ html, url: targetUrl }),
       catch: (cause) => new ParseMetadataError({ url, cause }),
@@ -482,28 +438,14 @@ export const prepareOutgoingImage = Effect.fn(
     return imageUrl;
   }
 
-  const client = yield* HttpClient.HttpClient;
   const request = HttpClientRequest.get(imageUrl).pipe(
     HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
   );
 
-  const downloadEffect = Effect.gen(function* () {
-    const response = yield* client.execute(request);
-    const cancelBody = () => {
-      const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
-      void webRes?.body?.cancel().catch(() => {});
-    };
-
-    if (response.status < 200 || response.status >= 300) {
-      const webRes = Option.getOrUndefined(HttpClientResponse.toWeb(response));
-      const statusText = webRes?.statusText ?? "";
-      cancelBody();
-      return yield* new FetchImageError({
-        cause: new Error(
-          `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`.trim(),
-        ),
-      });
-    }
+  const downloadEffect = executeWithResponse(
+    request,
+    (response) =>
+      Effect.gen(function* () {
 
     const rawContentType = response.headers["content-type"];
     const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
@@ -512,7 +454,7 @@ export const prepareOutgoingImage = Effect.fn(
       !contentType.startsWith("image/") ||
       contentType === "image/svg+xml"
     ) {
-      cancelBody();
+      cancelResponse(response);
       yield* Effect.logWarning(
         `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${imageUrl}`,
       );
@@ -523,7 +465,7 @@ export const prepareOutgoingImage = Effect.fn(
     if (declaredLengthStr) {
       const declaredLength = Number(declaredLengthStr);
       if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
-        cancelBody();
+        cancelResponse(response);
         yield* Effect.logWarning(
           `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${imageUrl}`,
         );
@@ -539,13 +481,14 @@ export const prepareOutgoingImage = Effect.fn(
       return undefined;
     }
 
-    const base64 = Buffer.from(buffer).toString("base64");
-    return `base64://${base64}` as string | undefined;
-  }).pipe(
-    Effect.timeout(timeoutDuration),
-    Effect.catchTag("FetchImageError", (error) =>
+        const base64 = Buffer.from(buffer).toString("base64");
+        return `base64://${base64}` as string | undefined;
+      }),
+    { timeoutDuration },
+  ).pipe(
+    Effect.catchTag("HttpFetchError", (error) =>
       Effect.logWarning(
-        `Failed to fetch image locally for ${imageUrl}: ${formatErrorDetail(error.cause)}`,
+        `Failed to fetch image locally for ${imageUrl}: ${error.status !== undefined ? `HTTP ${error.status}${error.statusText ? ` ${error.statusText}` : ""}`.trim() : (error.detail ?? "Unknown error")}`,
       ).pipe(Effect.as(undefined as string | undefined)),
     ),
     Effect.catch((error) =>

@@ -15,16 +15,10 @@ export class HttpFetchError extends Schema.TaggedError<
   detail: Schema.optional(Schema.String),
 }) {
   override get message(): string {
-    const parts: string[] = [];
     if (this.status !== undefined) {
-      parts.push(
-        `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`,
-      );
+      return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
     }
-    if (this.detail) {
-      parts.push(this.detail);
-    }
-    return `Failed to fetch ${this.url}: ${parts.join(" - ") || "Unknown error"}`;
+    return this.detail ?? "Unknown error";
   }
 }
 

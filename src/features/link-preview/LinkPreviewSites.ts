@@ -12,7 +12,8 @@ interface SiteFormatOptions {
   readonly description?: string;
 }
 
-export const DEFAULT_USER_AGENT = "Sakurako/1.0";
+import { DEFAULT_USER_AGENT } from "../../utils/HttpClient.ts";
+export { DEFAULT_USER_AGENT };
 export const DANBOORU_USER_AGENT = "Sakurako/1.0  (user #898759)";
 export const DEFAULT_ACCEPT_HEADER =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
