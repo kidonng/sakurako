@@ -1,7 +1,7 @@
 import { segments } from "@snowluma/sdk/messages";
 import { DateTime, Effect } from "effect";
 import type { IncomingMessage } from "../../SnowLuma.ts";
-import { isSelfMessage } from "../../utils/MessageGuard.ts";
+import { isGroupMessage, isSelfMessage } from "../../utils/MessageGuard.ts";
 import { parseCommand } from "../../utils/Command.ts";
 import { getDaysAgoShanghaiDateString } from "./StatsClassifier.ts";
 import { StatsCooldown } from "./StatsCooldown.ts";
@@ -15,11 +15,7 @@ export const handleStatsCommand = Effect.fnUntraced(
       return;
     }
 
-    if (
-      event.message_type !== "group" ||
-      typeof event.group_id !== "number" ||
-      typeof event.user_id !== "number"
-    ) {
+    if (!isGroupMessage(event)) {
       return;
     }
 

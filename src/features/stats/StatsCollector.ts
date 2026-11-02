@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { IncomingMessage, IncomingNotice } from "../../SnowLuma.ts";
-import { isSelfMessage } from "../../utils/MessageGuard.ts";
+import { isGroupMessage, isSelfMessage } from "../../utils/MessageGuard.ts";
 import {
   classifyMessage,
   getNoticeOperatorId,
@@ -17,11 +17,7 @@ export const handleStatsMessage = Effect.fnUntraced(
       return;
     }
 
-    if (
-      event.message_type !== "group" ||
-      typeof event.group_id !== "number" ||
-      typeof event.user_id !== "number"
-    ) {
+    if (!isGroupMessage(event)) {
       return;
     }
 

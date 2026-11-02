@@ -95,6 +95,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 ### Handler Guards
 
 - **Loop prevention**: every handler starts by checking `isSelfMessage(event)` from `src/utils/MessageGuard.ts`. Never re-implement the `post_type === "message_sent" || user_id === self_id` comparison inline, and never treat an event with a missing `user_id` as self-sent.
+- **Group message filter**: handlers operating strictly on group messages should use `isGroupMessage(event)` from `src/utils/MessageGuard.ts` to ensure `message_type === "group"` and valid `group_id` and `user_id`.
 
 ## Important Files
 
@@ -114,7 +115,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `docs/features/stats.md`: User-facing documentation for group message statistics.
 - `scripts/download-font.ts`: Font setup script fetching and extracting MiSans from official CDN.
 - `src/utils/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
-- `src/utils/MessageGuard.ts`: `isSelfMessage`, the shared loop guard identifying events produced by the bot account itself.
+- `src/utils/MessageGuard.ts`: `isSelfMessage` (shared loop guard) and `isGroupMessage` (group message type guard).
 - `test/TestHttpClient.ts`: Test layer helper (`makeTestHttpClient`) bridging mock responses into `HttpClient.HttpClient`.
 - `.env.example`: Public template for environment configuration.
 - `package.json` & `tsconfig.json`: Project setup configured for TypeScript 7, Bundler module resolution, and tsgo.

@@ -1,4 +1,8 @@
-import type { OneBotBaseEvent } from "@snowluma/sdk/types";
+import type {
+  OneBotBaseEvent,
+  OneBotGroupMessageEvent,
+} from "@snowluma/sdk/types";
+import { Predicate } from "effect";
 
 /**
  * Whether a message event was sent by the bot account itself.
@@ -15,4 +19,21 @@ export function isSelfMessage(
     return true;
   }
   return event.user_id !== undefined && event.user_id === event.self_id;
+}
+
+/**
+ * Whether a message event is from a group chat and has valid group and user IDs.
+ */
+export function isGroupMessage(
+  event: OneBotBaseEvent & {
+    readonly message_type?: string;
+    readonly group_id?: unknown;
+    readonly user_id?: unknown;
+  },
+): event is OneBotGroupMessageEvent {
+  return (
+    event.message_type === "group" &&
+    Predicate.isNumber(event.group_id) &&
+    Predicate.isNumber(event.user_id)
+  );
 }

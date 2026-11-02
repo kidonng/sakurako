@@ -62,6 +62,57 @@ describe("StatsCommand", () => {
     expect(quoted).toBe(false);
   });
 
+  it("ignores non-group messages", async () => {
+    let quoted = false;
+    const item: IncomingMessage = {
+      event: {
+        time: 1700000000,
+        self_id: 123456,
+        post_type: "message",
+        message_type: "private",
+        sub_type: "friend",
+        message_id: 100,
+        user_id: 20001,
+        message: [{ type: "text", data: { text: "/stat" } }],
+        raw_message: "/stat",
+        font: 0,
+        sender: { user_id: 20001, nickname: "Alice" },
+      } as unknown as OneBotGroupMessageEvent,
+      context: {
+        quote: () => {
+          quoted = true;
+          return Promise.resolve({} as never);
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
+    };
+
+    const mockRepo = StatsRepository.of({
+      initSchema: Effect.void,
+      recordMessage: () => Effect.void,
+      recordInteraction: () => Effect.void,
+      upsertProfile: () => Effect.void,
+      getLeaderboard: () => Effect.die("not called"),
+      getUserStats: () => Effect.die("not called"),
+    });
+    const mockRenderer = StatsRenderer.of({
+      renderLeaderboard: () => Effect.die("not called"),
+    });
+
+    await Effect.runPromise(
+      handleStatsCommand(item).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.succeed(StatsRepository, mockRepo),
+            Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
+          ),
+        ),
+      ),
+    );
+
+    expect(quoted).toBe(false);
+  });
+
   it("handles /stat command and sends image quote", async () => {
     let quotedPayload: unknown = null;
     let queryStartDate: string | undefined = undefined;

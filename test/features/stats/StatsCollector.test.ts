@@ -71,6 +71,63 @@ describe("StatsCollector", () => {
     expect(recorded).toBe(false);
   });
 
+  it("ignores non-group messages", async () => {
+    let recorded = false;
+    const mockRepo = StatsRepository.of({
+      initSchema: Effect.void,
+      recordMessage: () => {
+        recorded = true;
+        return Effect.void;
+      },
+      recordInteraction: () => Effect.void,
+      upsertProfile: () => Effect.void,
+      getLeaderboard: () => Effect.succeed({ groupTotal: 0, rows: [] }),
+      getUserStats: () =>
+        Effect.succeed({
+          userId: 0,
+          nickname: "",
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+        }),
+    });
+
+    const item: IncomingMessage = {
+      event: {
+        time: 1700000000,
+        self_id: 123456,
+        post_type: "message",
+        message_type: "private",
+        sub_type: "friend",
+        message_id: 1,
+        user_id: 10001,
+        message: "hello",
+        raw_message: "hello",
+        font: 0,
+        sender: { user_id: 10001, nickname: "Alice" },
+      } as unknown as OneBotGroupMessageEvent,
+      context: {} as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
+    };
+
+    await Effect.runPromise(
+      handleStatsMessage(item).pipe(
+        Effect.provideService(StatsRepository, mockRepo),
+      ),
+    );
+    expect(recorded).toBe(false);
+  });
+
   it("processes group message with profile update and message classification", async () => {
     let savedProfile: {
       groupId: number;
