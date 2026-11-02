@@ -4,3 +4,6 @@ node_modules
 .superpowers/sdd
 .superpowers/brainstorm
 data/
+assets/fonts/*.ttf
+assets/fonts/*.woff
+assets/fonts/*.woff2
