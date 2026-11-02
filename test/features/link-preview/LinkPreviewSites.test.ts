@@ -220,16 +220,6 @@ describe("LinkPreviewSites", () => {
       expect(image).toBe("https://pixiv.cat/82775556.jpg");
     });
 
-    it("extracts pixiv.cat image URL from legacy member_illust.php path", () => {
-      const url = new URL(
-        "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=82775556",
-      );
-      const image = pixivCustomizer.metascraperRules?.image?.({
-        url: url.href,
-        htmlDom: cheerio.load("<html></html>"),
-      });
-      expect(image).toBe("https://pixiv.cat/82775556.jpg");
-    });
 
     it("returns undefined for non-artwork URLs", () => {
       const userUrl = new URL("https://www.pixiv.net/users/12345");
@@ -267,11 +257,6 @@ describe("LinkPreviewSites", () => {
       expect(
         extractPixivArtworkId(new URL("https://www.pixiv.net/ja/artworks/654321")),
       ).toBe("654321");
-      expect(
-        extractPixivArtworkId(
-          new URL("https://www.pixiv.net/member_illust.php?mode=medium&illust_id=789"),
-        ),
-      ).toBe("789");
       expect(
         extractPixivArtworkId(new URL("https://www.pixiv.net/users/999")),
       ).toBeUndefined();

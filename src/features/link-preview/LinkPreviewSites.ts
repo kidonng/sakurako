@@ -130,17 +130,7 @@ export function extractPixivArtworkId(
 ): string | undefined {
   try {
     const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
-    const match = url.pathname.match(PIXIV_ARTWORKS_REGEX);
-    if (match?.[1]) {
-      return match[1];
-    }
-    if (url.pathname === "/member_illust.php") {
-      const illustId = url.searchParams.get("illust_id");
-      if (illustId && /^\d+$/.test(illustId)) {
-        return illustId;
-      }
-    }
-    return undefined;
+    return url.pathname.match(PIXIV_ARTWORKS_REGEX)?.[1];
   } catch {
     return undefined;
   }
