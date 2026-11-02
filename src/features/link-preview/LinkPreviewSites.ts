@@ -29,6 +29,9 @@ export interface SiteCustomizer {
     ) => string | undefined;
     readonly title?: (context: MetascraperRuleContext) => string | undefined;
     readonly image?: (context: MetascraperRuleContext) => string | undefined;
+    readonly fallbackImage?: (
+      context: MetascraperRuleContext,
+    ) => string | undefined;
   };
   readonly formatItem?: (params: {
     readonly metadata: PageMetadata;
@@ -120,10 +123,59 @@ export const danbooruCustomizer: SiteCustomizer = {
   }),
 };
 
+const PIXIV_ARTWORKS_REGEX = /^(?:\/[a-zA-Z-]+)?\/artworks\/(\d+)(?:\/.*)?$/;
+
+export function extractPixivArtworkId(
+  rawUrl: string | URL,
+): string | undefined {
+  try {
+    const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
+    const match = url.pathname.match(PIXIV_ARTWORKS_REGEX);
+    if (match?.[1]) {
+      return match[1];
+    }
+    if (url.pathname === "/member_illust.php") {
+      const illustId = url.searchParams.get("illust_id");
+      if (illustId && /^\d+$/.test(illustId)) {
+        return illustId;
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export const pixivCustomizer: SiteCustomizer = {
+  name: "pixiv.net",
+  match: (url) => {
+    const host = url.hostname.toLowerCase();
+    return host === "pixiv.net" || host.endsWith(".pixiv.net");
+  },
+  metascraperRules: {
+    image: ({ url }) => {
+      const illustId = extractPixivArtworkId(url);
+      return illustId ? `https://pixiv.cat/${illustId}.jpg` : undefined;
+    },
+    fallbackImage: ({ htmlDom, url }) => {
+      const illustId = extractPixivArtworkId(url);
+      if (!illustId) {
+        return undefined;
+      }
+      return (
+        htmlDom('meta[property="og:image"]').attr("content") ||
+        htmlDom('meta[property="twitter:image"]').attr("content") ||
+        htmlDom('meta[name="twitter:image"]').attr("content")
+      );
+    },
+  },
+};
+
 const siteCustomizers: ReadonlyArray<SiteCustomizer> = [
   githubCustomizer,
   hackerNewsCustomizer,
   danbooruCustomizer,
+  pixivCustomizer,
 ];
 
 export function findSiteCustomizer(
@@ -165,6 +217,12 @@ function createSiteMetascraperPlugin(): () => createMetascraper.Rules {
       ({ htmlDom, url }: MetascraperRuleContext) => {
         const customizer = findSiteCustomizer(url);
         return customizer?.metascraperRules?.image?.({ htmlDom, url });
+      },
+    ],
+    fallbackImage: [
+      ({ htmlDom, url }: MetascraperRuleContext) => {
+        const customizer = findSiteCustomizer(url);
+        return customizer?.metascraperRules?.fallbackImage?.({ htmlDom, url });
       },
     ],
   });

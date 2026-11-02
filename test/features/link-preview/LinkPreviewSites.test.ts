@@ -4,10 +4,12 @@ import {
   DANBOORU_USER_AGENT,
   DEFAULT_USER_AGENT,
   danbooruCustomizer,
+  extractPixivArtworkId,
   findSiteCustomizer,
   getUserAgent,
   githubCustomizer,
   hackerNewsCustomizer,
+  pixivCustomizer,
   shouldFetchImageLocally,
 } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
@@ -184,6 +186,95 @@ describe("LinkPreviewSites", () => {
         isSingle: true,
       });
       expect(options?.hideDescription).toBe(true);
+    });
+  });
+
+  describe("pixivCustomizer", () => {
+    it("matches pixiv.net and www.pixiv.net", () => {
+      expect(
+        findSiteCustomizer("https://www.pixiv.net/artworks/82775556")?.name,
+      ).toBe("pixiv.net");
+      expect(
+        findSiteCustomizer("https://pixiv.net/artworks/82775556")?.name,
+      ).toBe("pixiv.net");
+      expect(
+        findSiteCustomizer("https://other.com/artworks/82775556"),
+      ).toBeUndefined();
+    });
+
+    it("extracts pixiv.cat image URL from standard artwork path", () => {
+      const url = new URL("https://www.pixiv.net/artworks/82775556");
+      const image = pixivCustomizer.metascraperRules?.image?.({
+        url: url.href,
+        htmlDom: cheerio.load("<html></html>"),
+      });
+      expect(image).toBe("https://pixiv.cat/82775556.jpg");
+    });
+
+    it("extracts pixiv.cat image URL with language prefix", () => {
+      const url = new URL("https://www.pixiv.net/en/artworks/82775556");
+      const image = pixivCustomizer.metascraperRules?.image?.({
+        url: url.href,
+        htmlDom: cheerio.load("<html></html>"),
+      });
+      expect(image).toBe("https://pixiv.cat/82775556.jpg");
+    });
+
+    it("extracts pixiv.cat image URL from legacy member_illust.php path", () => {
+      const url = new URL(
+        "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=82775556",
+      );
+      const image = pixivCustomizer.metascraperRules?.image?.({
+        url: url.href,
+        htmlDom: cheerio.load("<html></html>"),
+      });
+      expect(image).toBe("https://pixiv.cat/82775556.jpg");
+    });
+
+    it("returns undefined for non-artwork URLs", () => {
+      const userUrl = new URL("https://www.pixiv.net/users/12345");
+      expect(
+        pixivCustomizer.metascraperRules?.image?.({
+          url: userUrl.href,
+          htmlDom: cheerio.load("<html></html>"),
+        }),
+      ).toBeUndefined();
+
+      const rankingUrl = new URL("https://www.pixiv.net/ranking.php");
+      expect(
+        pixivCustomizer.metascraperRules?.image?.({
+          url: rankingUrl.href,
+          htmlDom: cheerio.load("<html></html>"),
+        }),
+      ).toBeUndefined();
+    });
+
+    it("extracts fallbackImage from og:image or twitter:image", () => {
+      const html = `<html><head><meta property="og:image" content="https://embed.pixiv.net/decorate.php?illust_id=82775556"></head></html>`;
+      const fallback = pixivCustomizer.metascraperRules?.fallbackImage?.({
+        url: "https://www.pixiv.net/artworks/82775556",
+        htmlDom: cheerio.load(html),
+      });
+      expect(fallback).toBe(
+        "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+      );
+    });
+
+    it("extracts artwork ID using extractPixivArtworkId helper", () => {
+      expect(
+        extractPixivArtworkId(new URL("https://www.pixiv.net/artworks/123456")),
+      ).toBe("123456");
+      expect(
+        extractPixivArtworkId(new URL("https://www.pixiv.net/ja/artworks/654321")),
+      ).toBe("654321");
+      expect(
+        extractPixivArtworkId(
+          new URL("https://www.pixiv.net/member_illust.php?mode=medium&illust_id=789"),
+        ),
+      ).toBe("789");
+      expect(
+        extractPixivArtworkId(new URL("https://www.pixiv.net/users/999")),
+      ).toBeUndefined();
     });
   });
 
