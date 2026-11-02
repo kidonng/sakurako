@@ -236,6 +236,47 @@ describe("StatsCollector", () => {
     );
     expect(interactionCount).toBe(1); // Not incremented on removal
   });
+  it("processes reaction addition carrying only operator_id", async () => {
+    let recordedUserId: number | null = null;
+    const mockRepo = StatsRepository.of({
+      initSchema: Effect.void,
+      recordMessage: () => Effect.void,
+      recordInteraction: (_groupId, userId) => {
+        recordedUserId = userId;
+        return Effect.void;
+      },
+      upsertProfile: () => Effect.void,
+      getLeaderboard: () => Effect.succeed({ groupTotal: 0, rows: [] }),
+      getUserStats: () =>
+        Effect.succeed({
+          userId: 0,
+          nickname: "",
+          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+        }),
+    });
+
+    const notice: IncomingNotice = {
+      event: {
+        time: 1700000000,
+        self_id: 123456,
+        post_type: "notice",
+        notice_type: "group_msg_emoji_like",
+        sub_type: "add",
+        group_id: 10001,
+        operator_id: 30003,
+      } as unknown as OneBotNoticeEvent,
+      context: {} as SnowLumaEventContextWithQuote<OneBotNoticeEvent>,
+    };
+
+    await Effect.runPromise(
+      handleStatsNotice(notice).pipe(
+        Effect.provideService(StatsRepository, mockRepo),
+      ),
+    );
+    expect(recordedUserId as unknown).toBe(30003);
+  });
+
 
   it("isolates errors when database fails", async () => {
     const mockRepo = StatsRepository.of({

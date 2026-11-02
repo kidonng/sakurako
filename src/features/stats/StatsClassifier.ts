@@ -83,7 +83,8 @@ export function isGroupReactionNotice(event: unknown): event is {
   readonly notice_type: "group_msg_emoji_like";
   readonly sub_type: "add" | "remove";
   readonly group_id: number;
-  readonly user_id: number;
+  readonly user_id?: number;
+  readonly operator_id?: number;
 } {
   if (typeof event !== "object" || event === null) {
     return false;
@@ -99,6 +100,12 @@ export function isGroupReactionNotice(event: unknown): event is {
   );
 }
 
+export function getNoticeOperatorId(event: {
+  readonly user_id?: number;
+  readonly operator_id?: number;
+}): number | undefined {
+  return typeof event.user_id === "number" ? event.user_id : event.operator_id;
+}
 const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Shanghai",
   year: "numeric",

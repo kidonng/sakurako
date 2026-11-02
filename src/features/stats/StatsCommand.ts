@@ -76,7 +76,7 @@ export function handleStatsCommand(
       const renderer = yield* StatsRenderer;
       const lb = yield* repo.getLeaderboard(event.group_id, startDate);
 
-      if (lb.rows.length === 0) {
+      if (lb.groupTotal === 0 || lb.rows.length === 0) {
         yield* Effect.tryPromise(() =>
           item.context.quote("本群暂无统计数据。"),
         );

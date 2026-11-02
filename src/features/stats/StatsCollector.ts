@@ -3,6 +3,7 @@ import type { IncomingMessage, IncomingNotice } from "../../SnowLuma.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import {
   classifyMessage,
+  getNoticeOperatorId,
   getShanghaiDateString,
   isGroupPokeNotice,
   isGroupReactionNotice,
@@ -65,7 +66,10 @@ export function handleStatsNotice(
       yield* repo.recordInteraction(event.group_id, event.user_id, date);
     } else if (isGroupReactionNotice(event)) {
       if (event.sub_type === "add") {
-        yield* repo.recordInteraction(event.group_id, event.user_id, date);
+        const userId = getNoticeOperatorId(event);
+        if (typeof userId === "number") {
+          yield* repo.recordInteraction(event.group_id, userId, date);
+        }
       }
     }
   }).pipe(

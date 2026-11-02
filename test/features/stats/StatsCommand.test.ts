@@ -242,6 +242,73 @@ describe("StatsCommand", () => {
 
     expect(quotedText).toBe("本群暂无统计数据。");
   });
+  it("replies with fallback text when group has interaction rows but 0 messages", async () => {
+    resetCooldownForTest();
+    let quotedText: unknown = null;
+
+    const item: IncomingMessage = {
+      event: {
+        time: 1700000000,
+        self_id: 123456,
+        post_type: "message",
+        message_type: "group",
+        sub_type: "normal",
+        message_id: 107,
+        group_id: 10001,
+        user_id: 20001,
+        message: [{ type: "text", data: { text: "/stat" } }],
+        raw_message: "/stat",
+        font: 0,
+        sender: { user_id: 20001, nickname: "Alice" },
+      } as OneBotGroupMessageEvent,
+      context: {
+        quote: (payload: unknown) => {
+          quotedText = payload;
+          return Promise.resolve({} as never);
+        },
+      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
+    };
+
+    const mockRepo = StatsRepository.of({
+      initSchema: Effect.void,
+      recordMessage: () => Effect.void,
+      recordInteraction: () => Effect.void,
+      upsertProfile: () => Effect.void,
+      getLeaderboard: () =>
+        Effect.succeed({
+          groupTotal: 0,
+          rows: [
+            {
+              userId: 20001,
+              nickname: "Alice",
+              totalCount: 0,
+              mediaCount: 0,
+              linkCount: 0,
+              interactionCount: 5,
+            },
+          ],
+        }),
+      getUserStats: () => Effect.die("not called"),
+    });
+
+    const mockRenderer = StatsRenderer.of({
+      renderLeaderboard: () => Effect.die("should not be called"),
+    });
+
+    await Effect.runPromise(
+      handleStatsCommand(item).pipe(
+        Effect.provide(
+          Layer.merge(
+            Layer.succeed(StatsRepository, mockRepo),
+            Layer.succeed(StatsRenderer, mockRenderer),
+          ),
+        ),
+      ),
+    );
+
+    expect(quotedText).toBe("本群暂无统计数据。");
+  });
+
 
   it("throttles rapid repeated /stat queries in same group (Review Focus 5)", async () => {
     resetCooldownForTest();
