@@ -12,6 +12,7 @@ import {
   handleStatsNotice,
 } from "./features/stats/StatsCollector.ts";
 import { handleStatsCommand } from "./features/stats/StatsCommand.ts";
+import { StatsCooldown } from "./features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "./features/stats/StatsRenderer.ts";
 import { StatsRepository } from "./features/stats/StatsRepository.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
@@ -81,6 +82,7 @@ export const MainLive = MainProgram.pipe(
       FetchHttpClient.layer,
       StatsRepoLive,
       StatsRenderer.layer,
+      StatsCooldown.layer,
     ),
   ),
 );

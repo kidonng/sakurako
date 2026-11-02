@@ -11,21 +11,21 @@ import {
   handleStatsCollectorMessage,
   handleStatsCollectorNotice,
 } from "../../../src/index.ts";
-import {
-  handleStatsCommand,
-  resetCooldownForTest,
-} from "../../../src/features/stats/StatsCommand.ts";
+import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
+import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage, IncomingNotice } from "../../../src/SnowLuma.ts";
 
 describe("StatsIntegration", () => {
   it("records events and responds to /me and /stat commands end-to-end", async () => {
-    resetCooldownForTest();
-
     const sqliteLayer = SqliteClient.layer({ filename: ":memory:" });
     const repoLayer = StatsRepository.layer.pipe(Layer.provide(sqliteLayer));
-    const fullLayer = Layer.merge(repoLayer, StatsRenderer.layer);
+    const fullLayer = Layer.mergeAll(
+      repoLayer,
+      StatsRenderer.layer,
+      StatsCooldown.layer,
+    );
 
     const program = Effect.gen(function* () {
       const repo = yield* StatsRepository;

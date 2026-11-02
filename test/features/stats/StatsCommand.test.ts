@@ -2,10 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotGroupMessageEvent } from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
-import {
-  handleStatsCommand,
-  resetCooldownForTest,
-} from "../../../src/features/stats/StatsCommand.ts";
+import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
+import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
@@ -52,9 +50,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -64,7 +63,6 @@ describe("StatsCommand", () => {
   });
 
   it("handles /stat command and sends image quote", async () => {
-    resetCooldownForTest();
     let quotedPayload: unknown = null;
     let queryStartDate: string | undefined = undefined;
 
@@ -122,9 +120,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -136,7 +135,6 @@ describe("StatsCommand", () => {
   });
 
   it("handles /stat all command without startDate", async () => {
-    resetCooldownForTest();
     let queryStartDate: string | undefined = "init";
 
     const item: IncomingMessage = {
@@ -190,9 +188,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -202,7 +201,6 @@ describe("StatsCommand", () => {
   });
 
   it("replies with fallback text when group has no stats (Review Focus 4)", async () => {
-    resetCooldownForTest();
     let quotedText: unknown = null;
 
     const item: IncomingMessage = {
@@ -244,9 +242,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -255,7 +254,6 @@ describe("StatsCommand", () => {
     expect(quotedText).toBe("本群暂无统计数据。");
   });
   it("replies with fallback text when group has interaction rows but 0 messages", async () => {
-    resetCooldownForTest();
     let quotedText: unknown = null;
 
     const item: IncomingMessage = {
@@ -310,9 +308,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -322,7 +321,6 @@ describe("StatsCommand", () => {
   });
 
   it("throttles rapid repeated /stat queries in same group (Review Focus 5)", async () => {
-    resetCooldownForTest();
     let callCount = 0;
 
     const item: IncomingMessage = {
@@ -374,22 +372,22 @@ describe("StatsCommand", () => {
       renderLeaderboard: () => Effect.succeed(Buffer.from("png")),
     });
 
-    const layer = Layer.merge(
+    const layer = Layer.mergeAll(
       Layer.succeed(StatsRepository, mockRepo),
       Layer.succeed(StatsRenderer, mockRenderer),
+      StatsCooldown.layer,
     );
 
-    // Call 1: passes
+    // Call 1 passes, Call 2 immediately: throttled
     await Effect.runPromise(
-      handleStatsCommand(item).pipe(Effect.provide(layer)),
-    );
-    expect(callCount).toBe(1);
+      Effect.gen(function* () {
+        yield* handleStatsCommand(item);
+        expect(callCount).toBe(1);
 
-    // Call 2 immediately: throttled
-    await Effect.runPromise(
-      handleStatsCommand(item).pipe(Effect.provide(layer)),
+        yield* handleStatsCommand(item);
+        expect(callCount).toBe(1);
+      }).pipe(Effect.provide(layer)),
     );
-    expect(callCount).toBe(1);
   });
 
   it("handles /me command and quotes formatted personal stats", async () => {
@@ -452,9 +450,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),
@@ -529,9 +528,10 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       handleStatsCommand(item).pipe(
         Effect.provide(
-          Layer.merge(
+          Layer.mergeAll(
             Layer.succeed(StatsRepository, mockRepo),
             Layer.succeed(StatsRenderer, mockRenderer),
+            StatsCooldown.layer,
           ),
         ),
       ),

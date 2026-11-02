@@ -1,3 +1,5 @@
+import { DateTime, Predicate, Schema } from "effect";
+
 const MEDIA_SEGMENT_TYPES: Record<string, true> = {
   image: true,
   record: true,
@@ -6,7 +8,7 @@ const MEDIA_SEGMENT_TYPES: Record<string, true> = {
 };
 
 const CQ_MEDIA_REGEX = /\[CQ:(image|record|video|mface),/i;
-const HTTP_URL_REGEX = /https?:\/\/[^\s]+/i;
+const HTTP_URL_REGEX = /https?:\/\/\S+/i;
 
 export interface MessageClassification {
   readonly hasMedia: boolean;
@@ -23,10 +25,9 @@ export function classifyMessage(
   if (Array.isArray(message)) {
     for (const segment of message) {
       if (
-        typeof segment === "object" &&
-        segment !== null &&
+        Predicate.isObject(segment) &&
         "type" in segment &&
-        typeof segment.type === "string"
+        Predicate.isString(segment.type)
       ) {
         if (segment.type in MEDIA_SEGMENT_TYPES) {
           hasMedia = true;
@@ -34,10 +35,9 @@ export function classifyMessage(
         if (
           segment.type === "text" &&
           "data" in segment &&
-          typeof segment.data === "object" &&
-          segment.data !== null &&
+          Predicate.isObject(segment.data) &&
           "text" in segment.data &&
-          typeof segment.data.text === "string" &&
+          Predicate.isString(segment.data.text) &&
           HTTP_URL_REGEX.test(segment.data.text)
         ) {
           hasLink = true;
@@ -58,47 +58,32 @@ export function classifyMessage(
   return { hasMedia, hasLink };
 }
 
-export function isGroupPokeNotice(event: unknown): event is {
-  readonly post_type: "notice";
-  readonly notice_type: "notify";
-  readonly sub_type: "poke";
-  readonly group_id: number;
-  readonly user_id: number;
-} {
-  if (typeof event !== "object" || event === null) {
-    return false;
-  }
-  const e = event as Record<string, unknown>;
-  return (
-    e.post_type === "notice" &&
-    e.notice_type === "notify" &&
-    e.sub_type === "poke" &&
-    typeof e.group_id === "number" &&
-    typeof e.user_id === "number"
-  );
-}
+const GroupPokeNotice = Schema.Struct({
+  post_type: Schema.Literal("notice"),
+  notice_type: Schema.Literal("notify"),
+  sub_type: Schema.Literal("poke"),
+  group_id: Schema.Finite,
+  user_id: Schema.Finite,
+});
+export const isGroupPokeNotice = Schema.is(GroupPokeNotice);
 
-export function isGroupReactionNotice(event: unknown): event is {
-  readonly post_type: "notice";
-  readonly notice_type: "group_msg_emoji_like";
-  readonly sub_type: "add" | "remove";
-  readonly group_id: number;
-  readonly user_id?: number;
-  readonly operator_id?: number;
-} {
-  if (typeof event !== "object" || event === null) {
-    return false;
-  }
-  const e = event as Record<string, unknown>;
-  const userId = typeof e.user_id === "number" ? e.user_id : e.operator_id;
-  return (
-    e.post_type === "notice" &&
-    e.notice_type === "group_msg_emoji_like" &&
-    (e.sub_type === "add" || e.sub_type === "remove") &&
-    typeof e.group_id === "number" &&
-    typeof userId === "number"
-  );
-}
+const GroupReactionNotice = Schema.Struct({
+  post_type: Schema.Literal("notice"),
+  notice_type: Schema.Literal("group_msg_emoji_like"),
+  sub_type: Schema.Literals(["add", "remove"]),
+  group_id: Schema.Finite,
+  user_id: Schema.optional(Schema.Finite),
+  operator_id: Schema.optional(Schema.Finite),
+}).pipe(
+  Schema.refine(
+    (
+      e,
+    ): e is typeof e &
+      ({ readonly user_id: number } | { readonly operator_id: number }) =>
+      typeof e.user_id === "number" || typeof e.operator_id === "number",
+  ),
+);
+export const isGroupReactionNotice = Schema.is(GroupReactionNotice);
 
 export function getNoticeOperatorId(event: {
   readonly user_id?: number;
@@ -106,13 +91,25 @@ export function getNoticeOperatorId(event: {
 }): number | undefined {
   return typeof event.user_id === "number" ? event.user_id : event.operator_id;
 }
-const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
+export function getShanghaiDateString(
+  input?: DateTime.DateTime | Date,
+): string {
+  const dt =
+    input instanceof Date
+      ? DateTime.fromDateUnsafe(input)
+      : (input ?? DateTime.nowUnsafe());
+  const zoned = DateTime.setZoneNamedUnsafe(dt, "Asia/Shanghai");
+  return DateTime.formatIsoDate(zoned);
+}
 
-export function getShanghaiDateString(date: Date = new Date()): string {
-  return SHANGHAI_DATE_FORMATTER.format(date);
+export function getDaysAgoShanghaiDateString(
+  days: number,
+  input?: DateTime.DateTime | Date,
+): string {
+  const dt =
+    input instanceof Date
+      ? DateTime.fromDateUnsafe(input)
+      : (input ?? DateTime.nowUnsafe());
+  const zoned = DateTime.setZoneNamedUnsafe(dt, "Asia/Shanghai");
+  return DateTime.formatIsoDate(DateTime.subtract(zoned, { days }));
 }

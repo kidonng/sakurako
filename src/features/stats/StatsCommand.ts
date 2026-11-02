@@ -1,23 +1,15 @@
 import { parseSegments, segments } from "@snowluma/sdk/messages";
 import type { AnyMessageSegment } from "@snowluma/sdk/types";
-import { Effect, Predicate } from "effect";
+import { DateTime, Effect, Predicate } from "effect";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
-import { getShanghaiDateString } from "./StatsClassifier.ts";
+import { getDaysAgoShanghaiDateString } from "./StatsClassifier.ts";
+import { StatsCooldown } from "./StatsCooldown.ts";
 import { StatsRenderer } from "./StatsRenderer.ts";
 import { StatsRepository } from "./StatsRepository.ts";
 
-const groupCooldowns = new Map<number, number>();
-const COOLDOWN_MS = 5000;
-
-export function resetCooldownForTest(): void {
-  groupCooldowns.clear();
-}
-
-export function handleStatsCommand(
-  item: IncomingMessage,
-): Effect.Effect<void, never, StatsRepository | StatsRenderer> {
-  return Effect.gen(function* () {
+export const handleStatsCommand = Effect.fnUntraced(
+  function* (item: IncomingMessage) {
     const { event } = item;
     if (isSelfMessage(event)) {
       return;
@@ -54,24 +46,21 @@ export function handleStatsCommand(
       .trim();
 
     if (text === "/stat" || text === "/stat all") {
-      const now = Date.now();
-      const lastTime = groupCooldowns.get(event.group_id) ?? 0;
-      if (now - lastTime < COOLDOWN_MS) {
+      const cooldown = yield* StatsCooldown;
+      const allowed = yield* cooldown.checkAndSet(event.group_id);
+      if (!allowed) {
         return;
       }
-      groupCooldowns.set(event.group_id, now);
 
       const isAllTime = text === "/stat all";
       let startDate: string | undefined = undefined;
       let timeLabel = "历史累计";
 
       if (!isAllTime) {
-        const d = new Date();
-        d.setDate(d.getDate() - 29);
-        startDate = getShanghaiDateString(d);
+        const now = yield* DateTime.now;
+        startDate = getDaysAgoShanghaiDateString(29, now);
         timeLabel = "最近 30 天";
       }
-
       const repo = yield* StatsRepository;
       const renderer = yield* StatsRenderer;
       const lb = yield* repo.getLeaderboard(event.group_id, startDate);
@@ -96,9 +85,8 @@ export function handleStatsCommand(
       );
       yield* Effect.tryPromise(() => item.context.quote(imageSegment));
     } else if (text === "/me") {
-      const d = new Date();
-      d.setDate(d.getDate() - 29);
-      const startDate30d = getShanghaiDateString(d);
+      const now = yield* DateTime.now;
+      const startDate30d = getDaysAgoShanghaiDateString(29, now);
 
       const repo = yield* StatsRepository;
       const stats = yield* repo.getUserStats(
@@ -122,16 +110,13 @@ export function handleStatsCommand(
 
       yield* Effect.tryPromise(() => item.context.quote(lines.join("\n")));
     }
-  }).pipe(
-    Effect.catch((err) =>
-      Effect.logError(
-        `[StatsCommand] Failed to execute command: ${String(err)}`,
-      ),
+  },
+  Effect.catch((err) =>
+    Effect.logError(`[StatsCommand] Failed to execute command: ${String(err)}`),
+  ),
+  Effect.catchDefect((defect) =>
+    Effect.logError(
+      `[StatsCommand] Defect in command handler: ${String(defect)}`,
     ),
-    Effect.catchDefect((defect) =>
-      Effect.logError(
-        `[StatsCommand] Defect in command handler: ${String(defect)}`,
-      ),
-    ),
-  );
-}
+  ),
+);

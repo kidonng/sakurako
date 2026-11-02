@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun";
-import { Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import { Migrator, SqlClient } from "effect/sql";
 import type { SqlError } from "effect/sql/SqlError";
 
@@ -151,7 +151,7 @@ export class StatsRepository extends Context.Service<
         userId: number,
         nickname: string,
       ) {
-        const now = Date.now();
+        const now = yield* Clock.currentTimeMillis;
         yield* sql`
           INSERT INTO member_profiles (group_id, user_id, nickname, updated_at)
           VALUES (${groupId}, ${userId}, ${nickname}, ${now})

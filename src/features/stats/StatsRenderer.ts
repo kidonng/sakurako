@@ -39,17 +39,15 @@ export class StatsRenderer extends Context.Service<
         import.meta.dir,
         "../../../assets/fonts/MiSans-Normal.ttf",
       );
-      const fontBytes = yield* fs
-        .readFile(fontPath)
-        .pipe(
-          Effect.catch((err) =>
-            Effect.die(
-              new Error(
-                `Failed to read font file at ${fontPath}: ${String(err)}`,
-              ),
+      const fontBytes = yield* fs.readFile(fontPath).pipe(
+        Effect.mapError(
+          (err) =>
+            new Error(
+              `Failed to read font file at ${fontPath}: ${String(err)}`,
             ),
-          ),
-        );
+        ),
+        Effect.orDie,
+      );
       const fontData = Buffer.from(fontBytes);
 
       const renderLeaderboard = Effect.fnUntraced(function* (

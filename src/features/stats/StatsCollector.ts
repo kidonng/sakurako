@@ -10,10 +10,8 @@ import {
 } from "./StatsClassifier.ts";
 import { StatsRepository } from "./StatsRepository.ts";
 
-export function handleStatsMessage(
-  item: IncomingMessage,
-): Effect.Effect<void, never, StatsRepository> {
-  return Effect.gen(function* () {
+export const handleStatsMessage = Effect.fnUntraced(
+  function* (item: IncomingMessage) {
     const { event } = item;
     if (isSelfMessage(event)) {
       return;
@@ -40,24 +38,21 @@ export function handleStatsMessage(
       date,
       classification,
     );
-  }).pipe(
-    Effect.catch((err) =>
-      Effect.logWarning(
-        `[StatsCollector] Failed to record message: ${String(err)}`,
-      ),
+  },
+  Effect.catch((err) =>
+    Effect.logWarning(
+      `[StatsCollector] Failed to record message: ${String(err)}`,
     ),
-    Effect.catchDefect((defect) =>
-      Effect.logError(
-        `[StatsCollector] Defect in record message: ${String(defect)}`,
-      ),
+  ),
+  Effect.catchDefect((defect) =>
+    Effect.logError(
+      `[StatsCollector] Defect in record message: ${String(defect)}`,
     ),
-  );
-}
+  ),
+);
 
-export function handleStatsNotice(
-  item: IncomingNotice,
-): Effect.Effect<void, never, StatsRepository> {
-  return Effect.gen(function* () {
+export const handleStatsNotice = Effect.fnUntraced(
+  function* (item: IncomingNotice) {
     const { event } = item;
     if (isSelfMessage(event)) {
       return;
@@ -76,16 +71,15 @@ export function handleStatsNotice(
         }
       }
     }
-  }).pipe(
-    Effect.catch((err) =>
-      Effect.logWarning(
-        `[StatsCollector] Failed to record notice: ${String(err)}`,
-      ),
+  },
+  Effect.catch((err) =>
+    Effect.logWarning(
+      `[StatsCollector] Failed to record notice: ${String(err)}`,
     ),
-    Effect.catchDefect((defect) =>
-      Effect.logError(
-        `[StatsCollector] Defect in record notice: ${String(defect)}`,
-      ),
+  ),
+  Effect.catchDefect((defect) =>
+    Effect.logError(
+      `[StatsCollector] Defect in record notice: ${String(defect)}`,
     ),
-  );
-}
+  ),
+);
