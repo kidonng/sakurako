@@ -1,8 +1,8 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { existsSync, mkdirSync } from "node:fs";
-import { BunRuntime } from "@effect/platform-bun";
+import { BunFileSystem, BunRuntime } from "@effect/platform-bun";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Effect, Layer, Stream } from "effect";
+import { FileSystem } from "effect/FileSystem";
 import { FetchHttpClient } from "effect/http";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
@@ -66,12 +66,18 @@ export const MainProgram = Effect.gen(function* () {
   });
 });
 
-if (!existsSync("data")) {
-  mkdirSync("data", { recursive: true });
-}
+const EnsureDataDir = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem;
+    yield* fs.makeDirectory("data", { recursive: true });
+  }),
+).pipe(Layer.provide(BunFileSystem.layer));
 
 const SqliteLive = SqliteClient.layer({ filename: "data/stats.db" });
-const StatsRepoLive = StatsRepository.layer.pipe(Layer.provide(SqliteLive));
+const StatsRepoLive = StatsRepository.layer.pipe(
+  Layer.provide(SqliteLive),
+  Layer.provideMerge(EnsureDataDir),
+);
 
 export const MainLive = MainProgram.pipe(
   Effect.provide(

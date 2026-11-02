@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+/* oxlint-disable effecttsgo/unstable-api-usage */
+import { BunFileSystem, BunPath } from "@effect/platform-bun";
 import { Context, Effect, Layer, Schema } from "effect";
+import { FileSystem } from "effect/FileSystem";
+import { Path } from "effect/Path";
 import satori from "satori";
 import sharp from "sharp";
 import type { LeaderboardResult } from "./StatsRepository.ts";
@@ -28,16 +30,21 @@ export class StatsRenderer extends Context.Service<
     ) => Effect.Effect<Buffer, RenderError>;
   }
 >()("sakurako/StatsRenderer") {
-  static readonly layer = Layer.sync(StatsRenderer, () => {
-      const fontPath = join(
+  static readonly layer = Layer.effect(
+    StatsRenderer,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const path = yield* Path;
+      const fontPath = path.join(
         import.meta.dir,
         "../../../assets/fonts/MiSans-Normal.ttf",
       );
-      const fontBuffer = readFileSync(fontPath);
-      const fontArrayBuffer = fontBuffer.buffer.slice(
-        fontBuffer.byteOffset,
-        fontBuffer.byteOffset + fontBuffer.byteLength,
+      const fontBytes = yield* fs.readFile(fontPath).pipe(
+        Effect.catch((err) =>
+          Effect.die(new Error(`Failed to read font file at ${fontPath}: ${String(err)}`)),
+        ),
       );
+      const fontData = Buffer.from(fontBytes);
 
       const renderLeaderboard = Effect.fnUntraced(function* (
         options: RenderLeaderboardOptions,
@@ -316,7 +323,7 @@ export class StatsRenderer extends Context.Service<
               fonts: [
                 {
                   name: "MiSans",
-                  data: fontArrayBuffer,
+                  data: fontData,
                   weight: 400,
                   style: "normal",
                 },
@@ -329,11 +336,16 @@ export class StatsRenderer extends Context.Service<
           try: () => sharp(Buffer.from(svg)).png().toBuffer(),
           catch: (e) => new RenderError({ message: String(e) }),
         });
+
         return png;
       });
 
       return StatsRenderer.of({
         renderLeaderboard,
       });
-    });
+    }),
+  ).pipe(
+    Layer.provide(BunFileSystem.layer),
+    Layer.provide(BunPath.layer),
+  );
 }

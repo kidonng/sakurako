@@ -1,60 +1,78 @@
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+/* oxlint-disable effecttsgo/unstable-api-usage */
+import { BunFileSystem, BunPath, BunRuntime } from "@effect/platform-bun";
+import { Effect, Layer, Schema } from "effect";
+import { FileSystem } from "effect/FileSystem";
+import { Path } from "effect/Path";
 
 const FONT_URL = "https://hyperos.mi.com/font-download/MiSans.zip";
-const OUTPUT_FILE = join(import.meta.dir, "../assets/fonts/MiSans-Normal.ttf");
 const TARGET_ENTRY = "MiSans/ttf/MiSans-Normal.ttf";
+class FontDownloadError extends Schema.TaggedError<
+  FontDownloadError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("FontDownloadError", {
+  message: Schema.String,
+}) {}
 
-async function main(): Promise<void> {
-  if (existsSync(OUTPUT_FILE)) {
-    console.log(`Font already exists at ${OUTPUT_FILE}`);
+
+const mainProgram = Effect.gen(function* () {
+  const fs = yield* FileSystem;
+  const path = yield* Path;
+  const outputFile = path.join(
+    import.meta.dir,
+    "../assets/fonts/MiSans-Normal.ttf",
+  );
+  const outputDir = path.dirname(outputFile);
+
+  const exists = yield* fs.exists(outputFile);
+  if (exists) {
+    yield* Effect.logInfo(`Font already exists at ${outputFile}`);
     return;
   }
 
-  mkdirSync(dirname(OUTPUT_FILE), { recursive: true });
-  console.log(`Downloading MiSans font from ${FONT_URL}...`);
+  yield* fs.makeDirectory(outputDir, { recursive: true });
+  yield* Effect.logInfo(`Downloading MiSans font from ${FONT_URL}...`);
 
-  const response = await fetch(FONT_URL);
+  const response = yield* Effect.tryPromise(() => fetch(FONT_URL));
   if (!response.ok) {
-    throw new Error(
-      `Failed to download font: ${response.status} ${response.statusText}`,
-    );
+    return yield* new FontDownloadError({
+      message: `Failed to download font: ${response.status} ${response.statusText}`,
+    });
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const tempZipPath = join(dirname(OUTPUT_FILE), "MiSans.temp.zip");
-  writeFileSync(tempZipPath, Buffer.from(arrayBuffer));
+  const arrayBuffer = yield* Effect.tryPromise(() => response.arrayBuffer());
+  const tempZipPath = path.join(outputDir, "MiSans.temp.zip");
+  yield* fs.writeFile(tempZipPath, new Uint8Array(arrayBuffer));
 
-  try {
-    const proc = Bun.spawn([
-      "unzip",
-      "-p",
-      tempZipPath,
-      TARGET_ENTRY,
-    ]);
-    const fontBuffer = await new Response(proc.stdout).arrayBuffer();
-    const exitCode = await proc.exited;
+  yield* Effect.acquireUseRelease(
+    Effect.void,
+    () =>
+      Effect.gen(function* () {
+        const proc = Bun.spawn(["unzip", "-p", tempZipPath, TARGET_ENTRY]);
+        const fontBuffer = yield* Effect.tryPromise(() =>
+          new Response(proc.stdout).arrayBuffer(),
+        );
+        const exitCode = yield* Effect.tryPromise(() => proc.exited);
 
-    if (exitCode !== 0 || fontBuffer.byteLength === 0) {
-      throw new Error(`Failed to extract ${TARGET_ENTRY} from zip archive`);
-    }
+        if (exitCode !== 0 || fontBuffer.byteLength === 0) {
+          return yield* new FontDownloadError({
+            message: `Failed to extract ${TARGET_ENTRY} from zip archive`,
+          });
+        }
+        yield* fs.writeFile(outputFile, new Uint8Array(fontBuffer));
+        yield* Effect.logInfo(
+          `Saved font to ${outputFile} (${(fontBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`,
+        );
+      }),
+    () => fs.remove(tempZipPath).pipe(Effect.ignore),
+  );
+});
 
-    writeFileSync(OUTPUT_FILE, Buffer.from(fontBuffer));
-    console.log(
-      `Saved font to ${OUTPUT_FILE} (${(fontBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`,
-    );
-  } finally {
-    try {
-      unlinkSync(tempZipPath);
-    } catch {
-      // Ignore cleanup error
-    }
-  }
-}
+const MainLive = mainProgram.pipe(
+  Effect.provide(Layer.merge(BunFileSystem.layer, BunPath.layer)),
+);
 
 if (import.meta.main) {
-  main().catch((err: unknown) => {
-    console.error(err);
-    process.exit(1);
-  });
+  BunRuntime.runMain(MainLive);
 }
