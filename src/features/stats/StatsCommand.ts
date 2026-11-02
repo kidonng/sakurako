@@ -84,8 +84,7 @@ export function handleStatsCommand(
       }
 
       const groupName = (event as Record<string, unknown>).group_name as
-        | string
-        | undefined;
+        string | undefined;
       const pngBuffer = yield* renderer.renderLeaderboard({
         groupName: groupName || `群 ${event.group_id}`,
         timeLabel,
@@ -125,10 +124,14 @@ export function handleStatsCommand(
     }
   }).pipe(
     Effect.catch((err) =>
-      Effect.logError(`[StatsCommand] Failed to execute command: ${String(err)}`),
+      Effect.logError(
+        `[StatsCommand] Failed to execute command: ${String(err)}`,
+      ),
     ),
     Effect.catchDefect((defect) =>
-      Effect.logError(`[StatsCommand] Defect in command handler: ${String(defect)}`),
+      Effect.logError(
+        `[StatsCommand] Defect in command handler: ${String(defect)}`,
+      ),
     ),
   );
 }

@@ -36,7 +36,10 @@ export interface UserStatsResult {
 export class StatsRepository extends Context.Service<
   StatsRepository,
   {
-    readonly initSchema: Effect.Effect<void, SqlError | Migrator.MigrationError>;
+    readonly initSchema: Effect.Effect<
+      void,
+      SqlError | Migrator.MigrationError
+    >;
     readonly recordMessage: (
       groupId: number,
       userId: number,
@@ -163,9 +166,7 @@ export class StatsRepository extends Context.Service<
         startDate?: string,
         limit = 15,
       ) {
-        const dateCond = startDate
-          ? sql`AND date >= ${startDate}`
-          : sql``;
+        const dateCond = startDate ? sql`AND date >= ${startDate}` : sql``;
 
         const totalRes = yield* sql<{ readonly total: number }>`
           SELECT COALESCE(SUM(total_count), 0) AS total

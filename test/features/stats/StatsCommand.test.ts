@@ -2,7 +2,10 @@ import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotGroupMessageEvent } from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
-import { handleStatsCommand, resetCooldownForTest } from "../../../src/features/stats/StatsCommand.ts";
+import {
+  handleStatsCommand,
+  resetCooldownForTest,
+} from "../../../src/features/stats/StatsCommand.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
@@ -165,7 +168,16 @@ describe("StatsCommand", () => {
         queryStartDate = startDate;
         return Effect.succeed({
           groupTotal: 100,
-          rows: [{ userId: 20001, nickname: "Alice", totalCount: 100, mediaCount: 0, linkCount: 0, interactionCount: 0 }],
+          rows: [
+            {
+              userId: 20001,
+              nickname: "Alice",
+              totalCount: 100,
+              mediaCount: 0,
+              linkCount: 0,
+              interactionCount: 0,
+            },
+          ],
         });
       },
       getUserStats: () => Effect.die("not called"),
@@ -309,7 +321,6 @@ describe("StatsCommand", () => {
     expect(quotedText).toBe("本群暂无统计数据。");
   });
 
-
   it("throttles rapid repeated /stat queries in same group (Review Focus 5)", async () => {
     resetCooldownForTest();
     let callCount = 0;
@@ -345,7 +356,16 @@ describe("StatsCommand", () => {
       getLeaderboard: () =>
         Effect.succeed({
           groupTotal: 10,
-          rows: [{ userId: 20001, nickname: "Alice", totalCount: 10, mediaCount: 0, linkCount: 0, interactionCount: 0 }],
+          rows: [
+            {
+              userId: 20001,
+              nickname: "Alice",
+              totalCount: 10,
+              mediaCount: 0,
+              linkCount: 0,
+              interactionCount: 0,
+            },
+          ],
         }),
       getUserStats: () => Effect.die("not called"),
     });
@@ -360,11 +380,15 @@ describe("StatsCommand", () => {
     );
 
     // Call 1: passes
-    await Effect.runPromise(handleStatsCommand(item).pipe(Effect.provide(layer)));
+    await Effect.runPromise(
+      handleStatsCommand(item).pipe(Effect.provide(layer)),
+    );
     expect(callCount).toBe(1);
 
     // Call 2 immediately: throttled
-    await Effect.runPromise(handleStatsCommand(item).pipe(Effect.provide(layer)));
+    await Effect.runPromise(
+      handleStatsCommand(item).pipe(Effect.provide(layer)),
+    );
     expect(callCount).toBe(1);
   });
 
@@ -404,8 +428,20 @@ describe("StatsCommand", () => {
         Effect.succeed({
           userId,
           nickname: "Alice",
-          stats30d: { totalCount: 200, mediaCount: 50, linkCount: 20, interactionCount: 10, rank: 2 },
-          statsAll: { totalCount: 800, mediaCount: 200, linkCount: 80, interactionCount: 40, rank: 1 },
+          stats30d: {
+            totalCount: 200,
+            mediaCount: 50,
+            linkCount: 20,
+            interactionCount: 10,
+            rank: 2,
+          },
+          statsAll: {
+            totalCount: 800,
+            mediaCount: 200,
+            linkCount: 80,
+            interactionCount: 40,
+            rank: 1,
+          },
         }),
     });
 
@@ -469,8 +505,20 @@ describe("StatsCommand", () => {
         Effect.succeed({
           userId,
           nickname: "Newbie",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 

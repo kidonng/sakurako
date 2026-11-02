@@ -419,9 +419,10 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const description = metadata.description?.trim() || undefined;
     const rawImage = metadata.image?.trim() || undefined;
     const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
-    const rawFallback = (
-      metadata as unknown as Record<string, string | undefined>
-    ).fallbackImage?.trim() || undefined;
+    const rawFallback =
+      (
+        metadata as unknown as Record<string, string | undefined>
+      ).fallbackImage?.trim() || undefined;
     const fallbackImage =
       rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
 

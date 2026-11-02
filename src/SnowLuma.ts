@@ -27,7 +27,6 @@ export interface IncomingNotice {
   readonly context: SnowLumaEventContextWithQuote<OneBotNoticeEvent>;
 }
 
-
 class WebSocketConnectionError extends Schema.TaggedError<
   WebSocketConnectionError,
   {

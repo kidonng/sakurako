@@ -39,11 +39,17 @@ export class StatsRenderer extends Context.Service<
         import.meta.dir,
         "../../../assets/fonts/MiSans-Normal.ttf",
       );
-      const fontBytes = yield* fs.readFile(fontPath).pipe(
-        Effect.catch((err) =>
-          Effect.die(new Error(`Failed to read font file at ${fontPath}: ${String(err)}`)),
-        ),
-      );
+      const fontBytes = yield* fs
+        .readFile(fontPath)
+        .pipe(
+          Effect.catch((err) =>
+            Effect.die(
+              new Error(
+                `Failed to read font file at ${fontPath}: ${String(err)}`,
+              ),
+            ),
+          ),
+        );
       const fontData = Buffer.from(fontBytes);
 
       const renderLeaderboard = Effect.fnUntraced(function* (
@@ -258,21 +264,33 @@ export class StatsRenderer extends Context.Service<
                     {
                       type: "div",
                       props: {
-                        style: { width: 65, textAlign: "right", color: "#79c0ff" },
+                        style: {
+                          width: 65,
+                          textAlign: "right",
+                          color: "#79c0ff",
+                        },
                         children: "媒体",
                       },
                     },
                     {
                       type: "div",
                       props: {
-                        style: { width: 65, textAlign: "right", color: "#d2a8ff" },
+                        style: {
+                          width: 65,
+                          textAlign: "right",
+                          color: "#d2a8ff",
+                        },
                         children: "链接",
                       },
                     },
                     {
                       type: "div",
                       props: {
-                        style: { width: 65, textAlign: "right", color: "#ffa657" },
+                        style: {
+                          width: 65,
+                          textAlign: "right",
+                          color: "#ffa657",
+                        },
                         children: "互动",
                       },
                     },
@@ -344,8 +362,5 @@ export class StatsRenderer extends Context.Service<
         renderLeaderboard,
       });
     }),
-  ).pipe(
-    Layer.provide(BunFileSystem.layer),
-    Layer.provide(BunPath.layer),
-  );
+  ).pipe(Layer.provide(BunFileSystem.layer), Layer.provide(BunPath.layer));
 }

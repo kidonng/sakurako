@@ -42,10 +42,14 @@ export function handleStatsMessage(
     );
   }).pipe(
     Effect.catch((err) =>
-      Effect.logWarning(`[StatsCollector] Failed to record message: ${String(err)}`),
+      Effect.logWarning(
+        `[StatsCollector] Failed to record message: ${String(err)}`,
+      ),
     ),
     Effect.catchDefect((defect) =>
-      Effect.logError(`[StatsCollector] Defect in record message: ${String(defect)}`),
+      Effect.logError(
+        `[StatsCollector] Defect in record message: ${String(defect)}`,
+      ),
     ),
   );
 }
@@ -74,10 +78,14 @@ export function handleStatsNotice(
     }
   }).pipe(
     Effect.catch((err) =>
-      Effect.logWarning(`[StatsCollector] Failed to record notice: ${String(err)}`),
+      Effect.logWarning(
+        `[StatsCollector] Failed to record notice: ${String(err)}`,
+      ),
     ),
     Effect.catchDefect((defect) =>
-      Effect.logError(`[StatsCollector] Defect in record notice: ${String(defect)}`),
+      Effect.logError(
+        `[StatsCollector] Defect in record notice: ${String(defect)}`,
+      ),
     ),
   );
 }

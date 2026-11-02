@@ -2,10 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { type SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotNoticeEvent } from "@snowluma/sdk/types";
 import { Effect, Queue, Stream } from "effect";
-import {
-  type IncomingNotice,
-  SnowLumaClient,
-} from "../src/SnowLuma.ts";
+import { type IncomingNotice, SnowLumaClient } from "../src/SnowLuma.ts";
 
 describe("SnowLumaClient notice stream extension", () => {
   it("provides notices stream on SnowLumaClient service", async () => {

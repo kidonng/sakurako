@@ -15,7 +15,6 @@ class FontDownloadError extends Schema.TaggedError<
   message: Schema.String,
 }) {}
 
-
 const mainProgram = Effect.gen(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path;

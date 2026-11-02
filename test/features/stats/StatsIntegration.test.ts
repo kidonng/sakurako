@@ -2,10 +2,19 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
-import type { OneBotGroupMessageEvent, OneBotNoticeEvent } from "@snowluma/sdk/types";
+import type {
+  OneBotGroupMessageEvent,
+  OneBotNoticeEvent,
+} from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
-import { handleStatsCollectorMessage, handleStatsCollectorNotice } from "../../../src/index.ts";
-import { handleStatsCommand, resetCooldownForTest } from "../../../src/features/stats/StatsCommand.ts";
+import {
+  handleStatsCollectorMessage,
+  handleStatsCollectorNotice,
+} from "../../../src/index.ts";
+import {
+  handleStatsCommand,
+  resetCooldownForTest,
+} from "../../../src/features/stats/StatsCommand.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage, IncomingNotice } from "../../../src/SnowLuma.ts";
@@ -16,10 +25,7 @@ describe("StatsIntegration", () => {
 
     const sqliteLayer = SqliteClient.layer({ filename: ":memory:" });
     const repoLayer = StatsRepository.layer.pipe(Layer.provide(sqliteLayer));
-    const fullLayer = Layer.merge(
-      repoLayer,
-      StatsRenderer.layer,
-    );
+    const fullLayer = Layer.merge(repoLayer, StatsRenderer.layer);
 
     const program = Effect.gen(function* () {
       const repo = yield* StatsRepository;

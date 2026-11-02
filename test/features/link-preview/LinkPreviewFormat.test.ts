@@ -64,8 +64,7 @@ describe("formatPreview", () => {
     expect(formatted).toEqual({
       text: "Artwork Title",
       image: "https://pixiv.cat/82775556.jpg",
-      fallbackImage:
-        "https://embed.pixiv.net/decorate.php?illust_id=82775556",
+      fallbackImage: "https://embed.pixiv.net/decorate.php?illust_id=82775556",
     });
   });
 

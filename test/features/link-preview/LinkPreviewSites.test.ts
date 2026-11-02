@@ -220,7 +220,6 @@ describe("LinkPreviewSites", () => {
       expect(image).toBe("https://pixiv.cat/82775556.jpg");
     });
 
-
     it("returns undefined for non-artwork URLs", () => {
       const userUrl = new URL("https://www.pixiv.net/users/12345");
       expect(
@@ -255,7 +254,9 @@ describe("LinkPreviewSites", () => {
         extractPixivArtworkId(new URL("https://www.pixiv.net/artworks/123456")),
       ).toBe("123456");
       expect(
-        extractPixivArtworkId(new URL("https://www.pixiv.net/ja/artworks/654321")),
+        extractPixivArtworkId(
+          new URL("https://www.pixiv.net/ja/artworks/654321"),
+        ),
       ).toBe("654321");
       expect(
         extractPixivArtworkId(new URL("https://www.pixiv.net/users/999")),

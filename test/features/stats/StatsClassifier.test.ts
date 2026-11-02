@@ -9,16 +9,18 @@ import {
 describe("StatsClassifier", () => {
   describe("classifyMessage", () => {
     it("classifies plain text message", () => {
-      const res = classifyMessage([
-        { type: "text", data: { text: "hello world" } },
-      ], "hello world");
+      const res = classifyMessage(
+        [{ type: "text", data: { text: "hello world" } }],
+        "hello world",
+      );
       expect(res).toEqual({ hasMedia: false, hasLink: false });
     });
 
     it("classifies image message as media", () => {
-      const res = classifyMessage([
-        { type: "image", data: { file: "abc.jpg" } },
-      ], "[CQ:image,file=abc.jpg]");
+      const res = classifyMessage(
+        [{ type: "image", data: { file: "abc.jpg" } }],
+        "[CQ:image,file=abc.jpg]",
+      );
       expect(res).toEqual({ hasMedia: true, hasLink: false });
     });
 

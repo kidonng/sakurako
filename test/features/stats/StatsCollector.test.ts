@@ -1,18 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
-import type { OneBotGroupMessageEvent, OneBotNoticeEvent } from "@snowluma/sdk/types";
+import type {
+  OneBotGroupMessageEvent,
+  OneBotNoticeEvent,
+} from "@snowluma/sdk/types";
 import { Effect } from "effect";
 import {
   handleStatsMessage,
   handleStatsNotice,
 } from "../../../src/features/stats/StatsCollector.ts";
-import {
-  StatsRepository,
-} from "../../../src/features/stats/StatsRepository.ts";
-import type {
-  IncomingMessage,
-  IncomingNotice,
-} from "../../../src/SnowLuma.ts";
+import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
+import type { IncomingMessage, IncomingNotice } from "../../../src/SnowLuma.ts";
 
 describe("StatsCollector", () => {
   it("ignores self messages", async () => {
@@ -30,8 +28,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 
@@ -62,7 +72,11 @@ describe("StatsCollector", () => {
   });
 
   it("processes group message with profile update and message classification", async () => {
-    let savedProfile: { groupId: number; userId: number; nickname: string } | null = null;
+    let savedProfile: {
+      groupId: number;
+      userId: number;
+      nickname: string;
+    } | null = null;
     let savedMessage: {
       groupId: number;
       userId: number;
@@ -85,8 +99,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 
@@ -145,8 +171,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 
@@ -191,8 +229,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 
@@ -251,8 +301,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 
@@ -277,7 +339,6 @@ describe("StatsCollector", () => {
     expect(recordedUserId as unknown).toBe(30003);
   });
 
-
   it("isolates errors when database fails", async () => {
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -289,8 +350,20 @@ describe("StatsCollector", () => {
         Effect.succeed({
           userId: 0,
           nickname: "",
-          stats30d: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
-          statsAll: { totalCount: 0, mediaCount: 0, linkCount: 0, interactionCount: 0, rank: null },
+          stats30d: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
+          statsAll: {
+            totalCount: 0,
+            mediaCount: 0,
+            linkCount: 0,
+            interactionCount: 0,
+            rank: null,
+          },
         }),
     });
 

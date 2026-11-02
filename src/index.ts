@@ -48,15 +48,10 @@ export const MainProgram = Effect.gen(function* () {
 
   const processNotices = notices.pipe(
     Stream.runForEach((item) =>
-      Effect.all(
-        [
-          handleStatsNotice(item),
-        ],
-        {
-          concurrency: "unbounded",
-          discard: true,
-        },
-      ),
+      Effect.all([handleStatsNotice(item)], {
+        concurrency: "unbounded",
+        discard: true,
+      }),
     ),
   );
 

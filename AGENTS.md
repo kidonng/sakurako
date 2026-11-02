@@ -9,6 +9,7 @@ Key features include:
 - **Echo Bot**: Matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"`.
 - **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, applies site-specific custom displays (e.g. GitHub, Hacker News), truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
 - **Image Sauce**: Matches incoming messages strictly equaling `"/sauce"` replying to an image, queries SauceNao API, and replies with work title, author, and source link.
+- **Message Statistics**: Silently aggregates group member messages by type (total, media, links, interactions) into SQLite daily buckets using `@effect/sql-sqlite-bun` and `SqliteMigrator`. Generates Option B high-density leaderboard image cards via Satori + Sharp (`/stat`, `/stat all`) and replies with personal stats breakdowns (`/me`).
 
 ## Architecture & Data Flow
 
@@ -23,27 +24,27 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
   - Bridges events to an unbounded Queue via Queue.offerUnsafe
        │
        ▼ Stream.fromQueue
-[Message Stream] (Stream.Stream<IncomingMessage>)
+[Message & Notice Streams] (Stream.Stream<IncomingMessage> & Stream.Stream<IncomingNotice>)
        │
        ▼ Stream.runForEach (concurrent dispatch)
-  ┌────┴───────────────────────────┬───────────────────────────────┐
-  ▼                                ▼                               ▼
-[EchoBot]                      [LinkPreview]                   [Sauce]
-(src/features/echo/EchoBot.ts)  (src/features/link-preview/     (src/features/sauce/
-  - Match: === "喵喵喵"            LinkPreview.ts)                 Sauce.ts)
-  - Reply: context.reply         - Extract: get-urls             - Match: === "/sauce"
-                                 - Scrape: metascraper           - Query: SauceNao API
-                                 - Reply: context.quote          - Reply: context.quote
-       │                           │                               │
-       └───────────────────────────┼───────────────────────────────┘
+  ┌────┴───────────────────────────┬───────────────────────────────┬───────────────────────────────┐
+  ▼                                ▼                               ▼                               ▼
+[EchoBot]                      [LinkPreview]                   [Sauce]                         [Stats]
+(src/features/echo/EchoBot.ts)  (src/features/link-preview/     (src/features/sauce/            (src/features/stats/)
+  - Match: === "喵喵喵"            LinkPreview.ts)                 Sauce.ts)                       - Collector: silent counts
+  - Reply: context.reply         - Extract: get-urls             - Match: === "/sauce"           - Commands: /stat, /me
+                                 - Scrape: metascraper           - Query: SauceNao API           - SQLite: StatsRepository
+                                 - Reply: context.quote          - Reply: context.quote          - Render: Satori + Sharp
+       │                           │                               │                               │
+       └───────────────────────────┴───────────────────────────────┴───────────────────────────────┘
                                    ▼
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
 - **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY` and `OPENROUTER_API_KEY` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
-- **Event Pipeline**: WebSocket message callbacks offer items to an unbounded `Queue`, exposed downstream as a typed `Stream`.
-- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, and `Sauce`. Each handler isolates errors per message with `Effect.catch`, ensuring the stream remains active even if individual reply actions fail.
+- **Event Pipeline**: WebSocket callbacks offer messages and notices to unbounded Queues, exposed downstream as typed `messages` and `notices` Streams.
+- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, `Sauce`, `StatsCollector`, and `StatsCommand`, and notices to `StatsCollector`. Each handler isolates errors per event with `Effect.catch`, ensuring streams remain active even if individual reply actions fail.
 
 ## Key Directories
 
@@ -65,6 +66,7 @@ All development tasks use Bun:
 - **Lint**: `bun run lint` (runs `oxlint` with `oxlint-tsgolint` & `@effect/tsgo` rules)
 - **Unused Code & Dependency Check**: `bun run knip` (runs `knip`)
 - **Format**: `bun run format` (runs `bun fmt`)
+- **Download Font**: `bun run download-font` (downloads MiSans font archive for stats rendering)
 - **Post-Install Setup**: `bun run prepare` (`effect-tsgo patch --typescript --oxlint`)
 
 ## Code Conventions & Common Patterns
@@ -104,6 +106,13 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/link-preview/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
 - `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
 - `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
+- `src/features/stats/StatsRepository.ts`: SQLite persistence, schema migrations (`SqliteMigrator`), atomic daily upserts, and 30-day / all-time aggregate queries.
+- `src/features/stats/StatsClassifier.ts`: Pure event classification (media segments, URLs, poke/reaction notices) and Asia/Shanghai date bucketing.
+- `src/features/stats/StatsCollector.ts`: Silent background event consumer for incoming group messages and notices.
+- `src/features/stats/StatsRenderer.ts`: Leaderboard image card rendering pipeline using Satori and Sharp with MiSans typography.
+- `src/features/stats/StatsCommand.ts`: Active command router for `/stat`, `/stat all`, and `/me` with cooldown and empty-state fallbacks.
+- `docs/features/stats.md`: User-facing documentation for group message statistics.
+- `scripts/download-font.ts`: Font setup script fetching and extracting MiSans from official CDN.
 - `src/utils/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `src/utils/MessageGuard.ts`: `isSelfMessage`, the shared loop guard identifying events produced by the bot account itself.
 - `test/TestHttpClient.ts`: Test layer helper (`makeTestHttpClient`) bridging mock responses into `HttpClient.HttpClient`.
