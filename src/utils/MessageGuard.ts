@@ -1,4 +1,4 @@
-import type { OneBotMessageEvent } from "@snowluma/sdk/types";
+import type { OneBotBaseEvent } from "@snowluma/sdk/types";
 
 /**
  * Whether a message event was sent by the bot account itself.
@@ -8,7 +8,7 @@ import type { OneBotMessageEvent } from "@snowluma/sdk/types";
  * messages as regular `message` events. Replying to either would make the bot
  * answer its own replies in a loop.
  */
-export function isSelfMessage(event: OneBotMessageEvent): boolean {
+export function isSelfMessage(event: OneBotBaseEvent & { readonly user_id?: number }): boolean {
   if (event.post_type === "message_sent") {
     return true;
   }
