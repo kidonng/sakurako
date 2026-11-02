@@ -8,6 +8,7 @@ import {
   extractUrls,
   HttpFetchError,
   isScrapingResult,
+  DEFAULT_IMAGE_TIMEOUT,
   MAX_IMAGE_BYTES,
   prepareOutgoingImage,
   scrapeAll,
@@ -530,6 +531,33 @@ describe("LinkPreviewEngine", () => {
         prepareOutgoingImage("https://cdn.donmai.us/original/missing.jpg").pipe(
           Effect.provide(layer),
         ),
+      );
+      expect(result).toBeUndefined();
+    });
+    it("has a 5-second default timeout", () => {
+      expect(DEFAULT_IMAGE_TIMEOUT).toBe("5 seconds");
+    });
+
+    it("returns undefined when image request times out", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response(
+            new ReadableStream({
+              start() {
+                // never enqueue or close
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "image/jpeg" },
+            },
+          ),
+      );
+      const result = await Effect.runPromise(
+        prepareOutgoingImage(
+          "https://example.com/hanging.jpg",
+          "20 millis",
+        ).pipe(Effect.provide(layer)),
       );
       expect(result).toBeUndefined();
     });

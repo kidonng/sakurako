@@ -164,6 +164,7 @@ class SendLinkPreviewReplyError extends Schema.TaggedError<
 }) {}
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
+export const DEFAULT_IMAGE_TIMEOUT: Duration.Input = "5 seconds";
 
 function isSvgUrl(url: string): boolean {
   try {
@@ -410,7 +411,7 @@ export const prepareOutgoingImage = Effect.fn(
   "LinkPreview.prepareOutgoingImage",
 )(function* (
   imageUrl: string,
-  timeoutDuration: Duration.Input = "10 seconds",
+  timeoutDuration: Duration.Input = DEFAULT_IMAGE_TIMEOUT,
 ): Effect.fn.Return<string | undefined, never, HttpClient.HttpClient> {
   const urlObj = yield* Effect.try({
     try: () => new URL(imageUrl),
