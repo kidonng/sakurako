@@ -20,8 +20,8 @@
     "metascraper-description": "^5.58.4",
     "metascraper-image": "^5.58.4",
     "metascraper-title": "^5.58.4",
-    "satori": "^0.12.1",
-    "sharp": "^0.33.5",
+    "satori": "^0.63.2",
+    "sharp": "^0.35.5",
     "string-width": "^8.3.0"
   },
   "scripts": {
