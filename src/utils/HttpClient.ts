@@ -120,7 +120,6 @@ export function fetchText(
             (error) =>
               new HttpFetchError({
                 url: request.url,
-                status: response.status,
                 detail: `Failed to read response text: ${error.message}`,
               }),
           ),
@@ -145,7 +144,6 @@ export function fetchJson<A, I, RD>(
           (error) =>
             new HttpFetchError({
               url: request.url,
-              status: response.status,
               detail: `Failed to parse response JSON: ${String(error)}`,
             }),
         ),

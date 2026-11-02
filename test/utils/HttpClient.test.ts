@@ -115,6 +115,25 @@ describe("HttpClient utils", () => {
       expect(error).toBeInstanceOf(HttpFetchError);
       expect(error.message).toContain("timed out");
     });
+    it("fails with HttpFetchError containing read detail when response body read fails", async () => {
+      const layer = makeTestHttpClient(() => {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.error(new Error("Network connection reset"));
+          },
+        });
+        return new Response(stream, { status: 200 });
+      });
+
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/broken-stream"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error).toBeInstanceOf(HttpFetchError);
+      expect(error.status).toBeUndefined();
+      expect(error.message).toContain("Failed to read response text");
+    });
   });
 
   describe("fetchJson", () => {
@@ -157,6 +176,8 @@ describe("HttpClient utils", () => {
 
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpFetchError);
+      expect(error.status).toBeUndefined();
+      expect(error.message).toContain("Failed to parse response JSON");
     });
   });
 
