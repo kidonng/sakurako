@@ -4,7 +4,10 @@ import type { AnyMessageSegment } from "@snowluma/sdk/types";
 import { Effect } from "effect";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { parseCommand } from "../../utils/Command.ts";
-import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
+import {
+  formatErrorDetail,
+  formatLogMessagePrefix,
+} from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { DanbooruClient } from "./DanbooruClient.ts";
 import { formatDanbooruTitle } from "./DanbooruFormatter.ts";
@@ -145,22 +148,11 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
       `${prefix} Sent Danbooru post #${post.id} with title "${title}".`,
     );
   }).pipe(
-    Effect.catch((error) => {
-      const cause =
-        typeof error === "object" && error !== null && "cause" in error
-          ? error.cause
-          : undefined;
-      const causeMsg =
-        cause instanceof Error
-          ? cause.message
-          : typeof cause === "string"
-            ? cause
-            : "";
-      const detail = causeMsg
-        ? `${String(error)} (cause: ${causeMsg})`
-        : String(error);
-      return Effect.logError(`${prefix} Danbooru handler failed: ${detail}`);
-    }),
+    Effect.catch((error) =>
+      Effect.logError(
+        `${prefix} Danbooru handler failed: ${formatErrorDetail(error)}`,
+      ),
+    ),
   );
 
   yield* executeDanbooru;

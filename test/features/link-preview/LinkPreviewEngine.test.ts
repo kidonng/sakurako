@@ -146,7 +146,7 @@ describe("LinkPreviewEngine", () => {
       ),
     );
 
-    expect(capturedUserAgent).toBe("Sakurako/1.0  (user #898759)");
+    expect(capturedUserAgent).toBe("Sakurako/1.0 (user #898759)");
   });
 
   it("handles missing title, description, image gracefully", async () => {

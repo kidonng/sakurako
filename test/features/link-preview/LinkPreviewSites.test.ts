@@ -279,7 +279,7 @@ describe("LinkPreviewSites", () => {
       );
       expect(
         getUserAgent(new URL("https://danbooru.donmai.us/posts/12459835")),
-      ).toBe("Sakurako/1.0  (user #898759)");
+      ).toBe(DANBOORU_USER_AGENT);
     });
   });
 

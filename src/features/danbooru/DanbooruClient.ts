@@ -7,6 +7,7 @@ import {
   Url,
 } from "effect/http";
 import { executeWithResponse, HttpFetchError } from "../../utils/HttpClient.ts";
+import { DANBOORU_USER_AGENT } from "../link-preview/LinkPreviewSites.ts";
 
 const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
@@ -81,10 +82,7 @@ export class DanbooruClient extends Context.Service<
           tags: queryTags,
         }).toString();
         const request = HttpClientRequest.get(targetUrl).pipe(
-          HttpClientRequest.setHeader(
-            "User-Agent",
-            "SakurakoBot/1.0 (https://github.com/kidonng/sakurako)",
-          ),
+          HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
         );
 
         return yield* executeWithResponse(
@@ -133,10 +131,7 @@ export class DanbooruClient extends Context.Service<
         url: string,
       ): Effect.fn.Return<string, DanbooruApiError> {
         const request = HttpClientRequest.get(url).pipe(
-          HttpClientRequest.setHeader(
-            "User-Agent",
-            "SakurakoBot/1.0 (https://github.com/kidonng/sakurako)",
-          ),
+          HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
         );
 
         return yield* executeWithResponse(

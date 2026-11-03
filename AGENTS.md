@@ -10,6 +10,7 @@ Key features include:
 - **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, applies site-specific custom displays (e.g. GitHub, Hacker News), truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
 - **Image Sauce**: Matches incoming messages strictly equaling `"/sauce"` replying to an image, queries SauceNao API, and replies with work title, author, and source link.
 - **Message Statistics**: Silently aggregates group member messages by type (total, media, links, interactions) into SQLite daily buckets using `@effect/sql-sqlite-bun` and `SqliteMigrator`. Generates Option B high-density leaderboard image cards via Satori + Sharp (`/stat`, `/stat all`) and replies with personal stats breakdowns (`/me`).
+- **Danbooru**: Matches incoming messages starting with `"/dbr"`, processes tags using an offline bilingual SQLite dictionary (`assets/danbooru-tags.sqlite`), queries Danbooru random SFW posts, and replies with official format title and image.
 
 ## Architecture & Data Flow
 
@@ -27,16 +28,15 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 [Message & Notice Streams] (Stream.Stream<IncomingMessage> & Stream.Stream<IncomingNotice>)
        │
        ▼ Stream.runForEach (concurrent dispatch)
-  ┌────┴───────────────────────────┬───────────────────────────────┬───────────────────────────────┐
-  ▼                                ▼                               ▼                               ▼
-[EchoBot]                      [LinkPreview]                   [Sauce]                         [Stats]
-(src/features/echo/EchoBot.ts)  (src/features/link-preview/     (src/features/sauce/            (src/features/stats/)
-  - Match: === "喵喵喵"            LinkPreview.ts)                 Sauce.ts)                       - Collector: silent counts
-  - Reply: context.reply         - Extract: get-urls             - Match: === "/sauce"           - Commands: /stat, /me
-                                 - Scrape: metascraper           - Query: SauceNao API           - SQLite: StatsRepository
-                                 - Reply: context.quote          - Reply: context.quote          - Render: Satori + Sharp
-       │                           │                               │                               │
-       └───────────────────────────┴───────────────────────────────┴───────────────────────────────┘
+  ┌────┴───────────────┬───────────────────┬───────────────────┬───────────────────┬───────────────────┐
+  ▼                    ▼                   ▼                   ▼                   ▼                   ▼
+[EchoBot]          [LinkPreview]       [Sauce]             [Danbooru]          [Stats]             ...
+(src/features/     (src/features/      (src/features/      (src/features/      (src/features/
+ echo/EchoBot.ts)   link-preview/)      sauce/Sauce.ts)     danbooru/)          stats/)
+  - "喵喵喵"           - metascraper       - /sauce            - /dbr [tags]       - /stat, /me
+  - context.reply      - context.quote     - context.quote     - context.reply     - Satori + Sharp
+       │                   │                   │                   │                   │
+       └───────────────────┴───────────────────┴───────────────────┴───────────────────┴───────────────────┘
                                    ▼
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
@@ -44,7 +44,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 - **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY` and `OPENROUTER_API_KEY` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket callbacks offer messages and notices to unbounded Queues, exposed downstream as typed `messages` and `notices` Streams.
-- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, `Sauce`, `StatsCollector`, and `StatsCommand`, and notices to `StatsCollector`. Each handler isolates errors per event with `Effect.catch`, ensuring streams remain active even if individual reply actions fail.
+- **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, `Sauce`, `Danbooru`, `StatsCollector`, and `StatsCommand`, and notices to `StatsCollector`. Each handler isolates errors per event with `Effect.catch`, ensuring streams remain active even if individual reply actions fail.
 
 ## Key Directories
 
@@ -67,6 +67,7 @@ All development tasks use Bun:
 - **Unused Code & Dependency Check**: `bun run knip` (runs `knip`)
 - **Format**: `bun run format` (runs `bun fmt`)
 - **Download Font**: `bun run download-font` (downloads MiSans font archive for stats rendering)
+- **Download Danbooru Tags**: `bun run download-tags` (downloads Danbooru bilingual tags SQLite database)
 - **Post-Install Setup**: `bun run prepare` (`effect-tsgo patch --typescript --oxlint`)
 
 ## Code Conventions & Common Patterns
@@ -107,6 +108,12 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/link-preview/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
 - `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
 - `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
+- `src/features/danbooru/Danbooru.ts`: `/dbr` command matching, tag limit verification, and reply dispatch.
+- `src/features/danbooru/DanbooruClient.ts`: Danbooru random post and local image fetch client with `DANBOORU_USER_AGENT`.
+- `src/features/danbooru/DanbooruTagMatcher.ts`: Offline SQLite tag dictionary search with exact, prefix, and compound fuzzy matching.
+- `src/features/danbooru/DanbooruFormatter.ts`: Danbooru post title formatting mimicking upstream `humanized_essential_tag_string`.
+- `docs/features/danbooru.md`: User-facing documentation for `/dbr` image search.
+- `scripts/download-danbooru-tags.ts`: Tag setup script fetching and indexing `tag.sqlite` into `assets/danbooru-tags.sqlite`.
 - `src/features/stats/StatsRepository.ts`: SQLite persistence, schema migrations (`SqliteMigrator`), atomic daily upserts, and 30-day / all-time aggregate queries.
 - `src/features/stats/StatsClassifier.ts`: Pure event classification (media segments, URLs, poke/reaction notices) and Asia/Shanghai date bucketing.
 - `src/features/stats/StatsCollector.ts`: Silent background event consumer for incoming group messages and notices.
