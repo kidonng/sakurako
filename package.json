@@ -28,6 +28,7 @@
     "check": "tsc",
     "format": "bun fmt",
     "download-font": "bun scripts/download-font.ts",
+    "download-tags": "bun scripts/download-danbooru-tags.ts",
     "inspect-msg": "bun scripts/inspect-msg.ts",
     "knip": "knip",
     "lint": "oxlint",
