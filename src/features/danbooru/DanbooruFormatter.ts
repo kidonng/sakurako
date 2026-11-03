@@ -14,7 +14,7 @@ function splitTags(raw: string): string[] {
     .split(/\s+/)
     .map((t) => t.replaceAll("_", " "));
 }
-export function toSentence(words: readonly string[]): string {
+function toSentence(words: readonly string[]): string {
   if (words.length === 0) return "";
   if (words.length === 1) return words[0] ?? "";
   if (words.length === 2) return `${words[0] ?? ""} and ${words[1] ?? ""}`;

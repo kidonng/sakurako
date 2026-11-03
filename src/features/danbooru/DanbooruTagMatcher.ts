@@ -3,7 +3,7 @@ import { Context, Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
 
-export function levenshtein(a: string, b: string): number {
+function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   if (m === 0) return n;

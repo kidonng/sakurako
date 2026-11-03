@@ -7,6 +7,9 @@ import { FetchHttpClient } from "effect/http";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
+import { handleDanbooruMessage } from "./features/danbooru/Danbooru.ts";
+import { DanbooruClient } from "./features/danbooru/DanbooruClient.ts";
+import { DanbooruTagMatcher } from "./features/danbooru/DanbooruTagMatcher.ts";
 import {
   handleStatsMessage,
   handleStatsNotice,
@@ -36,6 +39,7 @@ export const MainProgram = Effect.gen(function* () {
           handleIncomingMessage(item),
           handleLinkPreviewMessage(item),
           handleSauceMessage(item),
+          handleDanbooruMessage(item),
           handleStatsMessage(item),
           handleStatsCommand(item),
         ],
@@ -74,6 +78,27 @@ const StatsRepoLive = StatsRepository.layer.pipe(
   Layer.provide(SqliteLive),
   Layer.provideMerge(EnsureDataDir),
 );
+const EnsureAssetsDir = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem;
+    yield* fs.makeDirectory("assets", { recursive: true });
+  }),
+).pipe(Layer.provide(BunFileSystem.layer));
+
+const DanbooruSqliteLive = SqliteClient.layer({
+  filename: "assets/danbooru-tags.sqlite",
+  readonly: true,
+});
+const DanbooruTagMatcherLive = DanbooruTagMatcher.layer.pipe(
+  Layer.provide(DanbooruSqliteLive),
+  Layer.provideMerge(EnsureAssetsDir),
+  Layer.provide(BunFileSystem.layer),
+);
+
+const DanbooruClientLive = DanbooruClient.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+);
+
 
 export const MainLive = MainProgram.pipe(
   Effect.provide(
@@ -83,6 +108,8 @@ export const MainLive = MainProgram.pipe(
       StatsRepoLive,
       StatsRenderer.layer,
       StatsCooldown.layer,
+      DanbooruTagMatcherLive,
+      DanbooruClientLive,
     ),
   ),
 );

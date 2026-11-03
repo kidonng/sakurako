@@ -8,7 +8,7 @@ import {
 } from "effect/http";
 import { executeWithResponse, HttpFetchError } from "../../utils/HttpClient.ts";
 
-export const DanbooruPostSchema = Schema.Struct({
+const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
   file_url: Schema.optional(Schema.String),
   large_file_url: Schema.optional(Schema.String),
@@ -44,7 +44,7 @@ export class DanbooruApiError extends Schema.TaggedError<
   message: Schema.String,
 }) {}
 
-export const DANBOORU_API_BASE = "https://danbooru.donmai.us/posts/random.json";
+const DANBOORU_API_BASE = "https://danbooru.donmai.us/posts/random.json";
 
 export class DanbooruClient extends Context.Service<
   DanbooruClient,
