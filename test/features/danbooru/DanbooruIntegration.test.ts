@@ -30,6 +30,7 @@ describe("Danbooru integration message flow", () => {
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
     });
 
     await Effect.runPromise(

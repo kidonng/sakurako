@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { handleDanbooruMessage } from "../../../src/features/danbooru/Danbooru.ts";
 import {
+  DanbooruApiError,
   DanbooruClient,
   DanbooruNotFoundError,
 } from "../../../src/features/danbooru/DanbooruClient.ts";
@@ -34,6 +35,7 @@ describe("handleDanbooruMessage", () => {
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
     });
 
     await Effect.runPromise(
@@ -77,6 +79,7 @@ describe("handleDanbooruMessage", () => {
           tag_string_artist: "artist",
           tag_string_general: "white_hair",
         }),
+      downloadImage: () => Effect.succeed("base64://fakeimagedata"),
     });
 
     await Effect.runPromise(
@@ -93,7 +96,11 @@ describe("handleDanbooruMessage", () => {
       data: Record<string, unknown>;
     }[];
     expect(arr.some((s) => s.type === "text" && s.data.text?.toString().includes("🔍 white_hair"))).toBe(true);
-    expect(arr.some((s) => s.type === "image" && s.data.file === "https://example.com/100.jpg")).toBe(true);
+    expect(
+      arr.some(
+        (s) => s.type === "image" && s.data.file === "base64://fakeimagedata",
+      ),
+    ).toBe(true);
   });
 
   it("replies with not found message when Danbooru returns DanbooruNotFoundError", async () => {
@@ -120,6 +127,7 @@ describe("handleDanbooruMessage", () => {
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () =>
         Effect.fail(new DanbooruNotFoundError({ queryTags: "test" })),
+      downloadImage: () => Effect.die("should not be called"),
     });
 
     await Effect.runPromise(
@@ -154,6 +162,7 @@ describe("handleDanbooruMessage", () => {
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
     });
 
     await Effect.runPromise(
@@ -163,5 +172,54 @@ describe("handleDanbooruMessage", () => {
     );
 
     expect(replied).toBe("[未找到匹配的标签]");
+  });
+
+  it("replies with download failure message when image download fails", async () => {
+    let replied = "";
+    const fakeItem = {
+      event: {
+        post_type: "message",
+        message_type: "group",
+        user_id: 10001,
+        message: [{ type: "text", data: { text: "/dbr" } }],
+      },
+      context: {
+        reply: (msg: string) => {
+          replied = msg;
+          return Promise.resolve();
+        },
+      },
+    } as unknown as IncomingMessage;
+
+    const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+    });
+    const ClientMock = Layer.succeed(DanbooruClient, {
+      getRandomPost: () =>
+        Effect.succeed({
+          id: 100,
+          large_file_url: "https://example.com/100.jpg",
+          tag_string_character: "",
+          tag_string_copyright: "",
+          tag_string_artist: "artist",
+          tag_string_general: "white_hair",
+        }),
+      downloadImage: () =>
+        Effect.fail(
+          new DanbooruApiError({
+            status: 403,
+            message: "HTTP 403",
+          }),
+        ),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(fakeItem).pipe(
+        Effect.provide(Layer.merge(MatcherMock, ClientMock)),
+      ),
+    );
+
+    expect(replied).toBe("[下载图片失败]");
   });
 });

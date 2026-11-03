@@ -109,4 +109,48 @@ describe("DanbooruClient", () => {
 
     expect(result._tag).toBe("DanbooruApiError");
   });
+
+  it("downloads image and encodes to base64 URI", async () => {
+    const fakeImageBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    const clientLive = makeTestHttpClient((req) => {
+      expect(req.url).toBe("https://example.com/test.jpg");
+      return new Response(fakeImageBuffer, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+
+    const program = Effect.gen(function* () {
+      const client = yield* DanbooruClient;
+      const base64Uri = yield* client.downloadImage("https://example.com/test.jpg");
+      expect(base64Uri.startsWith("base64://")).toBe(true);
+      expect(base64Uri).toBe(`base64://${Buffer.from(fakeImageBuffer).toString("base64")}`);
+    });
+
+    await Effect.runPromise(
+      program.pipe(
+        Effect.provide(DanbooruClient.layer.pipe(Layer.provide(clientLive))),
+      ),
+    );
+  });
+
+  it("maps download failure to DanbooruApiError", async () => {
+    const client403 = makeTestHttpClient(
+      () => new Response("Forbidden", { status: 403 }),
+    );
+
+    const program = Effect.gen(function* () {
+      const client = yield* DanbooruClient;
+      return yield* client.downloadImage("https://example.com/forbidden.jpg");
+    });
+
+    const result = await Effect.runPromise(
+      program.pipe(
+        Effect.provide(DanbooruClient.layer.pipe(Layer.provide(client403))),
+        Effect.flip,
+      ),
+    );
+
+    expect(result._tag).toBe("DanbooruApiError");
+  });
 });

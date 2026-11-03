@@ -110,6 +110,24 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
       return;
     }
 
+    const downloadedImage = yield* client.downloadImage(imageUrl).pipe(
+      Effect.catch((downloadError) =>
+        Effect.gen(function* () {
+          yield* Effect.logWarning(
+            `${prefix} Failed to download image for post #${post.id} from ${imageUrl}: ${String(downloadError)}`,
+          );
+          yield* Effect.tryPromise(() =>
+            item.context.reply("[下载图片失败]"),
+          );
+          return undefined;
+        }),
+      ),
+    );
+
+    if (!downloadedImage) {
+      return;
+    }
+
     const title = formatDanbooruTitle(post);
     let textContent = "";
     if (isModified && searchTags.length > 0) {
@@ -119,7 +137,7 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
 
     const replySegments: AnyMessageSegment[] = [
       segments.text(textContent),
-      segments.image(imageUrl),
+      segments.image(downloadedImage),
     ];
 
     yield* Effect.tryPromise(() => item.context.reply(replySegments));
@@ -127,9 +145,22 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
       `${prefix} Sent Danbooru post #${post.id} with title "${title}".`,
     );
   }).pipe(
-    Effect.catch((error) =>
-      Effect.logError(`${prefix} Danbooru handler failed: ${String(error)}`),
-    ),
+    Effect.catch((error) => {
+      const cause =
+        typeof error === "object" && error !== null && "cause" in error
+          ? error.cause
+          : undefined;
+      const causeMsg =
+        cause instanceof Error
+          ? cause.message
+          : typeof cause === "string"
+            ? cause
+            : "";
+      const detail = causeMsg
+        ? `${String(error)} (cause: ${causeMsg})`
+        : String(error);
+      return Effect.logError(`${prefix} Danbooru handler failed: ${detail}`);
+    }),
   );
 
   yield* executeDanbooru;

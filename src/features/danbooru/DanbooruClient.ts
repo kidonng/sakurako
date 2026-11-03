@@ -55,6 +55,9 @@ export class DanbooruClient extends Context.Service<
       DanbooruPost,
       DanbooruNotFoundError | DanbooruRateLimitError | DanbooruApiError
     >;
+    readonly downloadImage: (
+      url: string,
+    ) => Effect.Effect<string, DanbooruApiError>;
   }
 >()("sakurako/danbooru/DanbooruClient") {
   static readonly layer = Layer.effect(
@@ -126,8 +129,43 @@ export class DanbooruClient extends Context.Service<
         );
       });
 
+      const downloadImage = Effect.fnUntraced(function* (
+        url: string,
+      ): Effect.fn.Return<string, DanbooruApiError> {
+        const request = HttpClientRequest.get(url).pipe(
+          HttpClientRequest.setHeader(
+            "User-Agent",
+            "SakurakoBot/1.0 (https://github.com/kidonng/sakurako)",
+          ),
+        );
+
+        return yield* executeWithResponse(
+          request,
+          (response) =>
+            Effect.gen(function* () {
+              const buffer = yield* response.arrayBuffer;
+              const base64 = Buffer.from(buffer).toString("base64");
+              return `base64://${base64}`;
+            }),
+          { timeoutDuration: "20 seconds" },
+        ).pipe(
+          Effect.provideService(HttpClient.HttpClient, httpClient),
+          Effect.mapError((err) => {
+            const status =
+              "status" in err && typeof err.status === "number"
+                ? err.status
+                : 0;
+            return new DanbooruApiError({
+              status,
+              message: err.message,
+            });
+          }),
+        );
+      });
+
       return DanbooruClient.of({
         getRandomPost,
+        downloadImage,
       });
     }),
   );
