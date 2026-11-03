@@ -110,7 +110,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/stats/StatsRepository.ts`: SQLite persistence, schema migrations (`SqliteMigrator`), atomic daily upserts, and 30-day / all-time aggregate queries.
 - `src/features/stats/StatsClassifier.ts`: Pure event classification (media segments, URLs, poke/reaction notices) and Asia/Shanghai date bucketing.
 - `src/features/stats/StatsCollector.ts`: Silent background event consumer for incoming group messages and notices.
-- `src/features/stats/StatsRenderer.ts`: Leaderboard image card rendering pipeline using Satori and Sharp with MiSans typography.
+- `src/features/stats/StatsRenderer.tsx`: Leaderboard image card rendering pipeline using Satori and Sharp with MiSans typography.
 - `src/features/stats/StatsCommand.ts`: Active command router for `/stat`, `/stat all`, and `/me` with cooldown and empty-state fallbacks.
 - `docs/features/stats.md`: User-facing documentation for group message statistics.
 - `scripts/download-font.ts`: Font setup script fetching and extracting MiSans from official CDN.

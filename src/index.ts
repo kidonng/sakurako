@@ -13,7 +13,7 @@ import {
 } from "./features/stats/StatsCollector.ts";
 import { handleStatsCommand } from "./features/stats/StatsCommand.ts";
 import { StatsCooldown } from "./features/stats/StatsCooldown.ts";
-import { StatsRenderer } from "./features/stats/StatsRenderer.ts";
+import { StatsRenderer } from "./features/stats/StatsRenderer.tsx";
 import { StatsRepository } from "./features/stats/StatsRepository.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
 

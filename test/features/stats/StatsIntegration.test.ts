@@ -13,7 +13,7 @@ import {
 } from "../../../src/index.ts";
 import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
 import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
-import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
+import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.tsx";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage, IncomingNotice } from "../../../src/SnowLuma.ts";
 

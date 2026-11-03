@@ -5,7 +5,7 @@ import { isGroupMessage, isSelfMessage } from "../../utils/MessageGuard.ts";
 import { parseCommand } from "../../utils/Command.ts";
 import { getDaysAgoShanghaiDateString } from "./StatsClassifier.ts";
 import { StatsCooldown } from "./StatsCooldown.ts";
-import { StatsRenderer } from "./StatsRenderer.ts";
+import { StatsRenderer } from "./StatsRenderer.tsx";
 import { StatsRepository } from "./StatsRepository.ts";
 
 export const handleStatsCommand = Effect.fnUntraced(

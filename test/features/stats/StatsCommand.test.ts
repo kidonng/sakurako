@@ -4,7 +4,7 @@ import type { OneBotGroupMessageEvent } from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
 import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
 import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
-import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.ts";
+import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.tsx";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
 

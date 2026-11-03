@@ -4,7 +4,7 @@ import sharp from "sharp";
 import {
   type RenderLeaderboardOptions,
   StatsRenderer,
-} from "../../../src/features/stats/StatsRenderer.ts";
+} from "../../../src/features/stats/StatsRenderer.tsx";
 
 describe("StatsRenderer", () => {
   it("renders leaderboard to PNG buffer with correct magic bytes", async () => {
@@ -46,6 +46,46 @@ describe("StatsRenderer", () => {
       expect(pngBuffer[2]).toBe(0x4e);
       expect(pngBuffer[3]).toBe(0x47);
 
+      const metadata = yield* Effect.promise(() => sharp(pngBuffer).metadata());
+      expect(metadata.width).toBe(1240);
+      expect(metadata.height).toBeGreaterThan(0);
+    });
+
+    await Effect.runPromise(program.pipe(Effect.provide(StatsRenderer.layer)));
+  });
+
+  it("renders leaderboard with extremely long nickname and missing nickname gracefully", async () => {
+    const options: RenderLeaderboardOptions = {
+      timeLabel: "今日",
+      data: {
+        groupTotal: 9999,
+        rows: [
+          {
+            userId: 2001,
+            nickname:
+              "A very very long nickname that exceeds normal column width and requires ellipsis truncation",
+            totalCount: 5000,
+            mediaCount: 2000,
+            linkCount: 500,
+            interactionCount: 300,
+          },
+          {
+            userId: 2002,
+            nickname: "",
+            totalCount: 4999,
+            mediaCount: 1500,
+            linkCount: 400,
+            interactionCount: 200,
+          },
+        ],
+      },
+    };
+
+    const program = Effect.gen(function* () {
+      const renderer = yield* StatsRenderer;
+      const pngBuffer = yield* renderer.renderLeaderboard(options);
+
+      expect(pngBuffer).toBeInstanceOf(Buffer);
       const metadata = yield* Effect.promise(() => sharp(pngBuffer).metadata());
       expect(metadata.width).toBe(1240);
       expect(metadata.height).toBeGreaterThan(0);
