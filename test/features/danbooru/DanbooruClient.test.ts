@@ -122,9 +122,13 @@ describe("DanbooruClient", () => {
 
     const program = Effect.gen(function* () {
       const client = yield* DanbooruClient;
-      const base64Uri = yield* client.downloadImage("https://example.com/test.jpg");
+      const base64Uri = yield* client.downloadImage(
+        "https://example.com/test.jpg",
+      );
       expect(base64Uri.startsWith("base64://")).toBe(true);
-      expect(base64Uri).toBe(`base64://${Buffer.from(fakeImageBuffer).toString("base64")}`);
+      expect(base64Uri).toBe(
+        `base64://${Buffer.from(fakeImageBuffer).toString("base64")}`,
+      );
     });
 
     await Effect.runPromise(

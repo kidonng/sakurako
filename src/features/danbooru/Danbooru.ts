@@ -119,9 +119,7 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
           yield* Effect.logWarning(
             `${prefix} Failed to download image for post #${post.id} from ${imageUrl}: ${String(downloadError)}`,
           );
-          yield* Effect.tryPromise(() =>
-            item.context.reply("[下载图片失败]"),
-          );
+          yield* Effect.tryPromise(() => item.context.reply("[下载图片失败]"));
           return undefined;
         }),
       ),

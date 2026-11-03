@@ -96,7 +96,6 @@ const DanbooruClientLive = DanbooruClient.layer.pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 
-
 export const MainLive = MainProgram.pipe(
   Effect.provide(
     Layer.mergeAll(

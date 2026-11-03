@@ -51,8 +51,7 @@ function makeFallbackTagMatcher() {
 
     const deduplicated = Array.from(new Set(matchedList));
     const isModified =
-      deduplicated.join(" ") !==
-      tokens.map((t) => t.toLowerCase()).join(" ");
+      deduplicated.join(" ") !== tokens.map((t) => t.toLowerCase()).join(" ");
     return { tags: deduplicated, isModified };
   });
 

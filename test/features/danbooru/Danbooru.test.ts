@@ -95,7 +95,13 @@ describe("handleDanbooruMessage", () => {
       type: string;
       data: Record<string, unknown>;
     }[];
-    expect(arr.some((s) => s.type === "text" && s.data.text?.toString().includes("🔍 white_hair"))).toBe(true);
+    expect(
+      arr.some(
+        (s) =>
+          s.type === "text" &&
+          s.data.text?.toString().includes("🔍 white_hair"),
+      ),
+    ).toBe(true);
     expect(
       arr.some(
         (s) => s.type === "image" && s.data.file === "base64://fakeimagedata",

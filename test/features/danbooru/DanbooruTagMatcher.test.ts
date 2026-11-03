@@ -25,7 +25,10 @@ describe("DanbooruTagMatcher", () => {
     } as unknown as FileSystem);
 
     const TestLive = Layer.merge(
-      DanbooruTagMatcher.layer.pipe(Layer.provide(MockFs), Layer.provide(SqlLive)),
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
       SqlLive,
     );
 
@@ -50,7 +53,10 @@ describe("DanbooruTagMatcher", () => {
     } as unknown as FileSystem);
 
     const TestLive = Layer.merge(
-      DanbooruTagMatcher.layer.pipe(Layer.provide(MockFs), Layer.provide(SqlLive)),
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
       SqlLive,
     );
 
@@ -74,7 +80,10 @@ describe("DanbooruTagMatcher", () => {
     } as unknown as FileSystem);
 
     const TestLive = Layer.merge(
-      DanbooruTagMatcher.layer.pipe(Layer.provide(MockFs), Layer.provide(SqlLive)),
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
       SqlLive,
     );
 
@@ -120,7 +129,10 @@ describe("DanbooruTagMatcher", () => {
     } as unknown as FileSystem);
 
     const TestLive = Layer.merge(
-      DanbooruTagMatcher.layer.pipe(Layer.provide(MockFs), Layer.provide(SqlLive)),
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
       SqlLive,
     );
 
@@ -144,9 +156,7 @@ describe("DanbooruTagMatcher", () => {
     } as unknown as FileSystem);
 
     await Effect.runPromise(
-      testProgram.pipe(
-        Effect.provide(TestLive.pipe(Layer.provide(MockFs))),
-      ),
+      testProgram.pipe(Effect.provide(TestLive.pipe(Layer.provide(MockFs)))),
     );
   });
 });
