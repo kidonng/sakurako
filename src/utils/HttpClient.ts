@@ -3,6 +3,7 @@ import { Cause, Duration, Effect, Option, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 export const DEFAULT_USER_AGENT = "Sakurako/1.0";
+export const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
 
 export class HttpFetchError extends Schema.TaggedError<
   HttpFetchError,

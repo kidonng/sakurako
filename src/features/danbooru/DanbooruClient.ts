@@ -6,8 +6,11 @@ import {
   HttpClientResponse,
   Url,
 } from "effect/http";
-import { executeWithResponse, HttpFetchError } from "../../utils/HttpClient.ts";
-import { DANBOORU_USER_AGENT } from "../link-preview/LinkPreviewSites.ts";
+import {
+  DANBOORU_USER_AGENT,
+  executeWithResponse,
+  HttpFetchError,
+} from "../../utils/HttpClient.ts";
 
 const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
@@ -134,15 +137,12 @@ export class DanbooruClient extends Context.Service<
           HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
         );
 
-        return yield* executeWithResponse(
-          request,
-          (response) =>
-            Effect.gen(function* () {
-              const buffer = yield* response.arrayBuffer;
-              const base64 = Buffer.from(buffer).toString("base64");
-              return `base64://${base64}`;
-            }),
-          { timeoutDuration: "20 seconds" },
+        return yield* executeWithResponse(request, (response) =>
+          Effect.gen(function* () {
+            const buffer = yield* response.arrayBuffer;
+            const base64 = Buffer.from(buffer).toString("base64");
+            return `base64://${base64}`;
+          }),
         ).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.mapError((err) => {
