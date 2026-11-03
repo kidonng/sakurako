@@ -101,4 +101,52 @@ describe("DanbooruTagMatcher", () => {
 
     await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
   });
+
+  it("matches reversed compound tags like miku_hatsune to hatsune_miku", async () => {
+    const testProgram = Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE tags (name TEXT, cn_name TEXT, category INTEGER, post_count INTEGER);`;
+      yield* sql`INSERT INTO tags VALUES ('hatsune_miku', '初音未来', 4, 150000);`;
+
+      const matcher = yield* DanbooruTagMatcher;
+      const res = yield* matcher.matchQuery("miku_hatsune");
+      expect(res.tags).toEqual(["hatsune_miku"]);
+      expect(res.isModified).toBe(true);
+    });
+
+    const SqlLive = SqliteClient.layer({ filename: ":memory:" });
+    const MockFs = Layer.succeed(FileSystem, {
+      exists: () => Effect.succeed(true),
+    } as unknown as FileSystem);
+
+    const TestLive = Layer.merge(
+      DanbooruTagMatcher.layer.pipe(Layer.provide(MockFs), Layer.provide(SqlLive)),
+      SqlLive,
+    );
+
+    await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
+  });
+
+  it("builds live layer gracefully when database does not exist on disk", async () => {
+    const testProgram = Effect.gen(function* () {
+      const matcher = yield* DanbooruTagMatcher;
+      const res = yield* matcher.matchQuery("hatsune_miku");
+      expect(res.tags).toEqual(["hatsune_miku"]);
+      expect(res.isModified).toBe(false);
+    });
+
+    const TestLive = DanbooruTagMatcher.live({
+      filename: "assets/non-existent-tags.sqlite",
+    });
+
+    const MockFs = Layer.succeed(FileSystem, {
+      exists: () => Effect.succeed(false),
+    } as unknown as FileSystem);
+
+    await Effect.runPromise(
+      testProgram.pipe(
+        Effect.provide(TestLive.pipe(Layer.provide(MockFs))),
+      ),
+    );
+  });
 });
