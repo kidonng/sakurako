@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "bun:test";
 import * as cheerio from "cheerio";
 import {
@@ -206,10 +207,26 @@ describe("LinkPreviewSites", () => {
         htmlDom: $,
         url: "https://danbooru.donmai.us/posts/12459835",
       });
-      expect(title).toBe("泄矢诹访子 (东方Project) 画师 moni_monico");
+      expect(title).toBe(
+        existsSync("assets/danbooru-tags.sqlite")
+          ? "泄矢诹访子 (东方Project) 画师 moni_monico"
+          : "moriya suwako (touhou) 画师 moni_monico",
+      );
     });
 
-    it("strips ' | Danbooru' suffix on non-post or fallback pages", () => {
+    it("strips ' | Danbooru' suffix on post pages with fallback title", () => {
+      const html = `<html><head><title>deleted post | Danbooru</title></head></html>`;
+      const $ = cheerio.load(html);
+      const titleRule = danbooruCustomizer.metascraperRules?.title;
+      expect(titleRule).toBeDefined();
+      const title = titleRule!({
+        htmlDom: $,
+        url: "https://danbooru.donmai.us/posts/9999999",
+      });
+      expect(title).toBe("deleted post");
+    });
+
+    it("leaves non-post Danbooru pages to default scraper", () => {
       const html = `<html><head><title>Search: cat_ears | Danbooru</title></head></html>`;
       const $ = cheerio.load(html);
       const titleRule = danbooruCustomizer.metascraperRules?.title;
@@ -218,7 +235,7 @@ describe("LinkPreviewSites", () => {
         htmlDom: $,
         url: "https://danbooru.donmai.us/posts?tags=cat_ears",
       });
-      expect(title).toBe("Search: cat_ears");
+      expect(title).toBeUndefined();
     });
   });
 

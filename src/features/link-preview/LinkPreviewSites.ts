@@ -132,9 +132,11 @@ export const danbooruCustomizer: SiteCustomizer = {
       try {
         const urlObj = new URL(url);
         const postMatch = urlObj.pathname.match(DANBOORU_POST_REGEX);
+        if (!postMatch || !postMatch[1]) {
+          return undefined;
+        }
 
-        if (postMatch && postMatch[1]) {
-          const postId = Number.parseInt(postMatch[1], 10);
+        const postId = Number.parseInt(postMatch[1], 10);
           const charTags: string[] = [];
           htmlDom("ul.character-tag-list li[data-tag-name]").each((_, el) => {
             const tag = htmlDom(el).attr("data-tag-name");
@@ -170,7 +172,6 @@ export const danbooruCustomizer: SiteCustomizer = {
               translations,
             );
           }
-        }
 
         const fallback =
           htmlDom('meta[property="og:title"]').attr("content") ||
