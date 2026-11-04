@@ -1,8 +1,45 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
+import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Context, Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
+
+export function lookupDanbooruTagTranslations(
+  tags: readonly string[],
+  dbPath = "assets/danbooru-tags.sqlite",
+): Map<string, string> {
+  const result = new Map<string, string>();
+  const validTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+  if (validTags.length === 0 || !existsSync(dbPath)) {
+    return result;
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      const placeholders = validTags.map(() => "?").join(",");
+      const rows = db
+        .query<{ name: string; cn_name: string | null }, string[]>(
+          `SELECT name, cn_name FROM tags WHERE name IN (${placeholders})`,
+        )
+        .all(...validTags);
+
+      for (const row of rows) {
+        if (row.cn_name && row.cn_name.trim().length > 0) {
+          result.set(row.name, row.cn_name.trim());
+        }
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    // Ignore and return partial or empty map on error
+  }
+
+  return result;
+}
 
 function levenshtein(a: string, b: string): number {
   const m = a.length;
@@ -54,10 +91,13 @@ function makeFallbackTagMatcher() {
       deduplicated.join(" ") !== tokens.map((t) => t.toLowerCase()).join(" ");
     return { tags: deduplicated, isModified };
   });
+    const getTagTranslations = () =>
+      Effect.succeed(new Map<string, string>() as ReadonlyMap<string, string>);
 
   return DanbooruTagMatcher.of({
     matchTag,
     matchQuery,
+    getTagTranslations,
   });
 }
 
@@ -69,6 +109,9 @@ export class DanbooruTagMatcher extends Context.Service<
       readonly tags: readonly string[];
       readonly isModified: boolean;
     }>;
+    readonly getTagTranslations: (
+      tags: readonly string[],
+    ) => Effect.Effect<ReadonlyMap<string, string>>;
   }
 >()("sakurako/danbooru/DanbooruTagMatcher") {
   static readonly layer = Layer.effect(
@@ -209,10 +252,34 @@ export class DanbooruTagMatcher extends Context.Service<
           tokens.map((t) => t.toLowerCase()).join(" ");
         return { tags: deduplicated, isModified };
       });
+      const getTagTranslations = Effect.fnUntraced(function* (
+        tags: readonly string[],
+      ) {
+        const validTags = tags
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean);
+        const translationMap = new Map<string, string>();
+        if (validTags.length === 0 || !dbExists) {
+          return translationMap as ReadonlyMap<string, string>;
+        }
+
+        const rows = yield* sql<{ name: string; cn_name: string | null }>`
+          SELECT name, cn_name FROM tags
+          WHERE name IN ${sql.in(validTags)}
+        `.pipe(Effect.orElseSucceed(() => []));
+
+        for (const row of rows) {
+          if (row.cn_name && row.cn_name.trim().length > 0) {
+            translationMap.set(row.name, row.cn_name.trim());
+          }
+        }
+        return translationMap as ReadonlyMap<string, string>;
+      });
 
       return DanbooruTagMatcher.of({
         matchTag,
         matchQuery,
+        getTagTranslations,
       });
     }),
   );

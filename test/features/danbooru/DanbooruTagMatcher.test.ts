@@ -4,7 +4,10 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
-import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
+import {
+  DanbooruTagMatcher,
+  lookupDanbooruTagTranslations,
+} from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 
 describe("DanbooruTagMatcher", () => {
   it("matches exact Chinese and English tags", async () => {
@@ -158,5 +161,50 @@ describe("DanbooruTagMatcher", () => {
     await Effect.runPromise(
       testProgram.pipe(Effect.provide(TestLive.pipe(Layer.provide(MockFs)))),
     );
+  });
+
+  it("batch translates tags to Chinese using getTagTranslations and lookupDanbooruTagTranslations", async () => {
+    const testProgram = Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE tags (name TEXT, cn_name TEXT, category INTEGER, post_count INTEGER);`;
+      yield* sql`INSERT INTO tags VALUES ('white_hair', '白发', 0, 100000), ('cat_ears', '猫耳', 0, 50000);`;
+
+      const matcher = yield* DanbooruTagMatcher;
+      const translations = yield* matcher.getTagTranslations([
+        "white_hair",
+        "cat_ears",
+        "unknown_tag_xyz",
+      ]);
+      expect(translations.get("white_hair")).toBe("白发");
+      expect(translations.get("cat_ears")).toBe("猫耳");
+      expect(translations.has("unknown_tag_xyz")).toBe(false);
+    });
+
+    const SqlLive = SqliteClient.layer({ filename: ":memory:" });
+    const MockFs = Layer.succeed(FileSystem, {
+      exists: () => Effect.succeed(true),
+    } as unknown as FileSystem);
+
+    const TestLive = Layer.merge(
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
+      SqlLive,
+    );
+
+    await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
+
+    const syncMap = lookupDanbooruTagTranslations(["white_hair", "cat_ears"]);
+    expect(syncMap.get("white_hair")).toBe("白发");
+    expect(syncMap.get("cat_ears")).toBe("猫耳");
+  });
+
+  it("gracefully falls back when database file does not exist", () => {
+    const syncMap = lookupDanbooruTagTranslations(
+      ["white_hair"],
+      "assets/non-existent.sqlite",
+    );
+    expect(syncMap.size).toBe(0);
   });
 });

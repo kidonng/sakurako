@@ -32,6 +32,7 @@ describe("handleDanbooruMessage", () => {
       matchTag: () => Effect.succeed(undefined as string | undefined),
       matchQuery: () =>
         Effect.succeed({ tags: ["t1", "t2", "t3"], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () => Effect.die("should not be called"),
@@ -68,6 +69,7 @@ describe("handleDanbooruMessage", () => {
       matchTag: () => Effect.succeed(undefined as string | undefined),
       matchQuery: () =>
         Effect.succeed({ tags: ["white_hair"], isModified: true }),
+      getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () =>
@@ -129,6 +131,7 @@ describe("handleDanbooruMessage", () => {
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
       matchQuery: () => Effect.succeed({ tags: ["test"], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () =>
@@ -165,6 +168,7 @@ describe("handleDanbooruMessage", () => {
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
       matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () => Effect.die("should not be called"),
@@ -200,6 +204,7 @@ describe("handleDanbooruMessage", () => {
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
       matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
       getRandomPost: () =>
