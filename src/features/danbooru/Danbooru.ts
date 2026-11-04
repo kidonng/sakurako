@@ -10,7 +10,11 @@ import {
 } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { DanbooruClient } from "./DanbooruClient.ts";
-import { formatDanbooruTitle } from "./DanbooruFormatter.ts";
+import {
+  cleanArtistName,
+  formatDanbooruTitle,
+  parseCharacterSeries,
+} from "./DanbooruFormatter.ts";
 import { DanbooruTagMatcher } from "./DanbooruTagMatcher.ts";
 
 export const handleDanbooruMessage = Effect.fnUntraced(function* (
@@ -142,9 +146,12 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
     let textContent = "";
     if (searchTags.length > 0) {
       const searchTranslations = yield* matcher.getTagTranslations(searchTags);
-      const searchTagsCn = searchTags.map(
-        (t) => searchTranslations.get(t) ?? t,
-      );
+      const searchTagsCn = searchTags.map((t) => {
+        const raw = searchTranslations.get(t) ?? t;
+        const withoutArtist = cleanArtistName(raw);
+        const { base } = parseCharacterSeries(withoutArtist);
+        return base || withoutArtist;
+      });
       const userNorm = rawQuery.trim().split(/\s+/).join(" ").toLowerCase();
       const cnNorm = searchTagsCn.join(" ").toLowerCase();
       if (userNorm !== cnNorm) {

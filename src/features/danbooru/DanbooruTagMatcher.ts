@@ -56,8 +56,8 @@ function makeFallbackTagMatcher() {
       deduplicated.join(" ") !== tokens.map((t) => t.toLowerCase()).join(" ");
     return { tags: deduplicated, isModified };
   });
-    const getTagTranslations = () =>
-      Effect.succeed(new Map<string, string>() as ReadonlyMap<string, string>);
+  const getTagTranslations = () =>
+    Effect.succeed(new Map<string, string>() as ReadonlyMap<string, string>);
 
   return DanbooruTagMatcher.of({
     matchTag,
@@ -100,23 +100,36 @@ export class DanbooruTagMatcher extends Context.Service<
           return undefined;
         }
 
-        // 1. Exact match on name or cn_name
-        const exactRows = yield* sql<{ name: string; post_count: number }>`
+        // 1. Exact match on tag name (canonical English tag name)
+        const exactNameRows = yield* sql<{ name: string; post_count: number }>`
           SELECT name, post_count FROM tags
-          WHERE name = ${normalized} COLLATE NOCASE OR cn_name = ${normalized}
+          WHERE name = ${normalized} COLLATE NOCASE
           ORDER BY post_count DESC
           LIMIT 1
         `.pipe(Effect.orElseSucceed(() => []));
 
-        if (exactRows.length > 0 && exactRows[0]) {
-          return exactRows[0].name;
+        if (exactNameRows.length > 0 && exactNameRows[0]) {
+          return exactNameRows[0].name;
         }
 
-        // 2. Prefix match
+        // 2. Exact match on Chinese name for non-artist (category != 1)
+        const exactCnRows = yield* sql<{ name: string; post_count: number }>`
+          SELECT name, post_count FROM tags
+          WHERE cn_name = ${normalized} AND category != 1
+          ORDER BY post_count DESC
+          LIMIT 1
+        `.pipe(Effect.orElseSucceed(() => []));
+
+        if (exactCnRows.length > 0 && exactCnRows[0]) {
+          return exactCnRows[0].name;
+        }
+
+        // 3. Prefix match on non-artist tags (category != 1)
         const prefixPattern = `${normalized}%`;
         const prefixRows = yield* sql<{ name: string; post_count: number }>`
           SELECT name, post_count FROM tags
-          WHERE name LIKE ${prefixPattern} OR cn_name LIKE ${prefixPattern}
+          WHERE (name LIKE ${prefixPattern} OR cn_name LIKE ${prefixPattern})
+            AND category != 1
           ORDER BY post_count DESC
           LIMIT 20
         `.pipe(Effect.orElseSucceed(() => []));
@@ -125,6 +138,36 @@ export class DanbooruTagMatcher extends Context.Service<
           return prefixRows[0].name;
         }
 
+        // 4. Exact match on artist Chinese name (category = 1)
+        const exactArtistRows = yield* sql<{
+          name: string;
+          post_count: number;
+        }>`
+          SELECT name, post_count FROM tags
+          WHERE cn_name = ${normalized} AND category = 1
+          ORDER BY post_count DESC
+          LIMIT 1
+        `.pipe(Effect.orElseSucceed(() => []));
+
+        if (exactArtistRows.length > 0 && exactArtistRows[0]) {
+          return exactArtistRows[0].name;
+        }
+
+        // 5. Prefix match on artist tags (category = 1)
+        const prefixArtistRows = yield* sql<{
+          name: string;
+          post_count: number;
+        }>`
+          SELECT name, post_count FROM tags
+          WHERE (name LIKE ${prefixPattern} OR cn_name LIKE ${prefixPattern})
+            AND category = 1
+          ORDER BY post_count DESC
+          LIMIT 20
+        `.pipe(Effect.orElseSucceed(() => []));
+
+        if (prefixArtistRows.length > 0 && prefixArtistRows[0]) {
+          return prefixArtistRows[0].name;
+        }
         // 3. Typo / compound / substring match for English words
         if (/^[a-z0-9_]+$/i.test(normalized)) {
           const parts = normalized.split("_").filter(Boolean);
@@ -228,14 +271,22 @@ export class DanbooruTagMatcher extends Context.Service<
           return translationMap as ReadonlyMap<string, string>;
         }
 
-        const rows = yield* sql<{ name: string; cn_name: string | null }>`
-          SELECT name, cn_name FROM tags
+        const rows = yield* sql<{
+          name: string;
+          cn_name: string | null;
+          category: number;
+        }>`
+          SELECT name, cn_name, category FROM tags
           WHERE name IN ${sql.in(validTags)}
         `.pipe(Effect.orElseSucceed(() => []));
 
         for (const row of rows) {
           if (row.cn_name && row.cn_name.trim().length > 0) {
-            translationMap.set(row.name, row.cn_name.trim());
+            let cn = row.cn_name.trim();
+            if (row.category === 1) {
+              cn = cn.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim() || cn;
+            }
+            translationMap.set(row.name, cn);
           }
         }
         return translationMap as ReadonlyMap<string, string>;

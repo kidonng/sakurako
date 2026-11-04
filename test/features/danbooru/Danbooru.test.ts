@@ -218,8 +218,63 @@ describe("handleDanbooruMessage", () => {
     const textSegment = arr.find((s) => s.type === "text");
     const text = textSegment?.data.text?.toString() ?? "";
 
-    expect(text).toContain("🔍 初音未来（VOCALOID）\n");
-    expect(text).toContain("https://danbooru.donmai.us/posts/102");
+    expect(text).toContain("🔍 初音未来\n");
+    expect(text).not.toContain("VOCALOID");
+  });
+
+  it("omits search hint when user input matches character base name without series suffix", async () => {
+    let replyPayload: unknown = null;
+    const fakeItem = {
+      event: {
+        post_type: "message",
+        message_type: "group",
+        user_id: 10001,
+        message: [{ type: "text", data: { text: "/dbr 御坂美琴" } }],
+      },
+      context: {
+        reply: (payload: unknown) => {
+          replyPayload = payload;
+          return Promise.resolve();
+        },
+      },
+    } as unknown as IncomingMessage;
+
+    const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () =>
+        Effect.succeed({ tags: ["misaka_mikoto"], isModified: false }),
+      getTagTranslations: () =>
+        Effect.succeed(
+          new Map([["misaka_mikoto", "御坂美琴（魔法禁书目录）"]]),
+        ),
+    });
+    const ClientMock = Layer.succeed(DanbooruClient, {
+      getRandomPost: () =>
+        Effect.succeed({
+          id: 560660,
+          large_file_url: "https://example.com/560660.jpg",
+          tag_string_character: "misaka_mikoto",
+          tag_string_copyright: "toaru_majutsu_no_index",
+          tag_string_artist: "artist",
+          tag_string_general: "",
+        }),
+      downloadImage: () => Effect.succeed("base64://fakeimagedata"),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(fakeItem).pipe(
+        Effect.provide(Layer.merge(MatcherMock, ClientMock)),
+      ),
+    );
+
+    const arr = replyPayload as {
+      type: string;
+      data: Record<string, unknown>;
+    }[];
+    const textSegment = arr.find((s) => s.type === "text");
+    const text = textSegment?.data.text?.toString() ?? "";
+
+    expect(text).not.toContain("🔍");
   });
 
   it("replies with not found message when Danbooru returns DanbooruNotFoundError", async () => {

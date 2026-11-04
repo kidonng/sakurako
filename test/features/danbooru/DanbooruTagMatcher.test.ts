@@ -192,4 +192,71 @@ describe("DanbooruTagMatcher", () => {
 
     await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
   });
+
+  it("prioritizes non-artist tags over artist translations when matching queries", async () => {
+    const testProgram = Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE tags (name TEXT, cn_name TEXT, category INTEGER, post_count INTEGER);`;
+      yield* sql`INSERT INTO tags VALUES
+        ('qilunuo', '琪露诺', 1, 10),
+        ('cirno', '琪露诺（东方Project）', 4, 41488),
+        ('dairi', 'dairi', 1, 18872),
+        ('dairi-chan_(otokuyou)', '代理酱（Otokuyou）', 4, 18);`;
+
+      const matcher = yield* DanbooruTagMatcher;
+      const resCirno = yield* matcher.matchTag("琪露诺");
+      expect(resCirno).toBe("cirno");
+
+      const resDairi = yield* matcher.matchTag("dairi");
+      expect(resDairi).toBe("dairi");
+    });
+
+    const SqlLive = SqliteClient.layer({ filename: ":memory:" });
+    const MockFs = Layer.succeed(FileSystem, {
+      exists: () => Effect.succeed(true),
+    } as unknown as FileSystem);
+
+    const TestLive = Layer.merge(
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
+      SqlLive,
+    );
+
+    await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
+  });
+
+  it("strips redundant artist category suffix in getTagTranslations", async () => {
+    const testProgram = Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE tags (name TEXT, cn_name TEXT, category INTEGER, post_count INTEGER);`;
+      yield* sql`INSERT INTO tags VALUES
+        ('tandohark', 'tandohark（画师）', 1, 1181),
+        ('akari_ryuryuwa', 'Akari_Ryuryuwa (画师)', 1, 500);`;
+
+      const matcher = yield* DanbooruTagMatcher;
+      const translations = yield* matcher.getTagTranslations([
+        "tandohark",
+        "akari_ryuryuwa",
+      ]);
+      expect(translations.get("tandohark")).toBe("tandohark");
+      expect(translations.get("akari_ryuryuwa")).toBe("Akari_Ryuryuwa");
+    });
+
+    const SqlLive = SqliteClient.layer({ filename: ":memory:" });
+    const MockFs = Layer.succeed(FileSystem, {
+      exists: () => Effect.succeed(true),
+    } as unknown as FileSystem);
+
+    const TestLive = Layer.merge(
+      DanbooruTagMatcher.layer.pipe(
+        Layer.provide(MockFs),
+        Layer.provide(SqlLive),
+      ),
+      SqlLive,
+    );
+
+    await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
+  });
 });

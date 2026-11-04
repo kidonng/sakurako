@@ -12,7 +12,10 @@ function splitRawTags(raw: string): string[] {
   return raw.trim().split(/\s+/).filter(Boolean);
 }
 
-function parseCharacterSeries(name: string): { base: string; series?: string } {
+export function parseCharacterSeries(name: string): {
+  base: string;
+  series?: string;
+} {
   const match = name.match(/^(.*?)[（(]([^）)]+)[）)]$/);
   if (match && match[1] && match[2]) {
     return { base: match[1].trim(), series: match[2].trim() };
@@ -20,6 +23,10 @@ function parseCharacterSeries(name: string): { base: string; series?: string } {
   return { base: name };
 }
 
+export function cleanArtistName(name: string): string {
+  const cleaned = name.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim();
+  return cleaned || name;
+}
 export function formatDanbooruTitle(
   post: DanbooruPostTitleMeta,
   translations?: ReadonlyMap<string, string>,
@@ -33,12 +40,17 @@ export function formatDanbooruTitle(
     return { raw: translated, base, series };
   });
 
+  const definedSeries = Array.from(
+    new Set(
+      parsedChars
+        .map((c) => c.series)
+        .filter((s): s is string => s !== undefined),
+    ),
+  );
+
   const shouldStripSeries =
-    parsedChars.length === 1 ||
-    (parsedChars.length > 1 &&
-      parsedChars.every(
-        (c) => c.series !== undefined && c.series === parsedChars[0]?.series,
-      ));
+    definedSeries.length === 1 ||
+    (definedSeries.length === 0 && parsedChars.length <= 1);
 
   const charNames = parsedChars.map((c) =>
     shouldStripSeries ? c.base : c.raw,
@@ -56,8 +68,8 @@ export function formatDanbooruTitle(
   if (firstCopyTag) {
     firstCopyName =
       translations?.get(firstCopyTag) ?? firstCopyTag.replaceAll("_", " ");
-  } else if (shouldStripSeries && parsedChars[0]?.series) {
-    firstCopyName = parsedChars[0].series;
+  } else if (shouldStripSeries && definedSeries[0]) {
+    firstCopyName = definedSeries[0];
   }
 
   let copyStr = "";
@@ -72,8 +84,8 @@ export function formatDanbooruTitle(
   }
 
   const artistTags = splitRawTags(post.tag_string_artist);
-  const artistNames = artistTags.map(
-    (tag) => translations?.get(tag) ?? tag,
+  const artistNames = artistTags.map((tag) =>
+    cleanArtistName(translations?.get(tag) ?? tag),
   );
   let artistStr = artistNames.join("、");
   if (artistStr) {

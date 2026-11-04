@@ -36,7 +36,9 @@ describe("formatDanbooruTitle", () => {
       },
       translations,
     );
-    expect(title).toBe("仓本千奈、篠泽广 (学园偶像大师 等 1 部) 画师 kousuke0912");
+    expect(title).toBe(
+      "仓本千奈、篠泽广 (学园偶像大师 等 1 部) 画师 kousuke0912",
+    );
   });
 
   it("retains character series suffix when characters belong to different series", () => {
@@ -93,7 +95,9 @@ describe("formatDanbooruTitle", () => {
       },
       translations,
     );
-    expect(title).toBe("角色1、角色2、角色3、角色4、角色5 等 1 位 (作品) 画师 artist_c");
+    expect(title).toBe(
+      "角色1、角色2、角色3、角色4、角色5 等 1 位 (作品) 画师 artist_c",
+    );
   });
 
   it("omits empty components and falls back to #id when tags are blank", () => {
@@ -123,5 +127,47 @@ describe("formatDanbooruTitle", () => {
       tag_string_artist: "moni_monico",
     });
     expect(title).toBe("moriya suwako (touhou) 画师 moni_monico");
+  });
+
+  it("strips redundant artist category suffix from artist translations", () => {
+    const translations = new Map([
+      ["tandohark", "tandohark（画师）"],
+      ["akari_ryuryuwa", "Akari_Ryuryuwa (画师)"],
+    ]);
+    const title = formatDanbooruTitle(
+      {
+        id: 3512237,
+        tag_string_character: "",
+        tag_string_copyright: "original",
+        tag_string_artist: "tandohark akari_ryuryuwa",
+      },
+      translations,
+    );
+    expect(title).toBe("original 画师 tandohark、Akari_Ryuryuwa");
+  });
+
+  it("strips series suffix from characters when all characters with a series share the same series", () => {
+    const translations = new Map([
+      ["index_(toaru_majutsu_no_index)", "茵蒂克丝（魔法禁书目录）"],
+      ["misaka_imouto", "御坂妹妹（魔法禁书目录）"],
+      ["misaka_mikoto", "御坂美琴（魔法禁书目录）"],
+      ["nyandex", "Nyandex"],
+      ["shirai_kuroko", "白井黑子（魔法禁书目录）"],
+      ["toaru_majutsu_no_index", "魔法禁书目录"],
+      ["akari_ryuryuwa", "Akari_Ryuryuwa（画师）"],
+    ]);
+    const title = formatDanbooruTitle(
+      {
+        id: 560660,
+        tag_string_character:
+          "index_(toaru_majutsu_no_index) misaka_imouto misaka_mikoto nyandex shirai_kuroko",
+        tag_string_copyright: "toaru_majutsu_no_index",
+        tag_string_artist: "akari_ryuryuwa",
+      },
+      translations,
+    );
+    expect(title).toBe(
+      "茵蒂克丝、御坂妹妹、御坂美琴、Nyandex、白井黑子 (魔法禁书目录) 画师 Akari_Ryuryuwa",
+    );
   });
 });
