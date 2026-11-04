@@ -187,6 +187,39 @@ describe("LinkPreviewSites", () => {
       });
       expect(options?.hideDescription).toBe(true);
     });
+
+    it("extracts tags from Danbooru post HTML DOM and formats Chinese title", () => {
+      const html = `
+        <html>
+          <head><title>moriya suwako (touhou) drawn by moni_monico | Danbooru</title></head>
+          <body>
+            <ul class="character-tag-list"><li data-tag-name="moriya_suwako"></li></ul>
+            <ul class="copyright-tag-list"><li data-tag-name="touhou"></li></ul>
+            <ul class="artist-tag-list"><li data-tag-name="moni_monico"></li></ul>
+          </body>
+        </html>
+      `;
+      const $ = cheerio.load(html);
+      const titleRule = danbooruCustomizer.metascraperRules?.title;
+      expect(titleRule).toBeDefined();
+      const title = titleRule!({
+        htmlDom: $,
+        url: "https://danbooru.donmai.us/posts/12459835",
+      });
+      expect(title).toBe("泄矢诹访子 (东方Project) 画师 moni_monico");
+    });
+
+    it("strips ' | Danbooru' suffix on non-post or fallback pages", () => {
+      const html = `<html><head><title>Search: cat_ears | Danbooru</title></head></html>`;
+      const $ = cheerio.load(html);
+      const titleRule = danbooruCustomizer.metascraperRules?.title;
+      expect(titleRule).toBeDefined();
+      const title = titleRule!({
+        htmlDom: $,
+        url: "https://danbooru.donmai.us/posts?tags=cat_ears",
+      });
+      expect(title).toBe("Search: cat_ears");
+    });
   });
 
   describe("pixivCustomizer", () => {

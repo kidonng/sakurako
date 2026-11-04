@@ -1,5 +1,7 @@
 import type createMetascraper from "metascraper";
 import { Predicate } from "effect";
+import { formatDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
+import { lookupDanbooruTagTranslations } from "../danbooru/DanbooruTagMatcher.ts";
 import type { PageMetadata } from "./LinkPreview.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
@@ -113,6 +115,8 @@ export const hackerNewsCustomizer: SiteCustomizer = {
   },
 };
 
+const DANBOORU_POST_REGEX = /^\/posts\/(\d+)/;
+
 export const danbooruCustomizer: SiteCustomizer = {
   name: "danbooru.donmai.us",
   match: (url) => {
@@ -123,6 +127,67 @@ export const danbooruCustomizer: SiteCustomizer = {
   formatItem: () => ({
     hideDescription: true,
   }),
+  metascraperRules: {
+    title: ({ htmlDom, url }) => {
+      try {
+        const urlObj = new URL(url);
+        const postMatch = urlObj.pathname.match(DANBOORU_POST_REGEX);
+
+        if (postMatch && postMatch[1]) {
+          const postId = Number.parseInt(postMatch[1], 10);
+          const charTags: string[] = [];
+          htmlDom("ul.character-tag-list li[data-tag-name]").each((_, el) => {
+            const tag = htmlDom(el).attr("data-tag-name");
+            if (tag) charTags.push(tag);
+          });
+
+          const copyTags: string[] = [];
+          htmlDom("ul.copyright-tag-list li[data-tag-name]").each((_, el) => {
+            const tag = htmlDom(el).attr("data-tag-name");
+            if (tag) copyTags.push(tag);
+          });
+
+          const artistTags: string[] = [];
+          htmlDom("ul.artist-tag-list li[data-tag-name]").each((_, el) => {
+            const tag = htmlDom(el).attr("data-tag-name");
+            if (tag) artistTags.push(tag);
+          });
+
+          if (
+            charTags.length > 0 ||
+            copyTags.length > 0 ||
+            artistTags.length > 0
+          ) {
+            const allTags = [...charTags, ...copyTags, ...artistTags];
+            const translations = lookupDanbooruTagTranslations(allTags);
+            return formatDanbooruTitle(
+              {
+                id: postId,
+                tag_string_character: charTags.join(" "),
+                tag_string_copyright: copyTags.join(" "),
+                tag_string_artist: artistTags.join(" "),
+              },
+              translations,
+            );
+          }
+        }
+
+        const fallback =
+          htmlDom('meta[property="og:title"]').attr("content") ||
+          htmlDom('meta[name="twitter:title"]').attr("content") ||
+          htmlDom("title").text() ||
+          undefined;
+
+        if (fallback) {
+          return fallback.replace(/\s*\|\s*Danbooru$/i, "").trim();
+        }
+
+        return undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  },
 };
 
 const PIXIV_ARTWORKS_REGEX = /^(?:\/[a-zA-Z-]+)?\/artworks\/(\d+)(?:\/.*)?$/;
