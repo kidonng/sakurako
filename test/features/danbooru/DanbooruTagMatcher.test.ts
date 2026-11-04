@@ -1,6 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Database } from "bun:sqlite";
-import { unlinkSync } from "node:fs";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
@@ -197,23 +196,21 @@ describe("DanbooruTagMatcher", () => {
 
     await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
 
-    const tempDbPath = "/tmp/test-danbooru-tags.sqlite";
-    const testDb = new Database(tempDbPath);
-    testDb.run("CREATE TABLE tags (name TEXT, cn_name TEXT);");
-    testDb.run(
+    const memDb = new Database(":memory:");
+    memDb.run("CREATE TABLE tags (name TEXT, cn_name TEXT);");
+    memDb.run(
       "INSERT INTO tags VALUES ('white_hair', '白发'), ('cat_ears', '猫耳');",
     );
-    testDb.close();
 
     try {
       const syncMap = lookupDanbooruTagTranslations(
         ["white_hair", "cat_ears"],
-        tempDbPath,
+        memDb,
       );
       expect(syncMap.get("white_hair")).toBe("白发");
       expect(syncMap.get("cat_ears")).toBe("猫耳");
     } finally {
-      unlinkSync(tempDbPath);
+      memDb.close();
     }
   });
   it("gracefully falls back when database file does not exist", () => {

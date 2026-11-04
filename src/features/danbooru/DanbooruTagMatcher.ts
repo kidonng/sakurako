@@ -8,16 +8,23 @@ import { SqlClient } from "effect/sql";
 
 export function lookupDanbooruTagTranslations(
   tags: readonly string[],
-  dbPath = "assets/danbooru-tags.sqlite",
+  dbSource: Database | string = "assets/danbooru-tags.sqlite",
 ): Map<string, string> {
   const result = new Map<string, string>();
   const validTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
-  if (validTags.length === 0 || !existsSync(dbPath)) {
+  if (validTags.length === 0) {
+    return result;
+  }
+
+  const isStringPath = typeof dbSource === "string";
+  if (isStringPath && !existsSync(dbSource)) {
     return result;
   }
 
   try {
-    const db = new Database(dbPath, { readonly: true });
+    const db = isStringPath
+      ? new Database(dbSource, { readonly: true })
+      : dbSource;
     try {
       const placeholders = validTags.map(() => "?").join(",");
       const rows = db
@@ -32,7 +39,9 @@ export function lookupDanbooruTagTranslations(
         }
       }
     } finally {
-      db.close();
+      if (isStringPath) {
+        db.close();
+      }
     }
   } catch {
     // Ignore and return partial or empty map on error
