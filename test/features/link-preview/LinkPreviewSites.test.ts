@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
+import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import {
   DANBOORU_USER_AGENT,
   DEFAULT_USER_AGENT,
@@ -191,21 +192,22 @@ describe("LinkPreviewSites", () => {
       expect(options?.hideDescription).toBe(true);
     });
 
-    it("extracts tags from Danbooru post HTML DOM and formats Chinese title", async () => {
-      const html = `
-        <html>
-          <head><title>moriya suwako (touhou) drawn by moni_monico | Danbooru</title></head>
-          <body>
-            <ul class="character-tag-list"><li data-tag-name="moriya_suwako"></li></ul>
-            <ul class="copyright-tag-list"><li data-tag-name="touhou"></li></ul>
-            <ul class="artist-tag-list"><li data-tag-name="moni_monico"></li></ul>
-          </body>
-        </html>
-      `;
-      const metadata = {
-        url: "https://danbooru.donmai.us/posts/12459835",
-        title: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+    it("fetches post JSON directly and formats preview with Chinese translations", async () => {
+      const mockPost = {
+        id: 12459835,
+        large_file_url: "https://example.com/large.jpg",
+        preview_file_url: "https://example.com/preview.jpg",
+        tag_string_character: "moriya_suwako",
+        tag_string_copyright: "touhou",
+        tag_string_artist: "moni_monico",
+        tag_string_general: "",
       };
+
+      const httpLayer = makeTestHttpClient((req) => {
+        expect(req.url).toBe("https://danbooru.donmai.us/posts/12459835.json");
+        expect(req.headers["user-agent"]).toBe("Sakurako/1.0 (user #898759)");
+        return new Response(JSON.stringify(mockPost), { status: 200 });
+      });
 
       const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
         matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -219,74 +221,73 @@ describe("LinkPreviewSites", () => {
           ),
       });
 
-      const transformed = await Effect.runPromise(
-        danbooruCustomizer.transformMetadata!(metadata, {
-          html,
+      const metadata = await Effect.runPromise(
+        danbooruCustomizer.scrape!({
           url: new URL("https://danbooru.donmai.us/posts/12459835"),
-        }).pipe(Effect.provide(MatcherMock)),
+        }).pipe(Effect.provide(Layer.merge(httpLayer, MatcherMock))),
       );
 
-      expect(transformed.title).toBe(
-        "泄矢诹访子 (东方Project) 画师 moni_monico",
-      );
+      expect(metadata).toEqual({
+        url: "https://danbooru.donmai.us/posts/12459835",
+        title: "泄矢诹访子 (东方Project) 画师 moni_monico",
+        image: "https://example.com/large.jpg",
+        fallbackImage: "https://example.com/preview.jpg",
+      });
     });
 
     it("falls back to English tags when DanbooruTagMatcher is unavailable", async () => {
-      const html = `
-        <html>
-          <head><title>moriya suwako (touhou) drawn by moni_monico | Danbooru</title></head>
-          <body>
-            <ul class="character-tag-list"><li data-tag-name="moriya_suwako"></li></ul>
-            <ul class="copyright-tag-list"><li data-tag-name="touhou"></li></ul>
-            <ul class="artist-tag-list"><li data-tag-name="moni_monico"></li></ul>
-          </body>
-        </html>
-      `;
-      const metadata = {
-        url: "https://danbooru.donmai.us/posts/12459835",
-        title: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+      const mockPost = {
+        id: 12459835,
+        large_file_url: "https://example.com/large.jpg",
+        tag_string_character: "moriya_suwako",
+        tag_string_copyright: "touhou",
+        tag_string_artist: "moni_monico",
+        tag_string_general: "",
       };
 
-      const transformed = await Effect.runPromise(
-        danbooruCustomizer.transformMetadata!(metadata, {
-          html,
+      const httpLayer = makeTestHttpClient(() => {
+        return new Response(JSON.stringify(mockPost), { status: 200 });
+      });
+
+      const metadata = await Effect.runPromise(
+        danbooruCustomizer.scrape!({
           url: new URL("https://danbooru.donmai.us/posts/12459835"),
-        }),
+        }).pipe(Effect.provide(httpLayer)),
       );
 
-      expect(transformed.title).toBe(
-        "moriya suwako (touhou) 画师 moni_monico",
-      );
+      expect(metadata?.title).toBe("moriya suwako (touhou) 画师 moni_monico");
     });
 
-    it("strips ' | Danbooru' suffix on post pages with fallback title", async () => {
-      const html = `<html><head><title>deleted post | Danbooru</title></head></html>`;
-      const metadata = {
-        url: "https://danbooru.donmai.us/posts/9999999",
-        title: "deleted post | Danbooru",
-      };
-      const transformed = await Effect.runPromise(
-        danbooruCustomizer.transformMetadata!(metadata, {
-          html,
-          url: new URL("https://danbooru.donmai.us/posts/9999999"),
-        }),
-      );
-      expect(transformed.title).toBe("deleted post");
-    });
+    it("returns undefined for non-post URLs to let standard scraper handle them", async () => {
+      const httpLayer = makeTestHttpClient(() => {
+        throw new Error("Should not be called");
+      });
 
-    it("leaves non-post Danbooru pages unchanged", async () => {
-      const html = `<html><head><title>Search: cat_ears | Danbooru</title></head></html>`;
-      const metadata = {
-        url: "https://danbooru.donmai.us/posts?tags=cat_ears",
-        title: "Search: cat_ears | Danbooru",
-      };
-      const transformed = await Effect.runPromise(
-        danbooruCustomizer.transformMetadata!(metadata, {
-          html,
+      const metadata = await Effect.runPromise(
+        danbooruCustomizer.scrape!({
           url: new URL("https://danbooru.donmai.us/posts?tags=cat_ears"),
-        }),
+        }).pipe(Effect.provide(httpLayer)),
       );
-      expect(transformed.title).toBe("Search: cat_ears | Danbooru");
+
+      expect(metadata).toBeUndefined();
+    });
+
+    it("fails with 404 when post JSON returns 404", async () => {
+      const httpLayer = makeTestHttpClient(() => {
+        return new Response("Not Found", { status: 404 });
+      });
+
+      const error = await Effect.runPromise(
+        danbooruCustomizer.scrape!({
+          url: new URL("https://danbooru.donmai.us/posts/9999999"),
+        }).pipe(
+          Effect.provide(httpLayer),
+          Effect.flip,
+        ),
+      );
+
+      expect(error._tag).toBe("HttpFetchError");
+      expect(error.status).toBe(404);
     });
   });
 

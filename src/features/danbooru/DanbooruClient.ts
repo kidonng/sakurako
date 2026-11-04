@@ -12,7 +12,7 @@ import {
   HttpFetchError,
 } from "../../utils/HttpClient.ts";
 
-const DanbooruPostSchema = Schema.Struct({
+export const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
   file_url: Schema.optional(Schema.String),
   large_file_url: Schema.optional(Schema.String),

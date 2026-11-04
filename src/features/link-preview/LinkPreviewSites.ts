@@ -1,9 +1,17 @@
-import * as cheerio from "cheerio";
+/* oxlint-disable effecttsgo/unstable-api-usage */
 import type createMetascraper from "metascraper";
-import { Effect, Option, Predicate } from "effect";
+import { type Duration, Effect, Option, Predicate } from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { formatDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
+import { DanbooruPostSchema } from "../danbooru/DanbooruClient.ts";
 import { DanbooruTagMatcher } from "../danbooru/DanbooruTagMatcher.ts";
 import type { PageMetadata } from "./LinkPreview.ts";
+import {
+  DANBOORU_USER_AGENT,
+  DEFAULT_USER_AGENT,
+  executeWithResponse,
+  HttpFetchError,
+} from "../../utils/HttpClient.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
 
@@ -15,10 +23,6 @@ interface SiteFormatOptions {
   readonly description?: string;
 }
 
-import {
-  DANBOORU_USER_AGENT,
-  DEFAULT_USER_AGENT,
-} from "../../utils/HttpClient.ts";
 export { DANBOORU_USER_AGENT, DEFAULT_USER_AGENT };
 export const DEFAULT_ACCEPT_HEADER =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -42,10 +46,14 @@ export interface SiteCustomizer {
     readonly metadata: PageMetadata;
     readonly isSingle: boolean;
   }) => SiteFormatOptions;
-  readonly transformMetadata?: (
-    metadata: PageMetadata,
-    context: { readonly html: string; readonly url: URL },
-  ) => Effect.Effect<PageMetadata>;
+  readonly scrape?: (context: {
+    readonly url: URL;
+    readonly timeoutDuration?: Duration.Input;
+  }) => Effect.Effect<
+    PageMetadata | undefined,
+    HttpFetchError,
+    HttpClient.HttpClient
+  >;
 }
 
 export const githubCustomizer: SiteCustomizer = {
@@ -132,69 +140,84 @@ export const danbooruCustomizer: SiteCustomizer = {
   formatItem: () => ({
     hideDescription: true,
   }),
-  transformMetadata: (metadata, { html, url }) =>
+  scrape: ({ url, timeoutDuration }) =>
     Effect.gen(function* () {
       const postMatch = url.pathname.match(DANBOORU_POST_REGEX);
       if (!postMatch || !postMatch[1]) {
-        return metadata;
+        return undefined;
       }
 
-      const postId = Number.parseInt(postMatch[1], 10);
-      const $ = cheerio.load(html);
-      const charTags: string[] = [];
-      $("ul.character-tag-list li[data-tag-name]").each((_, el) => {
-        const tag = $(el).attr("data-tag-name");
-        if (tag) charTags.push(tag);
-      });
+      const jsonUrl = `${url.origin}/posts/${postMatch[1]}.json`;
+      const request = HttpClientRequest.get(jsonUrl).pipe(
+        HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
+        HttpClientRequest.setHeader("Accept", "application/json"),
+      );
 
-      const copyTags: string[] = [];
-      $("ul.copyright-tag-list li[data-tag-name]").each((_, el) => {
-        const tag = $(el).attr("data-tag-name");
-        if (tag) copyTags.push(tag);
-      });
+      const post = yield* executeWithResponse(
+        request,
+        (response) =>
+          Effect.gen(function* () {
+            if (response.status === 404) {
+              return yield* new HttpFetchError({
+                url: jsonUrl,
+                status: 404,
+                statusText: "Not Found",
+              });
+            }
+            if (response.status !== 200) {
+              return yield* new HttpFetchError({
+                url: jsonUrl,
+                status: response.status,
+              });
+            }
+            return yield* HttpClientResponse.schemaBodyJson(DanbooruPostSchema)(
+              response,
+            ).pipe(
+              Effect.mapError(
+                (err) =>
+                  new HttpFetchError({
+                    url: jsonUrl,
+                    status: response.status,
+                    detail: `Failed to decode Danbooru post JSON: ${String(err)}`,
+                  }),
+              ),
+            );
+          }),
+        { timeoutDuration },
+      );
 
-      const artistTags: string[] = [];
-      $("ul.artist-tag-list li[data-tag-name]").each((_, el) => {
-        const tag = $(el).attr("data-tag-name");
-        if (tag) artistTags.push(tag);
-      });
-
-      if (
-        charTags.length === 0 &&
-        copyTags.length === 0 &&
-        artistTags.length === 0
-      ) {
-        if (metadata.title) {
-          return {
-            ...metadata,
-            title: metadata.title.replace(/\s*\|\s*Danbooru$/i, "").trim(),
-          };
-        }
-        return metadata;
-      }
+      const postTags = [
+        post.tag_string_character,
+        post.tag_string_copyright,
+        post.tag_string_artist,
+      ]
+        .join(" ")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
 
       const matcherOpt = yield* Effect.serviceOption(DanbooruTagMatcher);
       let translations: ReadonlyMap<string, string> | undefined;
-      if (Option.isSome(matcherOpt)) {
-        const allTags = [...charTags, ...copyTags, ...artistTags];
-        translations = yield* matcherOpt.value.getTagTranslations(allTags);
+      if (Option.isSome(matcherOpt) && postTags.length > 0) {
+        translations = yield* matcherOpt.value.getTagTranslations(postTags);
       }
 
-      const title = formatDanbooruTitle(
-        {
-          id: postId,
-          tag_string_character: charTags.join(" "),
-          tag_string_copyright: copyTags.join(" "),
-          tag_string_artist: artistTags.join(" "),
-        },
-        translations,
-      );
+      const title = formatDanbooruTitle(post, translations);
+      const image = post.large_file_url ?? post.file_url;
+      const fallbackImage = post.preview_file_url;
 
       return {
-        ...metadata,
+        url: url.href,
         title,
+        image,
+        fallbackImage,
       };
-    }),
+    }).pipe(
+      Effect.catchTag("HttpFetchError", (err) =>
+        // oxlint-disable-next-line effecttsgo/effect-succeed-with-void
+        err.status === 404 ? Effect.fail(err) : Effect.succeed(undefined as PageMetadata | undefined),
+      ),
+    ),
 };
 
 const PIXIV_ARTWORKS_REGEX = /^(?:\/[a-zA-Z-]+)?\/artworks\/(\d+)(?:\/.*)?$/;

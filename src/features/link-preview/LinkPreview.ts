@@ -403,6 +403,17 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
       });
     }
 
+    const customizer = findSiteCustomizer(urlObj);
+    if (customizer?.scrape) {
+      const customMetadata = yield* customizer.scrape({
+        url: urlObj,
+        timeoutDuration,
+      });
+      if (customMetadata) {
+        return customMetadata;
+      }
+    }
+
     const request = HttpClientRequest.get(url).pipe(
       HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
       HttpClientRequest.setHeader("Accept", DEFAULT_ACCEPT_HEADER),
@@ -426,23 +437,13 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const fallbackImage =
       rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
 
-    let pageMetadata: PageMetadata = {
+    return {
       url,
       title,
       description,
       image,
       fallbackImage,
     };
-
-    const customizer = findSiteCustomizer(urlObj);
-    if (customizer?.transformMetadata) {
-      pageMetadata = yield* customizer.transformMetadata(pageMetadata, {
-        html,
-        url: urlObj,
-      });
-    }
-
-    return pageMetadata;
   },
 );
 
