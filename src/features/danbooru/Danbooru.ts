@@ -44,7 +44,6 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
     const client = yield* DanbooruClient;
 
     let searchTags: readonly string[] = [];
-    let isModified = false;
 
     if (rawQuery.length > 0) {
       const matchResult = yield* matcher.matchQuery(rawQuery);
@@ -61,7 +60,6 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
         return;
       }
       searchTags = matchResult.tags;
-      isModified = matchResult.isModified;
     }
 
     const post = yield* client.getRandomPost(searchTags).pipe(
@@ -129,12 +127,31 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
       return;
     }
 
-    const title = formatDanbooruTitle(post);
+    const postTags = [
+      post.tag_string_character,
+      post.tag_string_copyright,
+      post.tag_string_artist,
+    ]
+      .join(" ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const postTranslations = yield* matcher.getTagTranslations(postTags);
+    const title = formatDanbooruTitle(post, postTranslations);
+
     let textContent = "";
-    if (isModified && searchTags.length > 0) {
-      textContent += `🔍 ${searchTags.join(" ")}\n`;
+    if (searchTags.length > 0) {
+      const searchTranslations = yield* matcher.getTagTranslations(searchTags);
+      const searchTagsCn = searchTags.map(
+        (t) => searchTranslations.get(t) ?? t,
+      );
+      const userNorm = rawQuery.trim().split(/\s+/).join(" ").toLowerCase();
+      const cnNorm = searchTagsCn.join(" ").toLowerCase();
+      if (userNorm !== cnNorm) {
+        textContent += `🔍 ${searchTagsCn.join(" ")}\n`;
+      }
     }
-    textContent += title;
+    textContent += `${title}\nhttps://danbooru.donmai.us/posts/${post.id}`;
 
     const replySegments: AnyMessageSegment[] = [
       segments.text(textContent),
