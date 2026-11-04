@@ -5,46 +5,79 @@ export interface DanbooruPostTitleMeta {
   readonly tag_string_artist: string;
 }
 
-function splitTags(raw: string): string[] {
+function splitRawTags(raw: string): string[] {
   if (!raw || !raw.trim()) {
     return [];
   }
-  return raw
-    .trim()
-    .split(/\s+/)
-    .map((t) => t.replaceAll("_", " "));
-}
-function toSentence(words: readonly string[]): string {
-  if (words.length === 0) return "";
-  if (words.length === 1) return words[0] ?? "";
-  if (words.length === 2) return `${words[0] ?? ""} and ${words[1] ?? ""}`;
-  const initial = words.slice(0, -1).join(", ");
-  const last = words[words.length - 1] ?? "";
-  return `${initial}, and ${last}`;
+  return raw.trim().split(/\s+/).filter(Boolean);
 }
 
-export function formatDanbooruTitle(post: DanbooruPostTitleMeta): string {
-  const charList = splitTags(post.tag_string_character);
-  const chars = charList.slice(0, 5);
-  if (charList.length > 5) {
-    chars.push(`${charList.length - 5} more`);
+function parseCharacterSeries(name: string): { base: string; series?: string } {
+  const match = name.match(/^(.*?)[（(]([^）)]+)[）)]$/);
+  if (match && match[1] && match[2]) {
+    return { base: match[1].trim(), series: match[2].trim() };
   }
-  const charStr = toSentence(chars);
+  return { base: name };
+}
 
-  const copyList = splitTags(post.tag_string_copyright);
-  const copies = copyList.slice(0, 1);
-  if (copyList.length > 1) {
-    copies.push(`${copyList.length - 1} more`);
-  }
-  let copyStr = toSentence(copies);
-  if (charStr && copyStr) {
-    copyStr = `(${copyStr})`;
+export function formatDanbooruTitle(
+  post: DanbooruPostTitleMeta,
+  translations?: ReadonlyMap<string, string>,
+): string {
+  const charTags = splitRawTags(post.tag_string_character);
+  const displayedCharTags = charTags.slice(0, 5);
+
+  const parsedChars = displayedCharTags.map((tag) => {
+    const translated = translations?.get(tag) ?? tag.replaceAll("_", " ");
+    const { base, series } = parseCharacterSeries(translated);
+    return { raw: translated, base, series };
+  });
+
+  const shouldStripSeries =
+    parsedChars.length === 1 ||
+    (parsedChars.length > 1 &&
+      parsedChars.every(
+        (c) => c.series !== undefined && c.series === parsedChars[0]?.series,
+      ));
+
+  const charNames = parsedChars.map((c) =>
+    shouldStripSeries ? c.base : c.raw,
+  );
+  let charStr = charNames.join("、");
+  if (charTags.length > 5) {
+    charStr = charStr
+      ? `${charStr} 等 ${charTags.length - 5} 位`
+      : `等 ${charTags.length - 5} 位`;
   }
 
-  const artistList = splitTags(post.tag_string_artist);
-  let artistStr = toSentence(artistList);
+  const copyTags = splitRawTags(post.tag_string_copyright);
+  const firstCopyTag = copyTags[0];
+  let firstCopyName: string | undefined;
+  if (firstCopyTag) {
+    firstCopyName =
+      translations?.get(firstCopyTag) ?? firstCopyTag.replaceAll("_", " ");
+  } else if (shouldStripSeries && parsedChars[0]?.series) {
+    firstCopyName = parsedChars[0].series;
+  }
+
+  let copyStr = "";
+  if (firstCopyName) {
+    copyStr = firstCopyName;
+    if (copyTags.length > 1) {
+      copyStr = `${copyStr} 等 ${copyTags.length - 1} 部`;
+    }
+    if (charStr) {
+      copyStr = `(${copyStr})`;
+    }
+  }
+
+  const artistTags = splitRawTags(post.tag_string_artist);
+  const artistNames = artistTags.map(
+    (tag) => translations?.get(tag) ?? tag,
+  );
+  let artistStr = artistNames.join("、");
   if (artistStr) {
-    artistStr = `drawn by ${artistStr}`;
+    artistStr = `画师 ${artistStr}`;
   }
 
   const combined = [charStr, copyStr, artistStr]
