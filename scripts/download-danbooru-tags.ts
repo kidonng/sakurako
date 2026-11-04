@@ -1,9 +1,10 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Database } from "bun:sqlite";
+import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { BunFileSystem, BunPath, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
+import { SqlClient } from "effect/sql";
 import { DANBOORU_TAGS_DB_PATH } from "../src/features/danbooru/DanbooruTagMatcher.ts";
 const TAGS_DB_URL =
   "https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/main/tag.sqlite";
@@ -48,20 +49,13 @@ export const downloadTagsProgram = Effect.gen(function* () {
   }
 
   yield* Effect.logInfo("Ensuring database indexes...");
-  yield* Effect.sync(() => {
-    const db = new Database(outputFile);
-    try {
-      db.run(
-        "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);",
-      );
-      db.run("CREATE INDEX IF NOT EXISTS idx_tags_cn_name ON tags(cn_name);");
-      db.run(
-        "CREATE INDEX IF NOT EXISTS idx_tags_post_count ON tags(post_count);",
-      );
-    } finally {
-      db.close();
-    }
-  });
+  const ensureIndexes = Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);`;
+    yield* sql`CREATE INDEX IF NOT EXISTS idx_tags_cn_name ON tags(cn_name);`;
+    yield* sql`CREATE INDEX IF NOT EXISTS idx_tags_post_count ON tags(post_count);`;
+  }).pipe(Effect.provide(SqliteClient.layer({ filename: outputFile })));
+  yield* ensureIndexes;
   yield* Effect.logInfo("Danbooru tags database ready.");
 });
 

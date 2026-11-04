@@ -1,10 +1,8 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { BunFileSystem } from "@effect/platform-bun";
-import { describe, expect, it } from "bun:test";
 import * as cheerio from "cheerio";
-import { Effect } from "effect";
-import { FileSystem } from "effect/FileSystem";
-import { DANBOORU_TAGS_DB_PATH } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
+import { describe, expect, it } from "bun:test";
+import { Effect, Layer } from "effect";
+import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 import {
   DANBOORU_USER_AGENT,
   DEFAULT_USER_AGENT,
@@ -204,51 +202,91 @@ describe("LinkPreviewSites", () => {
           </body>
         </html>
       `;
-      const $ = cheerio.load(html);
-      const titleRule = danbooruCustomizer.metascraperRules?.title;
-      expect(titleRule).toBeDefined();
-      const title = titleRule!({
-        htmlDom: $,
+      const metadata = {
         url: "https://danbooru.donmai.us/posts/12459835",
+        title: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+      };
+
+      const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+        matchTag: () => Effect.succeed(undefined as string | undefined),
+        matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+        getTagTranslations: () =>
+          Effect.succeed(
+            new Map([
+              ["moriya_suwako", "泄矢诹访子（东方Project）"],
+              ["touhou", "东方Project"],
+            ]),
+          ),
       });
-      const dbExists = await Effect.runPromise(
-        Effect.gen(function* () {
-          const fs = yield* FileSystem;
-          return yield* fs.exists(DANBOORU_TAGS_DB_PATH);
-        }).pipe(
-          Effect.orElseSucceed(() => false),
-          Effect.provide(BunFileSystem.layer),
-        ),
+
+      const transformed = await Effect.runPromise(
+        danbooruCustomizer.transformMetadata!(metadata, {
+          html,
+          url: new URL("https://danbooru.donmai.us/posts/12459835"),
+        }).pipe(Effect.provide(MatcherMock)),
       );
-      expect(title).toBe(
-        dbExists
-          ? "泄矢诹访子 (东方Project) 画师 moni_monico"
-          : "moriya suwako (touhou) 画师 moni_monico",
+
+      expect(transformed.title).toBe(
+        "泄矢诹访子 (东方Project) 画师 moni_monico",
       );
     });
 
-    it("strips ' | Danbooru' suffix on post pages with fallback title", () => {
+    it("falls back to English tags when DanbooruTagMatcher is unavailable", async () => {
+      const html = `
+        <html>
+          <head><title>moriya suwako (touhou) drawn by moni_monico | Danbooru</title></head>
+          <body>
+            <ul class="character-tag-list"><li data-tag-name="moriya_suwako"></li></ul>
+            <ul class="copyright-tag-list"><li data-tag-name="touhou"></li></ul>
+            <ul class="artist-tag-list"><li data-tag-name="moni_monico"></li></ul>
+          </body>
+        </html>
+      `;
+      const metadata = {
+        url: "https://danbooru.donmai.us/posts/12459835",
+        title: "moriya suwako (touhou) drawn by moni_monico | Danbooru",
+      };
+
+      const transformed = await Effect.runPromise(
+        danbooruCustomizer.transformMetadata!(metadata, {
+          html,
+          url: new URL("https://danbooru.donmai.us/posts/12459835"),
+        }),
+      );
+
+      expect(transformed.title).toBe(
+        "moriya suwako (touhou) 画师 moni_monico",
+      );
+    });
+
+    it("strips ' | Danbooru' suffix on post pages with fallback title", async () => {
       const html = `<html><head><title>deleted post | Danbooru</title></head></html>`;
-      const $ = cheerio.load(html);
-      const titleRule = danbooruCustomizer.metascraperRules?.title;
-      expect(titleRule).toBeDefined();
-      const title = titleRule!({
-        htmlDom: $,
+      const metadata = {
         url: "https://danbooru.donmai.us/posts/9999999",
-      });
-      expect(title).toBe("deleted post");
+        title: "deleted post | Danbooru",
+      };
+      const transformed = await Effect.runPromise(
+        danbooruCustomizer.transformMetadata!(metadata, {
+          html,
+          url: new URL("https://danbooru.donmai.us/posts/9999999"),
+        }),
+      );
+      expect(transformed.title).toBe("deleted post");
     });
 
-    it("leaves non-post Danbooru pages to default scraper", () => {
+    it("leaves non-post Danbooru pages unchanged", async () => {
       const html = `<html><head><title>Search: cat_ears | Danbooru</title></head></html>`;
-      const $ = cheerio.load(html);
-      const titleRule = danbooruCustomizer.metascraperRules?.title;
-      expect(titleRule).toBeDefined();
-      const title = titleRule!({
-        htmlDom: $,
+      const metadata = {
         url: "https://danbooru.donmai.us/posts?tags=cat_ears",
-      });
-      expect(title).toBeUndefined();
+        title: "Search: cat_ears | Danbooru",
+      };
+      const transformed = await Effect.runPromise(
+        danbooruCustomizer.transformMetadata!(metadata, {
+          html,
+          url: new URL("https://danbooru.donmai.us/posts?tags=cat_ears"),
+        }),
+      );
+      expect(transformed.title).toBe("Search: cat_ears | Danbooru");
     });
   });
 

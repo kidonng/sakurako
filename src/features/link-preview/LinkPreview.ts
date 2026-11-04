@@ -426,13 +426,23 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const fallbackImage =
       rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
 
-    return {
+    let pageMetadata: PageMetadata = {
       url,
       title,
       description,
       image,
       fallbackImage,
     };
+
+    const customizer = findSiteCustomizer(urlObj);
+    if (customizer?.transformMetadata) {
+      pageMetadata = yield* customizer.transformMetadata(pageMetadata, {
+        html,
+        url: urlObj,
+      });
+    }
+
+    return pageMetadata;
   },
 );
 

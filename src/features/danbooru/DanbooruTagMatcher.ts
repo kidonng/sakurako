@@ -1,51 +1,10 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Database } from "bun:sqlite";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
-
-export const DANBOORU_TAGS_DB_PATH = "assets/danbooru-tags.sqlite";
 import { Context, Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
 
-export function lookupDanbooruTagTranslations(
-  tags: readonly string[],
-  dbSource: Database | string = DANBOORU_TAGS_DB_PATH,
-): Map<string, string> {
-  const result = new Map<string, string>();
-  const validTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
-  if (validTags.length === 0) {
-    return result;
-  }
-
-  const isStringPath = typeof dbSource === "string";
-  try {
-    const db = isStringPath
-      ? new Database(dbSource, { readonly: true })
-      : dbSource;
-    try {
-      const placeholders = validTags.map(() => "?").join(",");
-      const rows = db
-        .query<{ name: string; cn_name: string | null }, string[]>(
-          `SELECT name, cn_name FROM tags WHERE name IN (${placeholders})`,
-        )
-        .all(...validTags);
-
-      for (const row of rows) {
-        if (row.cn_name && row.cn_name.trim().length > 0) {
-          result.set(row.name, row.cn_name.trim());
-        }
-      }
-    } finally {
-      if (isStringPath) {
-        db.close();
-      }
-    }
-  } catch {
-    // Ignore and return partial or empty map on error
-  }
-
-  return result;
-}
+export const DANBOORU_TAGS_DB_PATH = "assets/danbooru-tags.sqlite";
 
 function levenshtein(a: string, b: string): number {
   const m = a.length;

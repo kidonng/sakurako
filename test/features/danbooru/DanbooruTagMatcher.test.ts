@@ -1,14 +1,10 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Database } from "bun:sqlite";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
-import {
-  DanbooruTagMatcher,
-  lookupDanbooruTagTranslations,
-} from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
+import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 
 describe("DanbooruTagMatcher", () => {
   it("matches exact Chinese and English tags", async () => {
@@ -164,7 +160,7 @@ describe("DanbooruTagMatcher", () => {
     );
   });
 
-  it("batch translates tags to Chinese using getTagTranslations and lookupDanbooruTagTranslations", async () => {
+  it("batch translates tags to Chinese using getTagTranslations", async () => {
     const testProgram = Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* sql`CREATE TABLE tags (name TEXT, cn_name TEXT, category INTEGER, post_count INTEGER);`;
@@ -195,29 +191,5 @@ describe("DanbooruTagMatcher", () => {
     );
 
     await Effect.runPromise(testProgram.pipe(Effect.provide(TestLive)));
-
-    const memDb = new Database(":memory:");
-    memDb.run("CREATE TABLE tags (name TEXT, cn_name TEXT);");
-    memDb.run(
-      "INSERT INTO tags VALUES ('white_hair', '白发'), ('cat_ears', '猫耳');",
-    );
-
-    try {
-      const syncMap = lookupDanbooruTagTranslations(
-        ["white_hair", "cat_ears"],
-        memDb,
-      );
-      expect(syncMap.get("white_hair")).toBe("白发");
-      expect(syncMap.get("cat_ears")).toBe("猫耳");
-    } finally {
-      memDb.close();
-    }
-  });
-  it("gracefully falls back when database file does not exist", () => {
-    const syncMap = lookupDanbooruTagTranslations(
-      ["white_hair"],
-      "assets/non-existent.sqlite",
-    );
-    expect(syncMap.size).toBe(0);
   });
 });
