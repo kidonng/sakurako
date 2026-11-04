@@ -85,9 +85,7 @@ const EnsureAssetsDir = Layer.effectDiscard(
   }),
 ).pipe(Layer.provide(BunFileSystem.layer));
 
-const DanbooruTagMatcherLive = DanbooruTagMatcher.live({
-  filename: "assets/danbooru-tags.sqlite",
-}).pipe(
+const DanbooruTagMatcherLive = DanbooruTagMatcher.live().pipe(
   Layer.provideMerge(EnsureAssetsDir),
   Layer.provide(BunFileSystem.layer),
 );

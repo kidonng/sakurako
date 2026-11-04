@@ -4,7 +4,7 @@ import { BunFileSystem, BunPath, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
-
+import { DANBOORU_TAGS_DB_PATH } from "../src/features/danbooru/DanbooruTagMatcher.ts";
 const TAGS_DB_URL =
   "https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/main/tag.sqlite";
 
@@ -20,10 +20,7 @@ class TagDownloadError extends Schema.TaggedError<
 export const downloadTagsProgram = Effect.gen(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path;
-  const outputFile = path.join(
-    import.meta.dir,
-    "../assets/danbooru-tags.sqlite",
-  );
+  const outputFile = path.resolve(DANBOORU_TAGS_DB_PATH);
   const outputDir = path.dirname(outputFile);
 
   yield* fs.makeDirectory(outputDir, { recursive: true });

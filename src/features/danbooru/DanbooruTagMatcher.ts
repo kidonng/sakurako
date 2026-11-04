@@ -1,14 +1,15 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
+
+export const DANBOORU_TAGS_DB_PATH = "assets/danbooru-tags.sqlite";
 import { Context, Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
 
 export function lookupDanbooruTagTranslations(
   tags: readonly string[],
-  dbSource: Database | string = "assets/danbooru-tags.sqlite",
+  dbSource: Database | string = DANBOORU_TAGS_DB_PATH,
 ): Map<string, string> {
   const result = new Map<string, string>();
   const validTags = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
@@ -17,10 +18,6 @@ export function lookupDanbooruTagTranslations(
   }
 
   const isStringPath = typeof dbSource === "string";
-  if (isStringPath && !existsSync(dbSource)) {
-    return result;
-  }
-
   try {
     const db = isStringPath
       ? new Database(dbSource, { readonly: true })
@@ -128,7 +125,7 @@ export class DanbooruTagMatcher extends Context.Service<
     Effect.gen(function* () {
       const fs = yield* FileSystem;
       const sql = yield* SqlClient.SqlClient;
-      const dbPath = "assets/danbooru-tags.sqlite";
+      const dbPath = DANBOORU_TAGS_DB_PATH;
       const dbExists = yield* fs
         .exists(dbPath)
         .pipe(Effect.orElseSucceed(() => false));
@@ -294,7 +291,7 @@ export class DanbooruTagMatcher extends Context.Service<
   );
 
   static readonly live = (options?: { readonly filename?: string }) => {
-    const filename = options?.filename ?? "assets/danbooru-tags.sqlite";
+    const filename = options?.filename ?? DANBOORU_TAGS_DB_PATH;
     return Layer.unwrap(
       Effect.gen(function* () {
         const fs = yield* FileSystem;

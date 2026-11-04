@@ -1,6 +1,10 @@
-import { existsSync } from "node:fs";
+/* oxlint-disable effecttsgo/unstable-api-usage */
+import { BunFileSystem } from "@effect/platform-bun";
 import { describe, expect, it } from "bun:test";
 import * as cheerio from "cheerio";
+import { Effect } from "effect";
+import { FileSystem } from "effect/FileSystem";
+import { DANBOORU_TAGS_DB_PATH } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 import {
   DANBOORU_USER_AGENT,
   DEFAULT_USER_AGENT,
@@ -189,7 +193,7 @@ describe("LinkPreviewSites", () => {
       expect(options?.hideDescription).toBe(true);
     });
 
-    it("extracts tags from Danbooru post HTML DOM and formats Chinese title", () => {
+    it("extracts tags from Danbooru post HTML DOM and formats Chinese title", async () => {
       const html = `
         <html>
           <head><title>moriya suwako (touhou) drawn by moni_monico | Danbooru</title></head>
@@ -207,8 +211,17 @@ describe("LinkPreviewSites", () => {
         htmlDom: $,
         url: "https://danbooru.donmai.us/posts/12459835",
       });
+      const dbExists = await Effect.runPromise(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem;
+          return yield* fs.exists(DANBOORU_TAGS_DB_PATH);
+        }).pipe(
+          Effect.orElseSucceed(() => false),
+          Effect.provide(BunFileSystem.layer),
+        ),
+      );
       expect(title).toBe(
-        existsSync("assets/danbooru-tags.sqlite")
+        dbExists
           ? "泄矢诹访子 (东方Project) 画师 moni_monico"
           : "moriya suwako (touhou) 画师 moni_monico",
       );
