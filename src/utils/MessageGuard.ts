@@ -37,3 +37,39 @@ export function isGroupMessage(
     Predicate.isNumber(event.user_id)
   );
 }
+
+/**
+ * Options for environment-based event filtering.
+ */
+export interface EventFilterOptions {
+  readonly devMode: boolean;
+  readonly devGroupId?: number;
+}
+
+/**
+ * Determines whether an incoming OneBot event should be processed given the
+ * current environment configuration.
+ *
+ * - In development mode (`devMode: true`):
+ *   Only events originating from the configured `devGroupId` are processed.
+ *   Private messages and events from all other groups are ignored.
+ *
+ * - In production mode (`devMode: false`):
+ *   Events from the configured `devGroupId` are ignored so they can be
+ *   exclusively handled by a local development instance. All other groups and
+ *   private messages are processed normally.
+ */
+export function shouldProcessEvent(
+  event: OneBotBaseEvent & { readonly group_id?: unknown },
+  options: EventFilterOptions,
+): boolean {
+  if (options.devMode) {
+    return (
+      options.devGroupId !== undefined && event.group_id === options.devGroupId
+    );
+  }
+
+  return (
+    options.devGroupId === undefined || event.group_id !== options.devGroupId
+  );
+}

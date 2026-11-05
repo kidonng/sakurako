@@ -4,6 +4,7 @@ import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Effect, Layer, Stream } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { FetchHttpClient } from "effect/http";
+import { BotConfig } from "./Config.ts";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
@@ -19,6 +20,7 @@ import { StatsCooldown } from "./features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "./features/stats/StatsRenderer.tsx";
 import { StatsRepository } from "./features/stats/StatsRepository.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
+import { shouldProcessEvent } from "./utils/MessageGuard.ts";
 
 export {
   handleStatsMessage as handleStatsCollectorMessage,
@@ -26,13 +28,24 @@ export {
 };
 
 export const MainProgram = Effect.gen(function* () {
+  const config = yield* BotConfig;
   const repo = yield* StatsRepository;
   yield* repo.initSchema;
 
   const { messages, notices } = yield* SnowLumaClient;
   yield* Effect.logInfo("Sakurako bot listening for messages and notices...");
+  if (config.devMode) {
+    yield* Effect.logInfo(
+      `Running in DEV MODE (only group ${config.devGroupId ?? "none"} will be processed)`,
+    );
+  } else if (config.devGroupId !== undefined) {
+    yield* Effect.logInfo(
+      `Running in PROD MODE (ignoring dev group ${config.devGroupId})`,
+    );
+  }
 
   const processMessages = messages.pipe(
+    Stream.filter((item) => shouldProcessEvent(item.event, config)),
     Stream.runForEach((item) =>
       Effect.all(
         [
@@ -52,6 +65,7 @@ export const MainProgram = Effect.gen(function* () {
   );
 
   const processNotices = notices.pipe(
+    Stream.filter((item) => shouldProcessEvent(item.event, config)),
     Stream.runForEach((item) =>
       Effect.all([handleStatsNotice(item)], {
         concurrency: "unbounded",

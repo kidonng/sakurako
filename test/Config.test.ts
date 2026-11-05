@@ -18,6 +18,8 @@ describe("BotConfig", () => {
     expect(Redacted.value(result.accessToken)).toBe("test-token");
     expect(result.sauceNaoApiKey).toBeUndefined();
     expect(result.openrouterApiKey).toBeUndefined();
+    expect(result.devMode).toBe(false);
+    expect(result.devGroupId).toBeUndefined();
   });
 
   it("uses default wsUrl if not provided", async () => {
@@ -55,5 +57,24 @@ describe("BotConfig", () => {
     expect(Redacted.value(config.openrouterApiKey!)).toBe(
       "test_openrouter_key",
     );
+  });
+
+  it("reads devMode and devGroupId when provided", async () => {
+    const config = await Effect.runPromise(
+      BotConfig.pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnvRecord({
+              SNOWLUMA_WS_URL: "ws://localhost:3001",
+              SNOWLUMA_ACCESS_TOKEN: "token",
+              DEV_MODE: "true",
+              DEV_GROUP_ID: "12345678",
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(config.devMode).toBe(true);
+    expect(config.devGroupId).toBe(12345678);
   });
 });

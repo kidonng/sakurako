@@ -5,6 +5,8 @@ export interface BotConfig {
   readonly accessToken: Redacted.Redacted<string>;
   readonly sauceNaoApiKey?: Redacted.Redacted<string>;
   readonly openrouterApiKey?: Redacted.Redacted<string>;
+  readonly devMode: boolean;
+  readonly devGroupId?: number;
 }
 
 export const BotConfig: Config.Config<BotConfig> = Config.all({
@@ -16,6 +18,10 @@ export const BotConfig: Config.Config<BotConfig> = Config.all({
     Config.map(Option.getOrUndefined),
   ),
   openrouterApiKey: Config.option(Config.Redacted("OPENROUTER_API_KEY")).pipe(
+    Config.map(Option.getOrUndefined),
+  ),
+  devMode: Config.Boolean("DEV_MODE").pipe(Config.withDefault(false)),
+  devGroupId: Config.option(Config.Int("DEV_GROUP_ID")).pipe(
     Config.map(Option.getOrUndefined),
   ),
 });
