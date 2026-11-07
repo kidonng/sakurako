@@ -32,7 +32,7 @@ import {
   shouldFetchImageLocally,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
-import { filterPreviewResults } from "./JevFilter.ts";
+import { filterPreviewResults } from "./DecisionFilter.ts";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import {

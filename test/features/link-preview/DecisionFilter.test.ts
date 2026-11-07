@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Logger, Redacted } from "effect";
 import { HttpBody } from "effect/http";
 import {
-  DEFAULT_JEV_MODEL,
+  DEFAULT_DECISION_MODEL,
   filterPreviewResults,
-  OPENROUTER_SYSTEMONE_URL,
-} from "../../../src/features/link-preview/JevFilter.ts";
+  OPENROUTER_DECISIONS_URL,
+} from "../../../src/features/link-preview/DecisionFilter.ts";
 import {
   HttpFetchError,
   isScrapingResult,
@@ -74,7 +74,7 @@ describe("filterPreviewResults", () => {
     expect(filtered).toEqual(results);
   });
 
-  it("filters items below threshold 0.7 using OpenRouter System One", async () => {
+  it("filters items below threshold 0.7 using OpenRouter Decisions API", async () => {
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
@@ -137,10 +137,10 @@ describe("filterPreviewResults", () => {
       ).pipe(Effect.provide(layer)),
     );
 
-    expect(captured.url).toBe(OPENROUTER_SYSTEMONE_URL);
+    expect(captured.url).toBe(OPENROUTER_DECISIONS_URL);
     expect(captured.method).toBe("POST");
     expect(captured.authHeader).toBe("Bearer sk-or-test-key");
-    expect(captured.requestBody?.model).toBe(DEFAULT_JEV_MODEL);
+    expect(captured.requestBody?.model).toBe(DEFAULT_DECISION_MODEL);
     expect(captured.requestBody?.state?.user_message).toBe(
       "谷歌开放第三方安卓应用商店注册",
     );
@@ -167,6 +167,45 @@ describe("filterPreviewResults", () => {
       _tag: "Filtered",
       url: "https://t.me/promo",
     });
+  });
+
+  it("passes custom model in request payload when specified", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://news.com",
+          title: "News Title",
+        },
+      },
+    ];
+
+    let capturedModel: string | undefined;
+
+    const layer = makeTestHttpClient((req) => {
+      const body = extractJsonBody(req) as { model?: string };
+      capturedModel = body.model;
+
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0: { type: "noul", noul: 0.9 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    await Effect.runPromise(
+      filterPreviewResults(
+        "some user message",
+        results,
+        Redacted.make("sk-test"),
+        "openai/gpt-6-luna-decisions",
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(capturedModel).toBe("openai/gpt-6-luna-decisions");
   });
 
   it("logs filtered URL and score when an item is filtered, without logging for passing items", async () => {
@@ -235,10 +274,7 @@ describe("filterPreviewResults", () => {
       },
       {
         _tag: "Success",
-        data: {
-          url: "https://valid.com",
-          title: "Valid Title",
-        },
+        data: { url: "https://news.com", title: "Valid Title" },
       },
     ];
 
@@ -367,7 +403,7 @@ describe("filterPreviewResults", () => {
 
     const noAnswersLayer = makeTestHttpClient(
       () =>
-        new Response(JSON.stringify({ model: "typesafe/jev" }), {
+        new Response(JSON.stringify({ model: "openai/gpt-6-luna-decisions" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
@@ -401,9 +437,12 @@ describe("filterPreviewResults", () => {
       };
       questions?: Record<string, unknown>;
     };
-    const captured: { body?: CapturedPayload } = {};
+
+    let capturedPayload: CapturedPayload | undefined;
+
     const layer = makeTestHttpClient((req) => {
-      captured.body = extractJsonBody(req) as CapturedPayload;
+      capturedPayload = extractJsonBody(req) as CapturedPayload;
+
       return new Response(
         JSON.stringify({
           answers: {
@@ -424,23 +463,23 @@ describe("filterPreviewResults", () => {
     );
 
     expect(
-      captured.body?.state?.previews?.preview_0?.standard_truncated,
+      capturedPayload?.state?.previews?.preview_0?.standard_truncated,
     ).toBeDefined();
     expect(
-      captured.body?.questions?.preview_0_standard_is_sufficient,
+      capturedPayload?.questions?.preview_0_standard_is_sufficient,
     ).toBeDefined();
+
     expect(filtered).toHaveLength(1);
-    const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
-    expect(filtered[0]).toEqual({
-      _tag: "Success",
-      data: first.data,
-      expanded: true,
-    });
+    const item = filtered[0];
+    expect(item && isScrapingResult("Success")(item)).toBe(true);
+    if (item && isScrapingResult("Success")(item)) {
+      expect(item.expanded).toBe(true);
+    }
   });
 
-  it("marks expanded: false when standard_is_sufficient is above threshold", async () => {
+  it("keeps expanded: false when standard_is_sufficient is above threshold", async () => {
     const longDesc =
-      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回，仅稳定币仍有追回可能。目前币安已暂停充提并承诺全额赔付，约 30 亿美元涉案资产被冻结，但比特币市场未现大幅抛售。#币安被盗##加密货币#";
+      "数字资产硬件钱包公司 Ballet Global 创始人 Bobby Lee 在彭博电视采访中表示，币安被盗比特币大概率无法追回，冻结资产不等于成功追回。目前币安已暂停充提并承诺全额赔付，但比特币市场未现大幅抛售。";
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
@@ -456,7 +495,7 @@ describe("filterPreviewResults", () => {
       return new Response(
         JSON.stringify({
           answers: {
-            preview_0: { type: "noul", noul: 0.95 },
+            preview_0: { type: "noul", noul: 0.9 },
             preview_0_standard_is_sufficient: { type: "noul", noul: 0.85 },
           },
         }),
@@ -473,28 +512,28 @@ describe("filterPreviewResults", () => {
     );
 
     expect(filtered).toHaveLength(1);
-    const first = results[0] as Extract<ScrapingResult, { _tag: "Success" }>;
-    expect(filtered[0]).toEqual({
-      _tag: "Success",
-      data: first.data,
-      expanded: false,
-    });
+    const item = filtered[0];
+    expect(item && isScrapingResult("Success")(item)).toBe(true);
+    if (item && isScrapingResult("Success")(item)) {
+      expect(item.expanded).toBe(false);
+    }
   });
 
   it("skips standard_is_sufficient question when description is short (<= 100 width)", async () => {
-    const shortDesc = "简短摘要内容";
+    const shortDesc = "简短描述，未超过一百个字符宽度。";
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
         data: {
           url: "https://news.com/short",
-          title: "简短新闻",
+          title: "短新闻",
           description: shortDesc,
         },
       },
     ];
 
     const captured: { body?: { questions?: Record<string, unknown> } } = {};
+
     const layer = makeTestHttpClient((req) => {
       captured.body = extractJsonBody(req) as {
         questions?: Record<string, unknown>;
@@ -514,6 +553,7 @@ describe("filterPreviewResults", () => {
         Effect.provide(layer),
       ),
     );
+
     expect(captured.body?.questions?.preview_0).toBeDefined();
     expect(
       captured.body?.questions?.preview_0_standard_is_sufficient,

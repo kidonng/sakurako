@@ -3,6 +3,7 @@ import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
+import { DEFAULT_DECISION_MODEL } from "../../Config.ts";
 import {
   DEFAULT_DESCRIPTION_MAX_WIDTH,
   isScrapingResult,
@@ -11,24 +12,24 @@ import {
 } from "./LinkPreview.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
-export const OPENROUTER_SYSTEMONE_URL =
-  "https://openrouter.ai/api/v1/systemone";
-export const DEFAULT_JEV_MODEL = "~typesafe/jev-latest";
+export const OPENROUTER_DECISIONS_URL =
+  "https://openrouter.ai/api/alpha/decisions";
+export { DEFAULT_DECISION_MODEL } from "../../Config.ts";
 const DEFAULT_THRESHOLD = 0.7;
 const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
-interface SystemOneNoulCriteria {
+interface DecisionsNoulCriteria {
   readonly true: string;
   readonly false: string;
 }
 
-interface SystemOneNoulQuestion {
+interface DecisionsNoulQuestion {
   readonly type: "noul";
   readonly instructions: string;
-  readonly criteria: SystemOneNoulCriteria;
+  readonly criteria: DecisionsNoulCriteria;
 }
 
-interface SystemOneRequest {
+interface DecisionsRequest {
   readonly model: string;
   readonly state: {
     readonly user_message: string;
@@ -42,16 +43,18 @@ interface SystemOneRequest {
       }
     >;
   };
-  readonly questions: Record<string, SystemOneNoulQuestion>;
+  readonly questions: Record<string, DecisionsNoulQuestion>;
 }
 
-const SystemOneAnswerSchema = Schema.Struct({
+const DecisionsAnswerSchema = Schema.Struct({
   type: Schema.optional(Schema.String),
   noul: Schema.optional(Schema.Finite),
 });
-const SystemOneResponseSchema = Schema.Struct({
+const DecisionsResponseSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
-  answers: Schema.optional(Schema.Record(Schema.String, SystemOneAnswerSchema)),
+  answers: Schema.optional(
+    Schema.Record(Schema.String, DecisionsAnswerSchema),
+  ),
   usage: Schema.optional(
     Schema.Struct({
       input_tokens: Schema.optional(Schema.Finite),
@@ -61,38 +64,42 @@ const SystemOneResponseSchema = Schema.Struct({
   ),
 });
 
-class JevFilterError extends Schema.TaggedError<
-  JevFilterError,
+class DecisionFilterError extends Schema.TaggedError<
+  DecisionFilterError,
   {
     readonly brand: unique symbol;
   }
->()("JevFilterError", {
+>()("DecisionFilterError", {
   cause: Schema.Defect(),
 }) {
   override get message(): string {
-    return `JevFilterError: ${String(this.cause)}`;
+    return `DecisionFilterError: ${String(this.cause)}`;
   }
 }
 
 const NOUL_INSTRUCTIONS =
   "Does the preview for this link provide substantive, valuable, and non-redundant information beyond what is already conveyed in the user message?";
 
-const NOUL_CRITERIA: SystemOneNoulCriteria = {
+const NOUL_CRITERIA: DecisionsNoulCriteria = {
   true: "The preview provides meaningful context, new facts, or substantial details not already present in the user message, and is not promotional boilerplate, generic site greetings, or channel ads.",
   false:
     "The preview merely repeats information already stated in the user message, or consists of generic site slogans, channel/group promo links, submission bots, or empty boilerplate.",
 };
 
-const NOUL_SUFFICIENT_CRITERIA: SystemOneNoulCriteria = {
+const NOUL_SUFFICIENT_CRITERIA: DecisionsNoulCriteria = {
   true: "The standard truncated excerpt already conveys meaningful new facts not present in user_message.",
   false:
     "The standard truncated excerpt merely repeats what was in user_message, while any new facts only exist further down in description or are absent entirely.",
 };
-export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
+
+export const filterPreviewResults = Effect.fn(
+  "DecisionFilter.filterPreviewResults",
+)(
   function* (
     rawMessage: string,
     results: ReadonlyArray<ScrapingResult>,
     apiKey?: Redacted.Redacted<string>,
+    model: string = DEFAULT_DECISION_MODEL,
     threshold: number = DEFAULT_THRESHOLD,
     timeoutDuration: Duration.Input = DEFAULT_TIMEOUT,
   ) {
@@ -119,7 +126,7 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
           readonly standard_truncated?: string;
         }
       > = {};
-      const questions: Record<string, SystemOneNoulQuestion> = {};
+      const questions: Record<string, DecisionsNoulQuestion> = {};
       const sufficiencyAskedKeys = new Set<string>();
 
       for (const entry of successEntries) {
@@ -153,8 +160,8 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
           };
         }
       }
-      const payload: SystemOneRequest = {
-        model: DEFAULT_JEV_MODEL,
+      const payload: DecisionsRequest = {
+        model,
         state: {
           user_message: rawMessage,
           previews,
@@ -163,26 +170,31 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
       };
 
       const request = yield* HttpClientRequest.post(
-        OPENROUTER_SYSTEMONE_URL,
+        OPENROUTER_DECISIONS_URL,
       ).pipe(
         HttpClientRequest.bearerToken(Redacted.value(apiKey)),
         HttpClientRequest.bodyJson(payload),
       );
 
-      const responseData = yield* fetchJson(request, SystemOneResponseSchema, {
-        timeoutDuration,
-      }).pipe(
+      const responseData = yield* fetchJson(
+        request,
+        DecisionsResponseSchema,
+        {
+          timeoutDuration,
+        },
+      ).pipe(
         Effect.mapError(
           (cause) =>
-            new JevFilterError({
+            new DecisionFilterError({
               cause: cause.detail ?? cause.message,
             }),
         ),
       );
 
       if (!responseData.answers) {
-        return yield* new JevFilterError({
-          cause: "Missing or invalid 'answers' envelope in System One response",
+        return yield* new DecisionFilterError({
+          cause:
+            "Missing or invalid 'answers' envelope in Decisions response",
         });
       }
 
@@ -205,8 +217,11 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
         if (passed) {
           let expanded = false;
           if (sufficiencyAskedKeys.has(key)) {
-            const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
-            const sufficiencyScore = Predicate.isNumber(sufficiencyAnswer?.noul)
+            const sufficiencyAnswer =
+              answers[`${key}_standard_is_sufficient`];
+            const sufficiencyScore = Predicate.isNumber(
+              sufficiencyAnswer?.noul,
+            )
               ? sufficiencyAnswer.noul
               : undefined;
             if (
@@ -221,7 +236,8 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
             expanded,
           });
         } else {
-          const scoreText = score !== undefined ? String(score) : "unknown";
+          const scoreText =
+            score !== undefined ? String(score) : "unknown";
           yield* Effect.logInfo(
             `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
           );
@@ -233,7 +249,7 @@ export const filterPreviewResults = Effect.fn("JevFilter.filterPreviewResults")(
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning(
-          `Jev decision filter failed, falling back to original preview: ${String(error)}`,
+          `Decision filter failed, falling back to original preview: ${String(error)}`,
         ).pipe(Effect.as(results)),
       ),
     );
