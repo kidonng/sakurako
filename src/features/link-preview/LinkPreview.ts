@@ -32,7 +32,10 @@ import {
   shouldFetchImageLocally,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
-import { DEFAULT_DECISION_MODEL, filterPreviewResults } from "./DecisionFilter.ts";
+import {
+  DEFAULT_DECISION_MODEL,
+  filterPreviewResults,
+} from "./DecisionFilter.ts";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import {

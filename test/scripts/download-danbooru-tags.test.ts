@@ -13,7 +13,9 @@ describe("download-danbooru-tags indexing logic", () => {
       yield* sql`CREATE INDEX IF NOT EXISTS idx_tags_cn_name ON tags(cn_name);`;
       yield* sql`CREATE INDEX IF NOT EXISTS idx_tags_post_count ON tags(post_count);`;
 
-      const rows = yield* sql<{ name: string }>`SELECT name FROM sqlite_master WHERE type='index'`;
+      const rows = yield* sql<{
+        name: string;
+      }>`SELECT name FROM sqlite_master WHERE type='index'`;
       const names = rows.map((i) => i.name);
       expect(names).toContain("idx_tags_name");
       expect(names).toContain("idx_tags_cn_name");

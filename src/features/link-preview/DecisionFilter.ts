@@ -52,9 +52,7 @@ const DecisionsAnswerSchema = Schema.Struct({
 });
 const DecisionsResponseSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
-  answers: Schema.optional(
-    Schema.Record(Schema.String, DecisionsAnswerSchema),
-  ),
+  answers: Schema.optional(Schema.Record(Schema.String, DecisionsAnswerSchema)),
   usage: Schema.optional(
     Schema.Struct({
       input_tokens: Schema.optional(Schema.Finite),
@@ -94,166 +92,152 @@ const NOUL_SUFFICIENT_CRITERIA: DecisionsNoulCriteria = {
 
 export const filterPreviewResults = Effect.fn(
   "DecisionFilter.filterPreviewResults",
-)(
-  function* (
-    rawMessage: string,
-    results: ReadonlyArray<ScrapingResult>,
-    apiKey?: Redacted.Redacted<string>,
-    model: string = DEFAULT_DECISION_MODEL,
-    threshold: number = DEFAULT_THRESHOLD,
-    timeoutDuration: Duration.Input = DEFAULT_TIMEOUT,
-  ) {
-    if (!apiKey || results.length === 0) {
-      return results;
-    }
+)(function* (
+  rawMessage: string,
+  results: ReadonlyArray<ScrapingResult>,
+  apiKey?: Redacted.Redacted<string>,
+  model: string = DEFAULT_DECISION_MODEL,
+  threshold: number = DEFAULT_THRESHOLD,
+  timeoutDuration: Duration.Input = DEFAULT_TIMEOUT,
+) {
+  if (!apiKey || results.length === 0) {
+    return results;
+  }
 
-    const isSuccess = isScrapingResult("Success");
-    const successEntries = results.flatMap((item, index) =>
-      isSuccess(item) ? [{ index, data: item.data }] : [],
-    );
+  const isSuccess = isScrapingResult("Success");
+  const successEntries = results.flatMap((item, index) =>
+    isSuccess(item) ? [{ index, data: item.data }] : [],
+  );
 
-    if (successEntries.length === 0) {
-      return results;
-    }
+  if (successEntries.length === 0) {
+    return results;
+  }
 
-    const filterEffect = Effect.gen(function* () {
-      const previews: Record<
-        string,
-        {
-          readonly url: string;
-          readonly title?: string;
-          readonly description?: string;
-          readonly standard_truncated?: string;
-        }
-      > = {};
-      const questions: Record<string, DecisionsNoulQuestion> = {};
-      const sufficiencyAskedKeys = new Set<string>();
-
-      for (const entry of successEntries) {
-        const key = `preview_${entry.index}`;
-        const description = entry.data.description;
-        const isLongDescription =
-          description !== undefined &&
-          stringWidth(description) > DEFAULT_DESCRIPTION_MAX_WIDTH;
-        const standardTruncated = description
-          ? truncate(description, DEFAULT_DESCRIPTION_MAX_WIDTH)
-          : undefined;
-
-        previews[key] = {
-          url: entry.data.url,
-          title: entry.data.title,
-          description,
-          standard_truncated: standardTruncated,
-        };
-        questions[key] = {
-          type: "noul",
-          instructions: NOUL_INSTRUCTIONS,
-          criteria: NOUL_CRITERIA,
-        };
-
-        if (isLongDescription) {
-          sufficiencyAskedKeys.add(key);
-          questions[`${key}_standard_is_sufficient`] = {
-            type: "noul",
-            instructions: `Does \`previews.${key}.standard_truncated\` convey the substantive new facts not in \`user_message\`?`,
-            criteria: NOUL_SUFFICIENT_CRITERIA,
-          };
-        }
+  const filterEffect = Effect.gen(function* () {
+    const previews: Record<
+      string,
+      {
+        readonly url: string;
+        readonly title?: string;
+        readonly description?: string;
+        readonly standard_truncated?: string;
       }
-      const payload: DecisionsRequest = {
-        model,
-        state: {
-          user_message: rawMessage,
-          previews,
-        },
-        questions,
+    > = {};
+    const questions: Record<string, DecisionsNoulQuestion> = {};
+    const sufficiencyAskedKeys = new Set<string>();
+
+    for (const entry of successEntries) {
+      const key = `preview_${entry.index}`;
+      const description = entry.data.description;
+      const isLongDescription =
+        description !== undefined &&
+        stringWidth(description) > DEFAULT_DESCRIPTION_MAX_WIDTH;
+      const standardTruncated = description
+        ? truncate(description, DEFAULT_DESCRIPTION_MAX_WIDTH)
+        : undefined;
+
+      previews[key] = {
+        url: entry.data.url,
+        title: entry.data.title,
+        description,
+        standard_truncated: standardTruncated,
+      };
+      questions[key] = {
+        type: "noul",
+        instructions: NOUL_INSTRUCTIONS,
+        criteria: NOUL_CRITERIA,
       };
 
-      const request = yield* HttpClientRequest.post(
-        OPENROUTER_DECISIONS_URL,
-      ).pipe(
-        HttpClientRequest.bearerToken(Redacted.value(apiKey)),
-        HttpClientRequest.bodyJson(payload),
-      );
-
-      const responseData = yield* fetchJson(
-        request,
-        DecisionsResponseSchema,
-        {
-          timeoutDuration,
-        },
-      ).pipe(
-        Effect.mapError(
-          (cause) =>
-            new DecisionFilterError({
-              cause: cause.detail ?? cause.message,
-            }),
-        ),
-      );
-
-      if (!responseData.answers) {
-        return yield* new DecisionFilterError({
-          cause:
-            "Missing or invalid 'answers' envelope in Decisions response",
-        });
+      if (isLongDescription) {
+        sufficiencyAskedKeys.add(key);
+        questions[`${key}_standard_is_sufficient`] = {
+          type: "noul",
+          instructions: `Does \`previews.${key}.standard_truncated\` convey the substantive new facts not in \`user_message\`?`,
+          criteria: NOUL_SUFFICIENT_CRITERIA,
+        };
       }
+    }
+    const payload: DecisionsRequest = {
+      model,
+      state: {
+        user_message: rawMessage,
+        previews,
+      },
+      questions,
+    };
 
-      const answers = responseData.answers ?? {};
+    const request = yield* HttpClientRequest.post(
+      OPENROUTER_DECISIONS_URL,
+    ).pipe(
+      HttpClientRequest.bearerToken(Redacted.value(apiKey)),
+      HttpClientRequest.bodyJson(payload),
+    );
 
-      const updated: ScrapingResult[] = [];
-      for (let index = 0; index < results.length; index++) {
-        const item = results[index]!;
-        if (!isSuccess(item)) {
-          updated.push(item);
-          continue;
-        }
-        const key = `preview_${index}`;
-        const primaryAnswer =
-          answers[`${key}_has_substantive_info`] ?? answers[key];
-        const score = Predicate.isNumber(primaryAnswer?.noul)
-          ? primaryAnswer.noul
-          : undefined;
-        const passed = score !== undefined && score >= threshold;
-        if (passed) {
-          let expanded = false;
-          if (sufficiencyAskedKeys.has(key)) {
-            const sufficiencyAnswer =
-              answers[`${key}_standard_is_sufficient`];
-            const sufficiencyScore = Predicate.isNumber(
-              sufficiencyAnswer?.noul,
-            )
-              ? sufficiencyAnswer.noul
-              : undefined;
-            if (
-              sufficiencyScore !== undefined &&
-              sufficiencyScore < threshold
-            ) {
-              expanded = true;
-            }
-          }
-          updated.push({
-            ...item,
-            expanded,
-          });
-        } else {
-          const scoreText =
-            score !== undefined ? String(score) : "unknown";
-          yield* Effect.logInfo(
-            `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
-          );
-          updated.push(ScrapingFiltered({ url: item.data.url }));
-        }
-      }
-
-      return updated;
+    const responseData = yield* fetchJson(request, DecisionsResponseSchema, {
+      timeoutDuration,
     }).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Decision filter failed, falling back to original preview: ${String(error)}`,
-        ).pipe(Effect.as(results)),
+      Effect.mapError(
+        (cause) =>
+          new DecisionFilterError({
+            cause: cause.detail ?? cause.message,
+          }),
       ),
     );
 
-    return yield* filterEffect;
-  },
-);
+    if (!responseData.answers) {
+      return yield* new DecisionFilterError({
+        cause: "Missing or invalid 'answers' envelope in Decisions response",
+      });
+    }
+
+    const answers = responseData.answers ?? {};
+
+    const updated: ScrapingResult[] = [];
+    for (let index = 0; index < results.length; index++) {
+      const item = results[index]!;
+      if (!isSuccess(item)) {
+        updated.push(item);
+        continue;
+      }
+      const key = `preview_${index}`;
+      const primaryAnswer =
+        answers[`${key}_has_substantive_info`] ?? answers[key];
+      const score = Predicate.isNumber(primaryAnswer?.noul)
+        ? primaryAnswer.noul
+        : undefined;
+      const passed = score !== undefined && score >= threshold;
+      if (passed) {
+        let expanded = false;
+        if (sufficiencyAskedKeys.has(key)) {
+          const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
+          const sufficiencyScore = Predicate.isNumber(sufficiencyAnswer?.noul)
+            ? sufficiencyAnswer.noul
+            : undefined;
+          if (sufficiencyScore !== undefined && sufficiencyScore < threshold) {
+            expanded = true;
+          }
+        }
+        updated.push({
+          ...item,
+          expanded,
+        });
+      } else {
+        const scoreText = score !== undefined ? String(score) : "unknown";
+        yield* Effect.logInfo(
+          `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
+        );
+        updated.push(ScrapingFiltered({ url: item.data.url }));
+      }
+    }
+
+    return updated;
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Decision filter failed, falling back to original preview: ${String(error)}`,
+      ).pipe(Effect.as(results)),
+    ),
+  );
+
+  return yield* filterEffect;
+});

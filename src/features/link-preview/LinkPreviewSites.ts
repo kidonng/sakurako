@@ -215,7 +215,9 @@ export const danbooruCustomizer: SiteCustomizer = {
     }).pipe(
       Effect.catchTag("HttpFetchError", (err) =>
         // oxlint-disable-next-line effecttsgo/effect-succeed-with-void
-        err.status === 404 ? Effect.fail(err) : Effect.succeed(undefined as PageMetadata | undefined),
+        err.status === 404
+          ? Effect.fail(err)
+          : Effect.succeed(undefined as PageMetadata | undefined),
       ),
     ),
 };

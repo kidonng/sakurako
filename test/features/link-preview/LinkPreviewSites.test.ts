@@ -280,10 +280,7 @@ describe("LinkPreviewSites", () => {
       const error = await Effect.runPromise(
         danbooruCustomizer.scrape!({
           url: new URL("https://danbooru.donmai.us/posts/9999999"),
-        }).pipe(
-          Effect.provide(httpLayer),
-          Effect.flip,
-        ),
+        }).pipe(Effect.provide(httpLayer), Effect.flip),
       );
 
       expect(error._tag).toBe("HttpFetchError");
