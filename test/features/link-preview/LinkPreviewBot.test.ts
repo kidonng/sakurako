@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent, OutgoingMessage } from "@snowluma/sdk/types";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
+import { HttpBody } from "effect/http";
 import { handleLinkPreviewMessage } from "../../../src/features/link-preview/LinkPreview.ts";
 import type { IncomingMessage } from "../../../src/SnowLuma.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
@@ -311,7 +312,7 @@ describe("handleLinkPreviewMessage", () => {
     });
   });
 
-  it("silences reply when single link preview is filtered by Jev", async () => {
+  it("silences reply when single link preview is filtered by decision model", async () => {
     let quotedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
@@ -362,7 +363,7 @@ describe("handleLinkPreviewMessage", () => {
     expect(quotedMessage).toBeNull();
   });
 
-  it("outputs placeholder when one of multiple links is filtered by Jev", async () => {
+  it("outputs placeholder when one of multiple links is filtered by decision model", async () => {
     let quotedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
@@ -424,6 +425,64 @@ describe("handleLinkPreviewMessage", () => {
       data: { text: string };
     };
     expect(textSegment.data.text).toBe("1. [已过滤]\n2. Title Two");
+  });
+
+  it("passes OPENROUTER_MODEL to decision filter request when configured", async () => {
+    let capturedModel: string | undefined;
+
+    const item: IncomingMessage = {
+      event: {
+        raw_message: "Please see https://example.com/test",
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        quote: async () => {},
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+        OPENROUTER_MODEL: "openai/gpt-6-luna-decisions",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        const raw =
+          // oxlint-disable-next-line effecttsgo/unstable-api-usage
+          req.body instanceof HttpBody.Uint8Array
+            ? new TextDecoder().decode(req.body.body)
+            : "{}";
+        const body = JSON.parse(raw) as { model?: string };
+        capturedModel = body.model;
+        return new Response(
+          JSON.stringify({
+            answers: {
+              preview_0: { type: "noul", noul: 0.9 },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        "<html><head><title>Preview Title</title></head></html>",
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(capturedModel).toBe("openai/gpt-6-luna-decisions");
   });
 
   it("does not contact OpenRouter when OPENROUTER_API_KEY is omitted", async () => {

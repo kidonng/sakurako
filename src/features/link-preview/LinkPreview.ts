@@ -32,7 +32,7 @@ import {
   shouldFetchImageLocally,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
-import { filterPreviewResults } from "./DecisionFilter.ts";
+import { DEFAULT_DECISION_MODEL, filterPreviewResults } from "./DecisionFilter.ts";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import {
@@ -624,10 +624,13 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     const results = yield* scrapeAll(urls);
     const config = yield* Effect.option(BotConfig);
     const openrouterApiKey = Option.getOrUndefined(config)?.openrouterApiKey;
+    const openrouterModel =
+      Option.getOrUndefined(config)?.openrouterModel ?? DEFAULT_DECISION_MODEL;
     const filteredResults = yield* filterPreviewResults(
       event.raw_message,
       results,
       openrouterApiKey,
+      openrouterModel,
     );
     const formatted = formatPreview(filteredResults);
     if (!formatted || (!formatted.text && !formatted.image)) {
