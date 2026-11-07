@@ -105,6 +105,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/echo/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
 - `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
 - `src/features/link-preview/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
+- `src/features/link-preview/DecisionFilter.ts`: OpenRouter Decisions API client for semantic link preview filtering and dynamic truncation evaluation.
 - `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
 - `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
 - `src/features/danbooru/Danbooru.ts`: `/dbr` command matching, tag limit verification, and reply dispatch.

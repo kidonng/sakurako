@@ -34,7 +34,7 @@
 
 ### 3. 内容过滤占位
 
-当配置了 `OPENROUTER_API_KEY` 时，Sakurako 会使用 Jev 决策模型评估链接预览相较于原消息是否具有实质新增信息。若多条链接中部分被过滤，未通过的条目将展示为已过滤占位符：
+当配置了 `OPENROUTER_API_KEY` 时，Sakurako 会使用决策模型（默认 `~typesafe/jev-latest`，可通过 `OPENROUTER_MODEL` 环境变量自定义）评估链接预览相较于原消息是否具有实质新增信息。若多条链接中部分被过滤，未通过的条目将展示为已过滤占位符：
 
 ```text
 1. [已过滤]
