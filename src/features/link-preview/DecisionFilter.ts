@@ -75,20 +75,25 @@ class DecisionFilterError extends Schema.TaggedError<
   }
 }
 
-const NOUL_INSTRUCTIONS =
-  "Does the preview for this link provide substantive, valuable, and non-redundant information beyond what is already conveyed in the user message?";
+const makeNoulQuestion = (key: string): DecisionsNoulQuestion => ({
+  type: "noul",
+  instructions: `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to \`user_message\`.`,
+  criteria: {
+    true: "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from `user_message`.",
+    false:
+      "The preview is redundant with `user_message`, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise.",
+  },
+});
 
-const NOUL_CRITERIA: DecisionsNoulCriteria = {
-  true: "The preview provides meaningful context, new facts, or substantial details not already present in the user message, and is not promotional boilerplate, generic site greetings, or channel ads.",
-  false:
-    "The preview merely repeats information already stated in the user message, or consists of generic site slogans, channel/group promo links, submission bots, or empty boilerplate.",
-};
-
-const NOUL_SUFFICIENT_CRITERIA: DecisionsNoulCriteria = {
-  true: "The standard truncated excerpt already conveys meaningful new facts not present in user_message.",
-  false:
-    "The standard truncated excerpt merely repeats what was in user_message, while any new facts only exist further down in description or are absent entirely.",
-};
+const makeSufficiencyQuestion = (key: string): DecisionsNoulQuestion => ({
+  type: "noul",
+  instructions: `Is \`previews.${key}.standard_truncated\` sufficient on its own to convey the essential incremental information?`,
+  criteria: {
+    true: "The essential new facts are already clear within `standard_truncated`, so expanding is unnecessary.",
+    false:
+      "Crucial new facts or core conclusions only appear in the tail of `description` and are lost in `standard_truncated`.",
+  },
+});
 
 export const filterPreviewResults = Effect.fn(
   "DecisionFilter.filterPreviewResults",
@@ -142,19 +147,12 @@ export const filterPreviewResults = Effect.fn(
         description,
         standard_truncated: standardTruncated,
       };
-      questions[key] = {
-        type: "noul",
-        instructions: NOUL_INSTRUCTIONS,
-        criteria: NOUL_CRITERIA,
-      };
+      questions[key] = makeNoulQuestion(key);
 
       if (isLongDescription) {
         sufficiencyAskedKeys.add(key);
-        questions[`${key}_standard_is_sufficient`] = {
-          type: "noul",
-          instructions: `Does \`previews.${key}.standard_truncated\` convey the substantive new facts not in \`user_message\`?`,
-          criteria: NOUL_SUFFICIENT_CRITERIA,
-        };
+        questions[`${key}_standard_is_sufficient`] =
+          makeSufficiencyQuestion(key);
       }
     }
     const payload: DecisionsRequest = {
