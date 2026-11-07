@@ -1,10 +1,13 @@
 import { Config, Option, type Redacted } from "effect";
 
+export const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
+
 export interface BotConfig {
   readonly wsUrl: string;
   readonly accessToken: Redacted.Redacted<string>;
   readonly sauceNaoApiKey?: Redacted.Redacted<string>;
   readonly openrouterApiKey?: Redacted.Redacted<string>;
+  readonly openrouterModel: string;
   readonly devMode: boolean;
   readonly devGroupId?: number;
 }
@@ -19,6 +22,9 @@ export const BotConfig: Config.Config<BotConfig> = Config.all({
   ),
   openrouterApiKey: Config.option(Config.Redacted("OPENROUTER_API_KEY")).pipe(
     Config.map(Option.getOrUndefined),
+  ),
+  openrouterModel: Config.String("OPENROUTER_MODEL").pipe(
+    Config.withDefault(DEFAULT_DECISION_MODEL),
   ),
   devMode: Config.Boolean("DEV_MODE").pipe(Config.withDefault(false)),
   devGroupId: Config.option(Config.Int("DEV_GROUP_ID")).pipe(
