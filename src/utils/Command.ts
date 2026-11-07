@@ -15,13 +15,13 @@ export function parseMessageSegments(
   message: unknown,
   rawMessage?: unknown,
 ): AnyMessageSegment[] {
-  if (Array.isArray(message)) {
+  if (Array.isArray(message) && message.length > 0) {
     return message as unknown as AnyMessageSegment[];
   }
-  if (Predicate.isString(rawMessage)) {
+  if (Predicate.isString(rawMessage) && rawMessage.length > 0) {
     return parseSegments(rawMessage);
   }
-  if (Predicate.isString(message)) {
+  if (Predicate.isString(message) && message.length > 0) {
     return parseSegments(message);
   }
   return [];

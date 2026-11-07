@@ -1,4 +1,5 @@
 import { DateTime, Predicate, Schema } from "effect";
+import { parseMessageSegments } from "../../utils/Command.ts";
 
 const MEDIA_SEGMENT_TYPES: Record<string, true> = {
   image: true,
@@ -7,7 +8,6 @@ const MEDIA_SEGMENT_TYPES: Record<string, true> = {
   mface: true,
 };
 
-const CQ_MEDIA_REGEX = /\[CQ:(image|record|video|mface),/i;
 const HTTP_URL_REGEX = /https?:\/\/\S+/i;
 
 export interface MessageClassification {
@@ -22,36 +22,40 @@ export function classifyMessage(
   let hasMedia = false;
   let hasLink = false;
 
-  if (Array.isArray(message)) {
-    for (const segment of message) {
-      if (
-        Predicate.isObject(segment) &&
-        "type" in segment &&
-        Predicate.isString(segment.type)
-      ) {
-        if (segment.type in MEDIA_SEGMENT_TYPES) {
-          hasMedia = true;
-        }
-        if (
-          segment.type === "text" &&
-          "data" in segment &&
-          Predicate.isObject(segment.data) &&
-          "text" in segment.data &&
-          Predicate.isString(segment.data.text) &&
-          HTTP_URL_REGEX.test(segment.data.text)
-        ) {
-          hasLink = true;
-        }
-      }
-    }
-  }
+  const segments = parseMessageSegments(message, rawMessage);
 
-  if (rawMessage) {
-    if (!hasMedia && CQ_MEDIA_REGEX.test(rawMessage)) {
-      hasMedia = true;
-    }
-    if (!hasLink && HTTP_URL_REGEX.test(rawMessage)) {
-      hasLink = true;
+  for (const segment of segments) {
+    if (
+      Predicate.isObject(segment) &&
+      "type" in segment &&
+      Predicate.isString(segment.type)
+    ) {
+      if (segment.type in MEDIA_SEGMENT_TYPES) {
+        hasMedia = true;
+      }
+      if (
+        segment.type === "text" &&
+        "data" in segment &&
+        Predicate.isObject(segment.data) &&
+        "text" in segment.data &&
+        Predicate.isString(segment.data.text) &&
+        HTTP_URL_REGEX.test(segment.data.text)
+      ) {
+        hasLink = true;
+      }
+      if (
+        segment.type === "share" &&
+        "data" in segment &&
+        Predicate.isObject(segment.data) &&
+        "url" in segment.data &&
+        Predicate.isString(segment.data.url) &&
+        HTTP_URL_REGEX.test(segment.data.url)
+      ) {
+        hasLink = true;
+      }
+      if (hasMedia && hasLink) {
+        break;
+      }
     }
   }
 

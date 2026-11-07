@@ -64,6 +64,55 @@ describe("StatsClassifier", () => {
       );
       expect(res).toEqual({ hasMedia: true, hasLink: false });
     });
+
+    it("does not classify media messages containing download URLs in CQ codes as links", () => {
+      const segmentRes = classifyMessage(
+        [
+          {
+            type: "image",
+            data: {
+              file: "0D09E17787BF2D57986E4271AA599A6D.jpg",
+              url: "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=test",
+            },
+          },
+        ],
+        "[CQ:image,file=0D09E17787BF2D57986E4271AA599A6D.jpg,url=https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=test]",
+      );
+      expect(segmentRes).toEqual({ hasMedia: true, hasLink: false });
+
+      const rawCqRes = classifyMessage(
+        "[CQ:image,file=test.jpg,url=https://multimedia.nt.qq.com.cn/test.jpg]",
+        "[CQ:image,file=test.jpg,url=https://multimedia.nt.qq.com.cn/test.jpg]",
+      );
+      expect(rawCqRes).toEqual({ hasMedia: true, hasLink: false });
+
+      const emptyArrayRes = classifyMessage(
+        [],
+        "[CQ:image,file=test.jpg,url=https://multimedia.nt.qq.com.cn/test.jpg]",
+      );
+      expect(emptyArrayRes).toEqual({ hasMedia: true, hasLink: false });
+
+      const recordRes = classifyMessage(
+        "[CQ:record,file=test.amr,url=https://multimedia.nt.qq.com.cn/test.amr]",
+        "[CQ:record,file=test.amr,url=https://multimedia.nt.qq.com.cn/test.amr]",
+      );
+      expect(recordRes).toEqual({ hasMedia: true, hasLink: false });
+
+      const textWithImageRes = classifyMessage(
+        [
+          { type: "text", data: { text: "look at this pic" } },
+          {
+            type: "image",
+            data: {
+              file: "test.jpg",
+              url: "https://multimedia.nt.qq.com.cn/test.jpg",
+            },
+          },
+        ],
+        "look at this pic [CQ:image,file=test.jpg,url=https://multimedia.nt.qq.com.cn/test.jpg]",
+      );
+      expect(textWithImageRes).toEqual({ hasMedia: true, hasLink: false });
+    });
   });
 
   describe("isGroupPokeNotice", () => {

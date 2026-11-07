@@ -27,6 +27,14 @@ describe("Command utils", () => {
       ]);
     });
 
+    it("falls back to raw_message when message is an empty array", () => {
+      const segments = parseMessageSegments([], "[CQ:face,id=14] test");
+      expect(segments).toEqual([
+        { type: "face", data: { id: "14" } },
+        { type: "text", data: { text: " test" } },
+      ]);
+    });
+
     it("returns empty array when neither message nor raw_message is valid", () => {
       expect(parseMessageSegments(null, undefined)).toEqual([]);
       expect(parseMessageSegments(123, null)).toEqual([]);
