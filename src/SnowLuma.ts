@@ -75,9 +75,6 @@ export class SnowLumaClient extends Context.Service<
           }),
       );
 
-      yield* Effect.logInfo(
-        `Connecting to SnowLuma WebSocket at ${config.wsUrl}...`,
-      );
       yield* Effect.tryPromise({
         try: () => client.connect(),
         catch: (error) =>
@@ -89,7 +86,9 @@ export class SnowLumaClient extends Context.Service<
           ),
         ),
       );
-      yield* Effect.logInfo("Connected to SnowLuma WebSocket");
+      yield* Effect.logInfo(
+        `Connected to SnowLuma WebSocket at ${config.wsUrl}`,
+      );
 
       return SnowLumaClient.of({
         client,
