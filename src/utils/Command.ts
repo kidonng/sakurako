@@ -27,6 +27,45 @@ export function parseMessageSegments(
   return [];
 }
 
+export interface ExtractedMessageImage {
+  readonly file?: string;
+  readonly url?: string;
+  readonly target: string;
+}
+
+/**
+ * Extracts image targets and URLs from message segments or CQ string.
+ */
+export function extractMessageImages(
+  message: unknown,
+  rawMessage?: unknown,
+  limit?: number,
+): ReadonlyArray<ExtractedMessageImage> {
+  const segments = parseMessageSegments(message, rawMessage);
+  const results: ExtractedMessageImage[] = [];
+  for (const segment of segments) {
+    if (segment.type === "image" && segment.data) {
+      const data = segment.data as { file?: unknown; url?: unknown };
+      const file =
+        Predicate.isString(data.file) && data.file.length > 0
+          ? data.file
+          : undefined;
+      const url =
+        Predicate.isString(data.url) && data.url.length > 0
+          ? data.url
+          : undefined;
+      const target = url ?? file;
+      if (target) {
+        results.push({ file, url, target });
+        if (limit !== undefined && results.length >= limit) {
+          break;
+        }
+      }
+    }
+  }
+  return results;
+}
+
 /**
  * Parses a message event into a clean command representation:
  * - Strips `reply` and `at` segments.

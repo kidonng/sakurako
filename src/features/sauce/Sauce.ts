@@ -1,12 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
-import type { AnyMessageSegment } from "@snowluma/sdk/types";
 import { Effect, Option } from "effect";
 import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
-import { parseCommand, parseMessageSegments } from "../../utils/Command.ts";
+import { extractMessageImages, parseCommand } from "../../utils/Command.ts";
 import { searchSauce } from "./SauceNao.ts";
 export const handleSauceMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
@@ -49,27 +48,13 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
       client.getMessage(messageId),
     )) as { message?: unknown; raw_message?: unknown };
 
-    const quotedSegments: AnyMessageSegment[] = parseMessageSegments(
+    const image = extractMessageImages(
       msgData.message,
       msgData.raw_message,
-    );
-
-    const imageSegment = quotedSegments.find((s) => s.type === "image");
-    if (!imageSegment) {
-      yield* Effect.tryPromise(() =>
-        item.context.reply("[未在引用的消息中找到图片]"),
-      );
-      return;
-    }
-
-    const imgData = imageSegment.data as
-      { url?: unknown; file?: unknown } | undefined;
+      1,
+    )[0];
     const imageUrl =
-      typeof imgData?.url === "string" && imgData.url.length > 0
-        ? imgData.url
-        : typeof imgData?.file === "string" && imgData.file.startsWith("http")
-          ? imgData.file
-          : undefined;
+      image?.url ?? (image?.file?.startsWith("http") ? image.file : undefined);
 
     if (!imageUrl) {
       yield* Effect.tryPromise(() =>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { parseCommand, parseMessageSegments } from "../../src/utils/Command.ts";
+import {
+  extractMessageImages,
+  parseCommand,
+  parseMessageSegments,
+} from "../../src/utils/Command.ts";
 
 describe("Command utils", () => {
   describe("parseMessageSegments", () => {
@@ -123,6 +127,56 @@ describe("Command utils", () => {
       });
       expect(result?.text).toBe("/stat all");
       expect(result?.replyMessageId).toBe(54321);
+    });
+  });
+  describe("extractMessageImages", () => {
+    it("extracts images with file and url from structured segments", () => {
+      const segments = [
+        { type: "text", data: { text: "hello" } },
+        {
+          type: "image",
+          data: { file: "test.png", url: "https://example.com/test.png" },
+        },
+      ];
+      const result = extractMessageImages(segments);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        file: "test.png",
+        url: "https://example.com/test.png",
+        target: "https://example.com/test.png",
+      });
+    });
+
+    it("extracts image from CQ string with file and url", () => {
+      const raw =
+        "test [CQ:image,file=abc.png,url=https://multimedia.nt.qq.com/img1]";
+      const result = extractMessageImages(undefined, raw);
+      expect(result).toEqual([
+        {
+          file: "abc.png",
+          url: "https://multimedia.nt.qq.com/img1",
+          target: "https://multimedia.nt.qq.com/img1",
+        },
+      ]);
+    });
+
+    it("falls back to file when url is missing", () => {
+      const raw = "[CQ:image,file=only-file.png]";
+      const result = extractMessageImages(undefined, raw);
+      expect(result).toEqual([
+        {
+          file: "only-file.png",
+          url: undefined,
+          target: "only-file.png",
+        },
+      ]);
+    });
+
+    it("respects limit parameter", () => {
+      const raw = "[CQ:image,file=1.png] [CQ:image,file=2.png]";
+      const result = extractMessageImages(undefined, raw, 1);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.file).toBe("1.png");
     });
   });
 });

@@ -46,7 +46,7 @@ import {
   formatLogSnippet,
 } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
-import { parseMessageSegments } from "../../utils/Command.ts";
+import { extractMessageImages } from "../../utils/Command.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
@@ -378,24 +378,9 @@ export function extractUserImageFiles(
   rawMessage?: unknown,
   limit: number = 1,
 ): ReadonlyArray<string> {
-  const segments = parseMessageSegments(message, rawMessage);
-  const files: string[] = [];
-  for (const segment of segments) {
-    if (segment.type === "image" && segment.data) {
-      const imgData = segment.data as { file?: unknown; url?: unknown };
-      const target =
-        Predicate.isString(imgData.url) && imgData.url.length > 0
-          ? imgData.url
-          : imgData.file;
-      if (Predicate.isString(target) && target.length > 0) {
-        files.push(target);
-        if (files.length >= limit) {
-          break;
-        }
-      }
-    }
-  }
-  return files;
+  return extractMessageImages(message, rawMessage, limit).map(
+    (img) => img.target,
+  );
 }
 
 export const downloadAndProcessUserImage = Effect.fnUntraced(function* (
