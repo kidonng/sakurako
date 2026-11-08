@@ -1,6 +1,8 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
+import type { SnowLumaApiClient } from "@snowluma/sdk";
+import sharp from "sharp";
 import {
   Data,
   Duration,
@@ -134,6 +136,20 @@ class ParseMetadataError extends Schema.TaggedError<
 }) {
   override get message(): string {
     return `Failed to parse metadata: ${String(this.cause)}`;
+  }
+}
+
+class ProcessUserImageError extends Schema.TaggedError<
+  ProcessUserImageError,
+  {
+    readonly brand: unique symbol;
+  }
+>()("ProcessUserImageError", {
+  file: Schema.String,
+  cause: Schema.Defect(),
+}) {
+  override get message(): string {
+    return `Failed to download and process user image ${this.file}: ${String(this.cause)}`;
   }
 }
 type ScrapeMetadataError =
@@ -377,6 +393,36 @@ export function extractUserImageFiles(
   }
   return files;
 }
+
+export const downloadAndProcessUserImage = Effect.fnUntraced(function* (
+  client: SnowLumaApiClient,
+  file: string,
+) {
+  return yield* Effect.tryPromise({
+    try: async () => {
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of client.downloadFileStream(
+        { file },
+        { action: "download_file_image_stream" },
+      )) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      const processed = await sharp(buffer)
+        .resize(1000, 1000, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      return `data:image/jpeg;base64,${processed.toString("base64")}`;
+    },
+    catch: (cause) => new ProcessUserImageError({ file, cause }),
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(error.message).pipe(
+        Effect.as(undefined as string | undefined),
+      ),
+    ),
+  );
+});
 
 export function extractUrls(text: string): ReadonlyArray<string> {
   const urls = new Set<string>();
