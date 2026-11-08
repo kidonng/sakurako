@@ -566,9 +566,17 @@ describe("filterPreviewResults", () => {
     });
   });
   it("serializes state as top-level array with image_url parts when userImages are provided", async () => {
-    const captured: { body?: { state?: unknown } } = {};
+    const captured: {
+      body?: {
+        state?: unknown;
+        questions?: Record<string, { instructions?: string }>;
+      };
+    } = {};
     const layer = makeTestHttpClient((req) => {
-      captured.body = extractJsonBody(req) as { state?: unknown };
+      captured.body = extractJsonBody(req) as {
+        state?: unknown;
+        questions?: Record<string, { instructions?: string }>;
+      };
       return new Response(
         JSON.stringify({
           model: "perplexity/pplx-decider-flash-v1.2",
@@ -605,12 +613,23 @@ describe("filterPreviewResults", () => {
       type: "image_url",
       image_url: { url: "data:image/jpeg;base64,abc12345" },
     });
+    expect(captured.body?.questions?.preview_0?.instructions).toContain(
+      "user's message and attached images in `state`",
+    );
   });
 
   it("preserves object state when userImages is empty or undefined", async () => {
-    const captured: { body?: { state?: unknown } } = {};
+    const captured: {
+      body?: {
+        state?: unknown;
+        questions?: Record<string, { instructions?: string }>;
+      };
+    } = {};
     const layer = makeTestHttpClient((req) => {
-      captured.body = extractJsonBody(req) as { state?: unknown };
+      captured.body = extractJsonBody(req) as {
+        state?: unknown;
+        questions?: Record<string, { instructions?: string }>;
+      };
       return new Response(
         JSON.stringify({
           model: "perplexity/pplx-decider-flash-v1.2",
@@ -638,5 +657,8 @@ describe("filterPreviewResults", () => {
     const state = captured.body?.state as Record<string, unknown>;
     expect(Array.isArray(state)).toBe(false);
     expect(state?.user_message).toBe("clean message");
+    expect(captured.body?.questions?.preview_0?.instructions).toContain(
+      "compared to `user_message`",
+    );
   });
 });

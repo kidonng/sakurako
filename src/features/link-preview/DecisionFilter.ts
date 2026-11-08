@@ -88,13 +88,21 @@ class DecisionFilterError extends Schema.TaggedError<
   }
 }
 
-const makeNoulQuestion = (key: string): DecisionsNoulQuestion => ({
+const makeNoulQuestion = (
+  key: string,
+  hasImages: boolean = false,
+): DecisionsNoulQuestion => ({
   type: "noul",
-  instructions: `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to \`user_message\`.`,
+  instructions: hasImages
+    ? `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to the user's message and attached images in \`state\`.`
+    : `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to \`user_message\`.`,
   criteria: {
-    true: "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from `user_message`.",
-    false:
-      "The preview is redundant with `user_message`, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise.",
+    true: hasImages
+      ? "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from the user's message and attached images."
+      : "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from `user_message`.",
+    false: hasImages
+      ? "The preview is redundant with the user's message or attached images, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise."
+      : "The preview is redundant with `user_message`, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise.",
   },
 });
 
@@ -145,6 +153,7 @@ export const filterPreviewResults = Effect.fn(
     const questions: Record<string, DecisionsNoulQuestion> = {};
     const sufficiencyAskedKeys = new Set<string>();
 
+    const hasImages = Boolean(userImages && userImages.length > 0);
     for (const entry of successEntries) {
       const key = `preview_${entry.index}`;
       const description = entry.data.description;
@@ -161,7 +170,7 @@ export const filterPreviewResults = Effect.fn(
         description,
         standard_truncated: standardTruncated,
       };
-      questions[key] = makeNoulQuestion(key);
+      questions[key] = makeNoulQuestion(key, hasImages);
 
       if (isLongDescription) {
         sufficiencyAskedKeys.add(key);

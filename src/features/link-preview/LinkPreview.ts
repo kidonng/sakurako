@@ -382,9 +382,13 @@ export function extractUserImageFiles(
   const files: string[] = [];
   for (const segment of segments) {
     if (segment.type === "image" && segment.data) {
-      const imgData = segment.data as { file?: unknown };
-      if (Predicate.isString(imgData.file) && imgData.file.length > 0) {
-        files.push(imgData.file);
+      const imgData = segment.data as { file?: unknown; url?: unknown };
+      const target =
+        Predicate.isString(imgData.url) && imgData.url.length > 0
+          ? imgData.url
+          : imgData.file;
+      if (Predicate.isString(target) && target.length > 0) {
+        files.push(target);
         if (files.length >= limit) {
           break;
         }
