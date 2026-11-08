@@ -41,7 +41,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
-- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY`, `OPENROUTER_API_KEY`, and `OPENROUTER_MODEL` using Effect's `Config` module.
+- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN`, and optional `SAUCENAO_API_KEY`, `OPENROUTER_API_KEY`, and `OPENROUTER_DECISION_MODEL` using Effect's `Config` module.
 - **Service Layer**: `SnowLumaClient` encapsulates `SnowLumaWebSocketClient`, managing socket connection, reconnection, and teardown inside a scoped `Layer`.
 - **Event Pipeline**: WebSocket callbacks offer messages and notices to unbounded Queues, exposed downstream as typed `messages` and `notices` Streams.
 - **Consumer Layer**: `src/index.ts` dispatches messages concurrently to `EchoBot`, `LinkPreview`, `Sauce`, `Danbooru`, `StatsCollector`, and `StatsCommand`, and notices to `StatsCollector`. Each handler isolates errors per event with `Effect.catch`, ensuring streams remain active even if individual reply actions fail.
@@ -100,7 +100,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 ## Important Files
 
 - `src/index.ts`: Application entry point dispatching messages concurrently to `handleIncomingMessage`, `handleLinkPreviewMessage`, and `handleSauceMessage` with merged `SnowLumaClient.layer` and `FetchHttpClient.layer` via `BunRuntime.runMain`.
-- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), optional `OPENROUTER_API_KEY` (`Redacted`), and `OPENROUTER_MODEL`.
+- `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), optional `OPENROUTER_API_KEY` (`Redacted`), and `OPENROUTER_DECISION_MODEL`.
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
 - `src/features/echo/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
 - `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and direct reply dispatch.

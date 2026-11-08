@@ -428,7 +428,7 @@ describe("handleLinkPreviewMessage", () => {
     expect(textSegment.data.text).toBe("1. [已过滤]\n2. Title Two");
   });
 
-  it("passes OPENROUTER_MODEL to decision filter request when configured", async () => {
+  it("passes OPENROUTER_DECISION_MODEL to decision filter request when configured", async () => {
     let capturedModel: string | undefined;
 
     const item: IncomingMessage = {
@@ -449,7 +449,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test_key",
-        OPENROUTER_MODEL: "openai/gpt-6-luna-decisions",
+        OPENROUTER_DECISION_MODEL: "openai/gpt-6-luna-decisions",
       }),
     );
 

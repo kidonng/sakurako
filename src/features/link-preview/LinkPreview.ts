@@ -692,8 +692,9 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     const results = yield* scrapeAll(urls);
     const config = yield* Effect.option(BotConfig);
     const openrouterApiKey = Option.getOrUndefined(config)?.openrouterApiKey;
-    const openrouterModel =
-      Option.getOrUndefined(config)?.openrouterModel ?? DEFAULT_DECISION_MODEL;
+    const openrouterDecisionModel =
+      Option.getOrUndefined(config)?.openrouterDecisionModel ??
+      DEFAULT_DECISION_MODEL;
     let userImages: string[] | undefined;
     if (openrouterApiKey) {
       const imageFiles = extractUserImageFiles(
@@ -716,7 +717,7 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
       cleanUserMessage,
       results,
       openrouterApiKey,
-      openrouterModel,
+      openrouterDecisionModel,
       undefined,
       undefined,
       userImages,
