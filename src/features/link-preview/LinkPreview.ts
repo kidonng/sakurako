@@ -44,6 +44,7 @@ import {
   formatLogSnippet,
 } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
+import { parseMessageSegments } from "../../utils/Command.ts";
 import { truncate } from "../../utils/TextWidth.ts";
 
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
@@ -346,6 +347,35 @@ function trimTrailingUrlPunctuation(url: string): string {
 
 function stripCqCodes(text: string): string {
   return text.replace(/\[CQ:[^\]]+\]/g, " ");
+}
+
+export function sanitizeUserMessageForDecision(rawMessage: string): string {
+  return rawMessage
+    .replace(/\[CQ:image,[^\]]+\]/g, "[图片]")
+    .replace(/\[CQ:at,[^\]]+\]/g, "@用户")
+    .replace(/\[CQ:[^\]]+\]/g, "")
+    .trim();
+}
+
+export function extractUserImageFiles(
+  message: unknown,
+  rawMessage?: unknown,
+  limit: number = 1,
+): ReadonlyArray<string> {
+  const segments = parseMessageSegments(message, rawMessage);
+  const files: string[] = [];
+  for (const segment of segments) {
+    if (segment.type === "image" && segment.data) {
+      const imgData = segment.data as { file?: unknown };
+      if (Predicate.isString(imgData.file) && imgData.file.length > 0) {
+        files.push(imgData.file);
+        if (files.length >= limit) {
+          break;
+        }
+      }
+    }
+  }
+  return files;
 }
 
 export function extractUrls(text: string): ReadonlyArray<string> {
