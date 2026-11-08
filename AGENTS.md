@@ -52,6 +52,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 - `test/`: Unit and integration test suites using `bun:test`.
 - `.superpowers/specs/`: Architecture specifications and design documents.
 - `.superpowers/plans/`: Implementation plans and task breakdowns.
+- `docs/config.md`: Configuration, deployment, and static resource setup guide.
 - `docs/features/`: User-facing feature documentation (e.g. `docs/features/link-preview.md`).
 
 ## Development Commands
@@ -119,6 +120,7 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/features/stats/StatsRenderer.tsx`: Leaderboard image card rendering pipeline using Satori and Sharp with MiSans typography.
 - `src/features/stats/StatsCommand.ts`: Active command router for `/stat`, `/stat all`, and `/me` with cooldown and empty-state fallbacks.
 - `docs/features/stats.md`: User-facing documentation for group message statistics.
+- `docs/config.md`: Comprehensive environment configuration, offline resource initialization, and storage guide.
 - `scripts/download-font.ts`: Font setup script fetching and extracting MiSans from official CDN.
 - `src/utils/TextWidth.ts`: Text truncation based on `string-width` and `Intl.Segmenter`.
 - `src/utils/MessageGuard.ts`: `isSelfMessage` (shared loop guard) and `isGroupMessage` (group message type guard).
