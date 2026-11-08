@@ -705,11 +705,32 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     const openrouterApiKey = Option.getOrUndefined(config)?.openrouterApiKey;
     const openrouterModel =
       Option.getOrUndefined(config)?.openrouterModel ?? DEFAULT_DECISION_MODEL;
+    let userImages: string[] | undefined;
+    if (openrouterApiKey) {
+      const imageFiles = extractUserImageFiles(
+        event.message,
+        event.raw_message,
+      );
+      if (imageFiles.length > 0 && item.context.client) {
+        const firstFile = imageFiles[0]!;
+        const processed = yield* downloadAndProcessUserImage(
+          item.context.client,
+          firstFile,
+        );
+        if (processed) {
+          userImages = [processed];
+        }
+      }
+    }
+    const cleanUserMessage = sanitizeUserMessageForDecision(event.raw_message);
     const filteredResults = yield* filterPreviewResults(
-      event.raw_message,
+      cleanUserMessage,
       results,
       openrouterApiKey,
       openrouterModel,
+      undefined,
+      undefined,
+      userImages,
     );
     const formatted = formatPreview(filteredResults);
     if (!formatted || (!formatted.text && !formatted.image)) {

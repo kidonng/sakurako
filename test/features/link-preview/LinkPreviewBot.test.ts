@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import sharp from "sharp";
 import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
 import type { OneBotMessageEvent, OutgoingMessage } from "@snowluma/sdk/types";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
@@ -658,5 +659,91 @@ describe("handleLinkPreviewMessage", () => {
     expect(segmentsList[1]?.data.file).toBe(
       `base64://${Buffer.from(croppedBytes).toString("base64")}`,
     );
+  });
+  it("extracts user images, sanitizes CQ codes, and sends multimodal state to OpenRouter Decisions", async () => {
+    const capturedBody: { value?: { state?: unknown } } = {};
+    const rawPng = await sharp({
+      create: {
+        width: 100,
+        height: 100,
+        channels: 3,
+        background: { r: 0, g: 255, b: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test-openrouter-key",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        // oxlint-disable-next-line effecttsgo/unstable-api-usage
+        if (req.body instanceof HttpBody.Uint8Array) {
+          const raw = new TextDecoder().decode(req.body.body);
+          capturedBody.value = JSON.parse(raw);
+        }
+        return new Response(
+          JSON.stringify({
+            answers: {
+              preview_0: { type: "noul", noul: 0.9 },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        '<html><head><title>Scraped Title</title><meta name="description" content="Scraped Desc"></head></html>',
+        { status: 200, headers: { "Content-Type": "text/html" } },
+      );
+    });
+
+    const item: IncomingMessage = {
+      event: {
+        raw_message:
+          "see this https://example.com/incident [CQ:image,file=screenshot.png]",
+        message: [
+          {
+            type: "text",
+            data: { text: "see this https://example.com/incident " },
+          },
+          { type: "image", data: { file: "screenshot.png" } },
+        ],
+        message_type: "group",
+        user_id: 10001,
+        self_id: 99999,
+        post_type: "message",
+      } as unknown as OneBotMessageEvent,
+      context: {
+        client: {
+          downloadFileStream: async function* () {
+            yield rawPng;
+          },
+        },
+        reply: async () => {},
+      } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
+    };
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(capturedBody.value).toBeDefined();
+    const state = capturedBody.value?.state as Array<Record<string, unknown>>;
+    expect(Array.isArray(state)).toBe(true);
+    expect(state).toHaveLength(2);
+    expect(state[0]?.user_message).toBe(
+      "see this https://example.com/incident [图片]",
+    );
+    expect(state[1]?.type).toBe("image_url");
+    const imgPart = state[1]?.image_url as { url: string };
+    expect(imgPart.url.startsWith("data:image/jpeg;base64,")).toBe(true);
   });
 });
