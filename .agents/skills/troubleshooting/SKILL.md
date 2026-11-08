@@ -1,3 +1,8 @@
+---
+name: troubleshooting
+description: Use when investigating runtime bot errors, inspecting OneBot message metadata via inspect-msg, analyzing SnowLuma container logs, or debugging link preview and sauce reply failures
+---
+
 # 故障排查与消息检索指南 (Troubleshooting Guide)
 
 本文档介绍在开发与日常运维 Sakurako 时，如何通过消息片段或日志快速定位原始消息、获取完整 OneBot 元数据，以及如何将 Sakurako 业务日志与底层事件进行关联排查。

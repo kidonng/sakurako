@@ -52,7 +52,6 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 - `test/`: Unit and integration test suites using `bun:test`.
 - `.superpowers/specs/`: Architecture specifications and design documents.
 - `.superpowers/plans/`: Implementation plans and task breakdowns.
-- `docs/`: Documentation and troubleshooting guides (e.g. `docs/troubleshooting.md`).
 - `docs/features/`: User-facing feature documentation (e.g. `docs/features/link-preview.md`).
 
 ## Development Commands
@@ -153,5 +152,4 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
   - **Tiered Testing & No Duplicate Paths**: Test detailed DOM/rule parsing branches in focused unit tests (e.g. `LinkPreviewSites.test.ts`), while keeping integration tests minimal to verify wiring without duplicating rule branches. Do not duplicate identical test execution paths with merely cosmetic variations.
   - **Consolidate Common Setup**: Group default and fallback assertions together when testing configuration records instead of repeating identical environment setup across multiple fragmented test cases.
 
-@docs/troubleshooting.md
 @node_modules/effect/AGENTS.md
