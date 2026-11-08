@@ -7,7 +7,7 @@ Sakurako is a QQ bot built with TypeScript, running on Bun and powered by the Ef
 Key features include:
 
 - **Echo Bot**: Matches incoming messages strictly equaling `"喵喵喵"` and sends a plain text reply `"喵喵喵"`.
-- **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, applies site-specific custom displays (e.g. GitHub, Hacker News), truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured quote replies (`context.quote`).
+- **Link Preview**: Extracts HTTP/HTTPS links via `get-urls`, fetches OpenGraph/HTML metadata using `metascraper`, applies site-specific custom displays (e.g. GitHub, Hacker News), truncates text according to East Asian Width (`string-width`), guards against SSRF using `ip-address`, and sends structured direct replies (`context.reply`).
 - **Image Sauce**: Matches incoming messages strictly equaling `"/sauce"` replying to an image, queries SauceNao API, and replies with work title, author, and source link.
 - **Message Statistics**: Silently aggregates group member messages by type (total, media, links, interactions) into SQLite daily buckets using `@effect/sql-sqlite-bun` and `SqliteMigrator`. Generates Option B high-density leaderboard image cards via Satori + Sharp (`/stat`, `/stat all`) and replies with personal stats breakdowns (`/me`).
 - **Danbooru**: Matches incoming messages starting with `"/dbr"`, processes tags using an offline bilingual SQLite dictionary (`assets/danbooru-tags.sqlite`), queries Danbooru random SFW posts, and replies with official format title and image.
@@ -34,7 +34,7 @@ The project follows a reactive, decoupled architecture built on Effect 4 service
 (src/features/     (src/features/      (src/features/      (src/features/      (src/features/
  echo/EchoBot.ts)   link-preview/)      sauce/Sauce.ts)     danbooru/)          stats/)
   - "喵喵喵"           - metascraper       - /sauce            - /dbr [tags]       - /stat, /me
-  - context.reply      - context.quote     - context.quote     - context.reply     - Satori + Sharp
+  - context.reply      - context.reply     - context.reply     - context.reply     - Satori + Sharp
        │                   │                   │                   │                   │
        └───────────────────┴───────────────────┴───────────────────┴───────────────────┴───────────────────┘
                                    ▼
@@ -103,10 +103,10 @@ General Effect patterns (`Effect.fn`, `Schema`, `Context.Service`, `Stream`, `Da
 - `src/Config.ts`: Effect `Config.all` schema for `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), optional `OPENROUTER_API_KEY` (`Redacted`), and `OPENROUTER_MODEL`.
 - `src/SnowLuma.ts`: `SnowLumaClient` service, WebSocket connection management, and event-to-stream bridge.
 - `src/features/echo/EchoBot.ts`: Domain logic, message filtering, anti-loop guards, and reply dispatch for "喵喵喵".
-- `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and quote reply dispatch.
+- `src/features/link-preview/LinkPreview.ts`: URL extraction, metadata scraping via `HttpClient.HttpClient`, East Asian Width formatting, SSRF guard, and direct reply dispatch.
 - `src/features/link-preview/LinkPreviewSites.ts`: Site-specific customization rules (e.g. GitHub, Hacker News), display formatting hooks, and metascraper plugin integration.
 - `src/features/link-preview/DecisionFilter.ts`: OpenRouter Decisions API client for semantic link preview filtering and dynamic truncation evaluation.
-- `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and quote reply dispatch.
+- `src/features/sauce/Sauce.ts`: `/sauce` command matching, OneBot quote image extraction, and direct reply dispatch.
 - `src/features/sauce/SauceNao.ts`: SauceNao API client, similarity threshold verification, and metadata normalization.
 - `src/features/danbooru/Danbooru.ts`: `/dbr` command matching, tag limit verification, and reply dispatch.
 - `src/features/danbooru/DanbooruClient.ts`: Danbooru random post and local image fetch client with `DANBOORU_USER_AGENT`.

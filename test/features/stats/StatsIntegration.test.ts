@@ -103,7 +103,7 @@ describe("StatsIntegration", () => {
       expect(meText).toContain("媒体消息：1 / 1 条");
 
       // 4. User 1001 executes /stat
-      let quotedStatPayload: unknown = null;
+      let repliedStatPayload: unknown = null;
       const statMsg: IncomingMessage = {
         event: {
           time: 1700000015,
@@ -120,16 +120,16 @@ describe("StatsIntegration", () => {
           sender: { user_id: 1001, nickname: "Alice", card: "AliceCard" },
         } as OneBotGroupMessageEvent,
         context: {
-          quote: (payload: unknown) => {
-            quotedStatPayload = payload;
+          reply: (payload: unknown) => {
+            repliedStatPayload = payload;
             return Promise.resolve({} as never);
           },
         } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
       };
       yield* handleStatsCommand(statMsg);
 
-      expect(quotedStatPayload).toBeDefined();
-      const payloadStr = JSON.stringify(quotedStatPayload);
+      expect(repliedStatPayload).toBeDefined();
+      const payloadStr = JSON.stringify(repliedStatPayload);
       expect(payloadStr).toContain("base64://");
     });
 

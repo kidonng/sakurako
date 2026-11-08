@@ -16,8 +16,7 @@ function createMockItem(params: {
   getMessageError?: boolean;
   onGetMessage?: (id: number) => void;
 }) {
-  const quotedReplies: unknown[] = [];
-
+  const sentReplies: unknown[] = [];
   const item: IncomingMessage = {
     event: {
       raw_message: params.raw_message,
@@ -39,15 +38,15 @@ function createMockItem(params: {
           }) as Record<string, unknown>;
         },
       },
-      quote: async (msg: unknown) => {
-        quotedReplies.push(msg);
+      reply: async (msg: unknown) => {
+        sentReplies.push(msg);
       },
     } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
   };
 
   return {
     item,
-    getQuotedReplies: () => quotedReplies,
+    getReplies: () => sentReplies,
   };
 }
 
@@ -75,8 +74,8 @@ const dummyHttpLayer = makeTestHttpClient(() =>
 );
 
 describe("handleSauceMessage", () => {
-  it("quotes reply with formatted text when quoting a message with an image", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+  it("replies with formatted text when quoting a message with an image", async () => {
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -94,7 +93,7 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toEqual({
       type: "text",
@@ -104,9 +103,9 @@ describe("handleSauceMessage", () => {
     });
   });
 
-  it("quotes reply with formatted text when quoting a message with a negative message ID", async () => {
+  it("replies with formatted text when quoting a message with a negative message ID", async () => {
     let queriedMessageId: number | undefined;
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=-1946661968] /sauce",
       getMessageResponse: {
         message: [
@@ -127,7 +126,7 @@ describe("handleSauceMessage", () => {
     );
 
     expect(queriedMessageId).toBe(-1946661968);
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toEqual({
       type: "text",
@@ -144,7 +143,7 @@ describe("handleSauceMessage", () => {
       return Response.json(mockSauceNaoSuccess);
     });
 
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -171,11 +170,11 @@ describe("handleSauceMessage", () => {
     expect(searchedUrl).toContain(
       "url=" + encodeURIComponent("https://example.com/first.jpg"),
     );
-    expect(getQuotedReplies().length).toBe(1);
+    expect(getReplies().length).toBe(1);
   });
 
   it("triggers search in group chat when message contains auto-prepended @author segment", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345][CQ:at,qq=10002] /sauce",
       getMessageResponse: {
         message: [
@@ -193,7 +192,7 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toEqual({
       type: "text",
@@ -203,8 +202,8 @@ describe("handleSauceMessage", () => {
     });
   });
 
-  it("quotes reply with notice when message is /sauce without a quote reply", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+  it("replies with notice when message is /sauce without a quote reply", async () => {
+    const { item, getReplies } = createMockItem({
       raw_message: "/sauce",
     });
 
@@ -212,13 +211,13 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toBe("[需引用包含图片的消息]");
   });
 
-  it("quotes reply with notice when quoted message has no image", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+  it("replies with notice when quoted message has no image", async () => {
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -236,12 +235,12 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toBe("[未在引用的消息中找到图片]");
   });
 
-  it("quotes reply with notice when SauceNao returns null (low similarity / no match)", async () => {
+  it("replies with notice when SauceNao returns null (low similarity / no match)", async () => {
     const lowSimilarityLayer = makeTestHttpClient(() =>
       Response.json({
         header: {
@@ -261,7 +260,7 @@ describe("handleSauceMessage", () => {
       }),
     );
 
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -279,17 +278,17 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(lowSimilarityLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toBe("[未找到相似度较高的图片来源]");
   });
 
-  it("quotes reply with notice when SauceNao fails with an error", async () => {
+  it("replies with notice when SauceNao fails with an error", async () => {
     const errorLayer = makeTestHttpClient(
       () => new Response("Server error", { status: 500 }),
     );
 
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -307,13 +306,13 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(errorLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toBe("[查询失败]");
   });
 
-  it("quotes reply with notice when getMessage fails with an error", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+  it("replies with notice when getMessage fails with an error", async () => {
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageError: true,
     });
@@ -322,7 +321,7 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toBe("[查询失败]");
   });
@@ -337,7 +336,7 @@ describe("handleSauceMessage", () => {
     ];
 
     for (const msg of tests) {
-      const { item, getQuotedReplies } = createMockItem({
+      const { item, getReplies } = createMockItem({
         raw_message: msg,
       });
 
@@ -345,12 +344,12 @@ describe("handleSauceMessage", () => {
         handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
       );
 
-      expect(getQuotedReplies().length).toBe(0);
+      expect(getReplies().length).toBe(0);
     }
   });
 
   it("does nothing when message is sent by the bot itself", async () => {
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       user_id: 99999,
       self_id: 99999,
@@ -360,10 +359,10 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
     );
 
-    expect(getQuotedReplies().length).toBe(0);
+    expect(getReplies().length).toBe(0);
   });
 
-  it("quotes reply as a text segment preventing raw CQ code injection", async () => {
+  it("replies as a text segment preventing raw CQ code injection", async () => {
     const cpHackResponse = {
       header: {
         status: 0,
@@ -384,7 +383,7 @@ describe("handleSauceMessage", () => {
 
     const httpLayer = makeTestHttpClient(() => Response.json(cpHackResponse));
 
-    const { item, getQuotedReplies } = createMockItem({
+    const { item, getReplies } = createMockItem({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -402,7 +401,7 @@ describe("handleSauceMessage", () => {
       handleSauceMessage(item).pipe(Effect.provide(httpLayer)),
     );
 
-    const replies = getQuotedReplies();
+    const replies = getReplies();
     expect(replies.length).toBe(1);
     expect(replies[0]).toEqual({
       type: "text",

@@ -659,17 +659,17 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     const outgoing = buildOutgoing(resolvedImage);
 
     yield* Effect.tryPromise({
-      try: () => item.context.quote(outgoing),
+      try: () => item.context.reply(outgoing),
       catch: (cause) => new SendLinkPreviewReplyError({ cause }),
     }).pipe(
       Effect.catch((error) => {
         if (resolvedImage && formatted.text) {
           return Effect.logWarning(
-            `Failed to send quote reply with image, falling back to text-only: ${formatErrorDetail(error.cause)}`,
+            `Failed to send reply with image, falling back to text-only: ${formatErrorDetail(error.cause)}`,
           ).pipe(
             Effect.andThen(
               Effect.tryPromise({
-                try: () => item.context.quote(buildOutgoing(undefined)),
+                try: () => item.context.reply(buildOutgoing(undefined)),
                 catch: (fallbackCause) =>
                   new SendLinkPreviewReplyError({ cause: fallbackCause }),
               }),
@@ -679,7 +679,7 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
         return Effect.fail(error);
       }),
     );
-    yield* Effect.logInfo(`${prefix} Link preview quote reply sent.`);
+    yield* Effect.logInfo(`${prefix} Link preview reply sent.`);
   }).pipe(
     Effect.catch((error) =>
       Effect.logError(

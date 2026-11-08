@@ -113,8 +113,8 @@ describe("StatsCommand", () => {
     expect(quoted).toBe(false);
   });
 
-  it("handles /stat command and sends image quote", async () => {
-    let quotedPayload: unknown = null;
+  it("handles /stat command and sends image directly", async () => {
+    let repliedPayload: unknown = null;
     let queryStartDate: string | undefined = undefined;
 
     const item: IncomingMessage = {
@@ -133,8 +133,8 @@ describe("StatsCommand", () => {
         sender: { user_id: 20001, nickname: "Alice" },
       } as OneBotGroupMessageEvent,
       context: {
-        quote: (payload: unknown) => {
-          quotedPayload = payload;
+        reply: (payload: unknown) => {
+          repliedPayload = payload;
           return Promise.resolve({} as never);
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
@@ -181,8 +181,8 @@ describe("StatsCommand", () => {
     );
 
     expect(queryStartDate).toBeDefined(); // Last 30 days query has startDate
-    expect(quotedPayload).toBeDefined();
-    expect(JSON.stringify(quotedPayload)).toContain("base64://");
+    expect(repliedPayload).toBeDefined();
+    expect(JSON.stringify(repliedPayload)).toContain("base64://");
   });
 
   it("handles /stat all command without startDate", async () => {
@@ -204,7 +204,7 @@ describe("StatsCommand", () => {
         sender: { user_id: 20001, nickname: "Alice" },
       } as OneBotGroupMessageEvent,
       context: {
-        quote: () => Promise.resolve({} as never),
+        reply: () => Promise.resolve({} as never),
       } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
     };
 
@@ -252,7 +252,7 @@ describe("StatsCommand", () => {
   });
 
   it("replies with fallback text when group has no stats (Review Focus 4)", async () => {
-    let quotedText: unknown = null;
+    let repliedText: unknown = null;
 
     const item: IncomingMessage = {
       event: {
@@ -270,8 +270,8 @@ describe("StatsCommand", () => {
         sender: { user_id: 20001, nickname: "Alice" },
       } as OneBotGroupMessageEvent,
       context: {
-        quote: (payload: unknown) => {
-          quotedText = payload;
+        reply: (payload: unknown) => {
+          repliedText = payload;
           return Promise.resolve({} as never);
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
@@ -302,10 +302,10 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(quotedText).toBe("本群暂无统计数据。");
+    expect(repliedText).toBe("本群暂无统计数据。");
   });
   it("replies with fallback text when group has interaction rows but 0 messages", async () => {
-    let quotedText: unknown = null;
+    let repliedText: unknown = null;
 
     const item: IncomingMessage = {
       event: {
@@ -323,8 +323,8 @@ describe("StatsCommand", () => {
         sender: { user_id: 20001, nickname: "Alice" },
       } as OneBotGroupMessageEvent,
       context: {
-        quote: (payload: unknown) => {
-          quotedText = payload;
+        reply: (payload: unknown) => {
+          repliedText = payload;
           return Promise.resolve({} as never);
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
@@ -368,7 +368,7 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(quotedText).toBe("本群暂无统计数据。");
+    expect(repliedText).toBe("本群暂无统计数据。");
   });
 
   it("throttles rapid repeated /stat queries in same group (Review Focus 5)", async () => {
@@ -390,7 +390,7 @@ describe("StatsCommand", () => {
         sender: { user_id: 20001, nickname: "Alice" },
       } as OneBotGroupMessageEvent,
       context: {
-        quote: () => {
+        reply: () => {
           callCount += 1;
           return Promise.resolve({} as never);
         },

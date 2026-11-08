@@ -25,10 +25,10 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
   const messageId = command.replyMessageId;
   if (messageId === undefined) {
     yield* Effect.tryPromise(() =>
-      item.context.quote("[需引用包含图片的消息]"),
+      item.context.reply("[需引用包含图片的消息]"),
     ).pipe(
       Effect.catch((error) =>
-        Effect.logError(`Failed to quote reply: ${String(error)}`),
+        Effect.logError(`Failed to reply: ${String(error)}`),
       ),
     );
     return;
@@ -41,7 +41,7 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
     );
     const client = item.context.client;
     if (!client) {
-      yield* Effect.tryPromise(() => item.context.quote("[查询失败]"));
+      yield* Effect.tryPromise(() => item.context.reply("[查询失败]"));
       return;
     }
 
@@ -57,7 +57,7 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
     const imageSegment = quotedSegments.find((s) => s.type === "image");
     if (!imageSegment) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("[未在引用的消息中找到图片]"),
+        item.context.reply("[未在引用的消息中找到图片]"),
       );
       return;
     }
@@ -73,7 +73,7 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
 
     if (!imageUrl) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("[未在引用的消息中找到图片]"),
+        item.context.reply("[未在引用的消息中找到图片]"),
       );
       return;
     }
@@ -87,13 +87,13 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
 
     if (!result) {
       yield* Effect.tryPromise(() =>
-        item.context.quote("[未找到相似度较高的图片来源]"),
+        item.context.reply("[未找到相似度较高的图片来源]"),
       );
       return;
     }
 
     yield* Effect.tryPromise(() =>
-      item.context.quote(segments.text(result.formattedText)),
+      item.context.reply(segments.text(result.formattedText)),
     );
     yield* Effect.logInfo(`${prefix} Sauce reply sent successfully.`);
   }).pipe(
@@ -103,10 +103,10 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
         yield* Effect.logError(
           `${prefix} Sauce handler failed: ${String(error)}`,
         );
-        yield* Effect.tryPromise(() => item.context.quote("[查询失败]")).pipe(
+        yield* Effect.tryPromise(() => item.context.reply("[查询失败]")).pipe(
           Effect.catch((quoteError) =>
             Effect.logError(
-              `Failed to send failure quote: ${String(quoteError)}`,
+              `Failed to send failure reply: ${String(quoteError)}`,
             ),
           ),
         );

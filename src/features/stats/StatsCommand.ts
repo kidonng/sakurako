@@ -47,7 +47,7 @@ export const handleStatsCommand = Effect.fnUntraced(
 
       if (lb.groupTotal === 0 || lb.rows.length === 0) {
         yield* Effect.tryPromise(() =>
-          item.context.quote("本群暂无统计数据。"),
+          item.context.reply("本群暂无统计数据。"),
         );
         return;
       }
@@ -63,7 +63,7 @@ export const handleStatsCommand = Effect.fnUntraced(
       const imageSegment = segments.image(
         `base64://${pngBuffer.toString("base64")}`,
       );
-      yield* Effect.tryPromise(() => item.context.quote(imageSegment));
+      yield* Effect.tryPromise(() => item.context.reply(imageSegment));
     } else if (text === "/me") {
       const now = yield* DateTime.now;
       const startDate30d = getDaysAgoShanghaiDateString(29, now);

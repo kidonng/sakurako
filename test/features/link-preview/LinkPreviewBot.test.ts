@@ -11,7 +11,7 @@ const dummyLayer = makeTestHttpClient(() => new Response(""));
 
 describe("handleLinkPreviewMessage", () => {
   it("ignores self messages", async () => {
-    let quoted = false;
+    let replied = false;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://example.com",
@@ -20,8 +20,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {
-          quoted = true;
+        reply: async () => {
+          replied = true;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -29,11 +29,11 @@ describe("handleLinkPreviewMessage", () => {
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
     );
-    expect(quoted).toBe(false);
+    expect(replied).toBe(false);
   });
 
   it("ignores messages without links", async () => {
-    let quoted = false;
+    let replied = false;
     const item: IncomingMessage = {
       event: {
         raw_message: "Hello world without any link",
@@ -42,8 +42,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {
-          quoted = true;
+        reply: async () => {
+          replied = true;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -51,12 +51,12 @@ describe("handleLinkPreviewMessage", () => {
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(dummyLayer)),
     );
-    expect(quoted).toBe(false);
+    expect(replied).toBe(false);
   });
 
   it("ignores messages that only contain CQ image codes with URLs", async () => {
     let fetchCalled = false;
-    let quoted = false;
+    let replied = false;
     const item: IncomingMessage = {
       event: {
         raw_message:
@@ -66,8 +66,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {
-          quoted = true;
+        reply: async () => {
+          replied = true;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -81,11 +81,11 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
     expect(fetchCalled).toBe(false);
-    expect(quoted).toBe(false);
+    expect(replied).toBe(false);
   });
 
   it("remains silent when all links fail to scrape", async () => {
-    let quoted = false;
+    let replied = false;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://fail.com/404",
@@ -94,8 +94,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {
-          quoted = true;
+        reply: async () => {
+          replied = true;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -106,11 +106,11 @@ describe("handleLinkPreviewMessage", () => {
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
-    expect(quoted).toBe(false);
+    expect(replied).toBe(false);
   });
 
-  it("quotes with only image segment for single github.com link with image", async () => {
-    let quotedMessage: unknown = null;
+  it("replies with only image segment for single github.com link with image", async () => {
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://github.com/kidonng/sakurako",
@@ -119,8 +119,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
+        reply: async (msg: unknown) => {
+          repliedMessage = msg;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -154,7 +154,7 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
-    expect(quotedMessage).toEqual([
+    expect(repliedMessage).toEqual([
       {
         type: "image",
         data: {
@@ -184,7 +184,7 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {
+        reply: async () => {
           throw new Error("OneBot API failed to send media");
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
@@ -212,8 +212,8 @@ describe("handleLinkPreviewMessage", () => {
     expect(loggedMessages[0]).not.toContain("UnknownError");
   });
 
-  it("quotes with text-only reply for Hacker News item containing y18.svg", async () => {
-    let quotedMessage: unknown = null;
+  it("replies with text-only reply for Hacker News item containing y18.svg", async () => {
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://news.ycombinator.com/item?id=50261319",
@@ -223,8 +223,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
+        reply: async (msg: unknown) => {
+          repliedMessage = msg;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -249,7 +249,7 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
-    expect(quotedMessage).toEqual({
+    expect(repliedMessage).toEqual({
       type: "text",
       data: {
         text: "Genie 4 | Hacker News\n> https://deepmind.google/blog/genie-4",
@@ -257,8 +257,8 @@ describe("handleLinkPreviewMessage", () => {
     });
   });
 
-  it("falls back to text-only quote when quote with image fails", async () => {
-    const quotesAttempted: unknown[] = [];
+  it("falls back to text-only reply when reply with image fails", async () => {
+    const repliesAttempted: unknown[] = [];
     const item: IncomingMessage = {
       event: {
         raw_message: "https://example.com/with-image",
@@ -268,9 +268,9 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotesAttempted.push(msg);
-          if (quotesAttempted.length === 1) {
+        reply: async (msg: unknown) => {
+          repliesAttempted.push(msg);
+          if (repliesAttempted.length === 1) {
             throw new Error("HTTP download failed: 403");
           }
           return { message_id: 12345 };
@@ -295,16 +295,16 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
-    expect(quotesAttempted.length).toBe(2);
+    expect(repliesAttempted.length).toBe(2);
     // First attempt included image segment
-    expect(Array.isArray(quotesAttempted[0])).toBe(true);
+    expect(Array.isArray(repliesAttempted[0])).toBe(true);
     expect(
-      (quotesAttempted[0] as Array<{ type: string }>).some(
+      (repliesAttempted[0] as Array<{ type: string }>).some(
         (s) => s.type === "image",
       ),
     ).toBe(true);
     // Second attempt was text-only
-    expect(quotesAttempted[1]).toEqual({
+    expect(repliesAttempted[1]).toEqual({
       type: "text",
       data: {
         text: "Title",
@@ -313,7 +313,7 @@ describe("handleLinkPreviewMessage", () => {
   });
 
   it("silences reply when single link preview is filtered by decision model", async () => {
-    let quotedMessage: unknown = null;
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message: "Please see https://example.com/test",
@@ -323,8 +323,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
+        reply: async (msg: unknown) => {
+          repliedMessage = msg;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -360,11 +360,11 @@ describe("handleLinkPreviewMessage", () => {
       ),
     );
 
-    expect(quotedMessage).toBeNull();
+    expect(repliedMessage).toBeNull();
   });
 
   it("outputs placeholder when one of multiple links is filtered by decision model", async () => {
-    let quotedMessage: unknown = null;
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message:
@@ -375,8 +375,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
+        reply: async (msg: unknown) => {
+          repliedMessage = msg;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -419,8 +419,8 @@ describe("handleLinkPreviewMessage", () => {
       ),
     );
 
-    expect(quotedMessage).toBeDefined();
-    const textSegment = quotedMessage as {
+    expect(repliedMessage).toBeDefined();
+    const textSegment = repliedMessage as {
       type: string;
       data: { text: string };
     };
@@ -439,7 +439,7 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async () => {},
+        reply: async () => {},
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
 
@@ -486,7 +486,7 @@ describe("handleLinkPreviewMessage", () => {
   });
 
   it("does not contact OpenRouter when OPENROUTER_API_KEY is omitted", async () => {
-    let quotedMessage: unknown = null;
+    let repliedMessage: unknown = null;
     let openrouterContacted = false;
 
     const item: IncomingMessage = {
@@ -498,8 +498,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (msg: unknown) => {
-          quotedMessage = msg;
+        reply: async (msg: unknown) => {
+          repliedMessage = msg;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -529,8 +529,8 @@ describe("handleLinkPreviewMessage", () => {
     );
 
     expect(openrouterContacted).toBe(false);
-    expect(quotedMessage).toBeDefined();
-    const textSegment = quotedMessage as {
+    expect(repliedMessage).toBeDefined();
+    const textSegment = repliedMessage as {
       type: string;
       data: { text: string };
     };
@@ -566,7 +566,7 @@ describe("handleLinkPreviewMessage", () => {
       return new Response("", { status: 404 });
     });
 
-    let quotedMessage: unknown = null;
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://www.pixiv.net/artworks/82775556",
@@ -575,8 +575,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (payload: OutgoingMessage) => {
-          quotedMessage = payload;
+        reply: async (payload: OutgoingMessage) => {
+          repliedMessage = payload;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -585,8 +585,8 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
-    expect(quotedMessage).toBeArray();
-    const segmentsList = quotedMessage as Array<{
+    expect(repliedMessage).toBeArray();
+    const segmentsList = repliedMessage as Array<{
       type: string;
       data: Record<string, string>;
     }>;
@@ -630,7 +630,7 @@ describe("handleLinkPreviewMessage", () => {
       return new Response("", { status: 404 });
     });
 
-    let quotedMessage: unknown = null;
+    let repliedMessage: unknown = null;
     const item: IncomingMessage = {
       event: {
         raw_message: "https://www.pixiv.net/artworks/82775556",
@@ -639,8 +639,8 @@ describe("handleLinkPreviewMessage", () => {
         post_type: "message",
       } as unknown as OneBotMessageEvent,
       context: {
-        quote: async (payload: OutgoingMessage) => {
-          quotedMessage = payload;
+        reply: async (payload: OutgoingMessage) => {
+          repliedMessage = payload;
         },
       } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
     };
@@ -649,8 +649,8 @@ describe("handleLinkPreviewMessage", () => {
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
 
-    expect(quotedMessage).toBeArray();
-    const segmentsList = quotedMessage as Array<{
+    expect(repliedMessage).toBeArray();
+    const segmentsList = repliedMessage as Array<{
       type: string;
       data: Record<string, string>;
     }>;
