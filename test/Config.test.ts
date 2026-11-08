@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ConfigProvider, Effect, Redacted } from "effect";
+import { ConfigProvider, Effect, Exit, Redacted } from "effect";
 import { BotConfig } from "../src/Config.ts";
 
 describe("BotConfig", () => {
@@ -23,18 +23,17 @@ describe("BotConfig", () => {
     expect(result.devGroupId).toBeUndefined();
   });
 
-  it("uses default wsUrl if not provided", async () => {
+  it("fails when SNOWLUMA_WS_URL is not provided", async () => {
     const layer = ConfigProvider.layer(
       ConfigProvider.fromEnvRecord({
         SNOWLUMA_ACCESS_TOKEN: "test-token",
       }),
     );
 
-    const result = await Effect.runPromise(
+    const exit = await Effect.runPromiseExit(
       BotConfig.pipe(Effect.provide(layer)),
     );
-    expect(result.wsUrl).toBe("ws://snowluma.orb.local:3001/");
-    expect(Redacted.value(result.accessToken)).toBe("test-token");
+    expect(Exit.isFailure(exit)).toBe(true);
   });
 
   it("reads optional API keys when provided", async () => {

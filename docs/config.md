@@ -10,10 +10,10 @@ Sakurako 的运行依赖环境变量配置（基于 `.env` 文件）以及部分
 
 ### 1. 核心连接配置
 
-| 环境变量                | 必填 | 默认值                          | 说明                                                  |
-| :---------------------- | :--- | :------------------------------ | :---------------------------------------------------- |
-| `SNOWLUMA_WS_URL`       | 否   | `ws://snowluma.orb.local:3001/` | SnowLuma / OneBot v11 服务端 WebSocket 正向服务地址。 |
-| `SNOWLUMA_ACCESS_TOKEN` | 是   | 无                              | 用于 WebSocket 连接鉴权的 Access Token。              |
+| 环境变量                | 必填 | 默认值 | 说明                                                  |
+| :---------------------- | :--- | :----- | :---------------------------------------------------- |
+| `SNOWLUMA_WS_URL`       | 是   | 无     | SnowLuma / OneBot v11 服务端 WebSocket 正向服务地址。 |
+| `SNOWLUMA_ACCESS_TOKEN` | 是   | 无     | 用于 WebSocket 连接鉴权的 Access Token。              |
 
 ### 2. 可选功能增强配置
 
