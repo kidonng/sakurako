@@ -29,20 +29,33 @@ interface DecisionsNoulQuestion {
   readonly criteria: DecisionsNoulCriteria;
 }
 
+export interface DecisionsImageUrlPart {
+  readonly type: "image_url";
+  readonly image_url: {
+    readonly url: string;
+  };
+}
+
+export interface DecisionsStateContext {
+  readonly user_message: string;
+  readonly previews: Record<
+    string,
+    {
+      readonly url: string;
+      readonly title?: string;
+      readonly description?: string;
+      readonly standard_truncated?: string;
+    }
+  >;
+}
+
+export type DecisionsState =
+  | DecisionsStateContext
+  | ReadonlyArray<DecisionsStateContext | DecisionsImageUrlPart>;
+
 interface DecisionsRequest {
   readonly model: string;
-  readonly state: {
-    readonly user_message: string;
-    readonly previews: Record<
-      string,
-      {
-        readonly url: string;
-        readonly title?: string;
-        readonly description?: string;
-        readonly standard_truncated?: string;
-      }
-    >;
-  };
+  readonly state: DecisionsState;
   readonly questions: Record<string, DecisionsNoulQuestion>;
 }
 
@@ -104,6 +117,7 @@ export const filterPreviewResults = Effect.fn(
   model: string = DEFAULT_DECISION_MODEL,
   threshold: number = DEFAULT_THRESHOLD,
   timeoutDuration: Duration.Input = DEFAULT_TIMEOUT,
+  userImages?: ReadonlyArray<string>,
 ) {
   if (!apiKey || results.length === 0) {
     return results;
@@ -155,12 +169,26 @@ export const filterPreviewResults = Effect.fn(
           makeSufficiencyQuestion(key);
       }
     }
+    const stateContext: DecisionsStateContext = {
+      user_message: rawMessage,
+      previews,
+    };
+    const state: DecisionsState =
+      userImages && userImages.length > 0
+        ? [
+            stateContext,
+            ...userImages.map(
+              (url): DecisionsImageUrlPart => ({
+                type: "image_url",
+                image_url: { url },
+              }),
+            ),
+          ]
+        : stateContext;
+
     const payload: DecisionsRequest = {
       model,
-      state: {
-        user_message: rawMessage,
-        previews,
-      },
+      state,
       questions,
     };
 

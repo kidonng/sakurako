@@ -565,4 +565,78 @@ describe("filterPreviewResults", () => {
       expanded: false,
     });
   });
+  it("serializes state as top-level array with image_url parts when userImages are provided", async () => {
+    const captured: { body?: { state?: unknown } } = {};
+    const layer = makeTestHttpClient((req) => {
+      captured.body = extractJsonBody(req) as { state?: unknown };
+      return new Response(
+        JSON.stringify({
+          model: "perplexity/pplx-decider-flash-v1.2",
+          answers: {
+            preview_0: { type: "noul", noul: 0.85 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const previewItem: ScrapingResult = {
+      _tag: "Success",
+      data: { url: "https://example.com", title: "Example" },
+    };
+
+    await Effect.runPromise(
+      filterPreviewResults(
+        "clean message",
+        [previewItem],
+        Redacted.make("fake-key"),
+        "perplexity/pplx-decider-flash-v1.2",
+        0.7,
+        "5 seconds",
+        ["data:image/jpeg;base64,abc12345"],
+      ).pipe(Effect.provide(layer)),
+    );
+
+    const state = captured.body?.state as Array<Record<string, unknown>>;
+    expect(Array.isArray(state)).toBe(true);
+    expect(state).toHaveLength(2);
+    expect(state[0]?.user_message).toBe("clean message");
+    expect(state[1]).toEqual({
+      type: "image_url",
+      image_url: { url: "data:image/jpeg;base64,abc12345" },
+    });
+  });
+
+  it("preserves object state when userImages is empty or undefined", async () => {
+    const captured: { body?: { state?: unknown } } = {};
+    const layer = makeTestHttpClient((req) => {
+      captured.body = extractJsonBody(req) as { state?: unknown };
+      return new Response(
+        JSON.stringify({
+          model: "perplexity/pplx-decider-flash-v1.2",
+          answers: {
+            preview_0: { type: "noul", noul: 0.85 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const previewItem: ScrapingResult = {
+      _tag: "Success",
+      data: { url: "https://example.com", title: "Example" },
+    };
+
+    await Effect.runPromise(
+      filterPreviewResults(
+        "clean message",
+        [previewItem],
+        Redacted.make("fake-key"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    const state = captured.body?.state as Record<string, unknown>;
+    expect(Array.isArray(state)).toBe(false);
+    expect(state?.user_message).toBe("clean message");
+  });
 });
