@@ -8,7 +8,13 @@ import {
   executeWithResponse,
   fetchJson,
   fetchText,
-  HttpFetchError,
+  HttpClientStatusError,
+  HttpNetworkError,
+  HttpNoContentError,
+  HttpNotFoundError,
+  HttpRateLimitError,
+  HttpServerStatusError,
+  HttpTimeoutError,
 } from "../../src/utils/HttpClient.ts";
 
 describe("HttpClient utils", () => {
@@ -60,7 +66,7 @@ describe("HttpClient utils", () => {
       expect(capturedUa).toBe("CustomBot/2.0");
     });
 
-    it("fails with HttpFetchError on non-2xx status and cancels response body", async () => {
+    it("fails with HttpNotFoundError on 404 status and cancels response body", async () => {
       let bodyCancelled = false;
       const layer = makeTestHttpClient(() => {
         const stream = new ReadableStream({
@@ -82,14 +88,57 @@ describe("HttpClient utils", () => {
       ).pipe(Effect.provide(layer), Effect.flip);
 
       const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpFetchError);
+      expect(error).toBeInstanceOf(HttpNotFoundError);
+      expect(error._tag).toBe("HttpNotFoundError");
       expect(error.status).toBe(404);
       expect(error.statusText).toBe("Not Found");
       expect(error.message).toContain("HTTP 404 Not Found");
       expect(bodyCancelled).toBe(true);
     });
 
-    it("fails with HttpFetchError when response reading times out", async () => {
+    it("fails with HttpRateLimitError on 429 status and cancels response body", async () => {
+      const layer = makeTestHttpClient(
+        () => new Response("Rate Limited", { status: 429, statusText: "Too Many Requests" }),
+      );
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/api"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+      const error = await Effect.runPromise(program);
+      expect(error).toBeInstanceOf(HttpRateLimitError);
+      expect(error._tag).toBe("HttpRateLimitError");
+      expect(error.status).toBe(429);
+      expect(error.message).toContain("HTTP 429 Too Many Requests");
+    });
+
+    it("fails with HttpClientStatusError on other 4xx status", async () => {
+      const layer = makeTestHttpClient(
+        () => new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+      );
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/api"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+      const error = await Effect.runPromise(program);
+      expect(error).toBeInstanceOf(HttpClientStatusError);
+      expect(error._tag).toBe("HttpClientStatusError");
+      expect(error.status).toBe(403);
+      expect(error.message).toContain("HTTP 403 Forbidden");
+    });
+
+    it("fails with HttpServerStatusError on 5xx status", async () => {
+      const layer = makeTestHttpClient(
+        () => new Response("Server Error", { status: 500, statusText: "Internal Server Error" }),
+      );
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/api"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+      const error = await Effect.runPromise(program);
+      expect(error).toBeInstanceOf(HttpServerStatusError);
+      expect(error._tag).toBe("HttpServerStatusError");
+      expect(error.status).toBe(500);
+      expect(error.message).toContain("HTTP 500 Internal Server Error");
+    });
+
+    it("fails with HttpTimeoutError when response reading times out", async () => {
       const layer = makeTestHttpClient(() => {
         const stream = new ReadableStream({
           start() {
@@ -105,10 +154,12 @@ describe("HttpClient utils", () => {
       ).pipe(Effect.provide(layer), Effect.flip);
 
       const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpFetchError);
+      expect(error).toBeInstanceOf(HttpTimeoutError);
+      expect(error._tag).toBe("HttpTimeoutError");
       expect(error.message).toContain("timed out");
     });
-    it("fails with HttpFetchError containing read detail when response body read fails", async () => {
+
+    it("fails with HttpNetworkError containing read detail when response body read fails", async () => {
       const layer = makeTestHttpClient(() => {
         const stream = new ReadableStream({
           start(controller) {
@@ -123,7 +174,8 @@ describe("HttpClient utils", () => {
       ).pipe(Effect.provide(layer), Effect.flip);
 
       const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpFetchError);
+      expect(error).toBeInstanceOf(HttpNetworkError);
+      expect(error._tag).toBe("HttpNetworkError");
       expect(error.status).toBeUndefined();
       expect(error.message).toContain("Failed to read response text");
     });
@@ -152,7 +204,19 @@ describe("HttpClient utils", () => {
       expect(result).toEqual({ id: 42, name: "Sakurako" });
     });
 
-    it("fails with HttpFetchError on schema validation failure", async () => {
+    it("fails with HttpNoContentError when fetchJson receives 204", async () => {
+      const layer = makeTestHttpClient(() => new Response(null, { status: 204 }));
+      const program = fetchJson(
+        HttpClientRequest.get("https://example.com/empty"),
+        TestSchema,
+      ).pipe(Effect.provide(layer), Effect.flip);
+      const error = await Effect.runPromise(program);
+      expect(error).toBeInstanceOf(HttpNoContentError);
+      expect(error._tag).toBe("HttpNoContentError");
+      expect(error.status).toBe(204);
+    });
+
+    it("fails with HttpNetworkError on schema validation failure", async () => {
       const layer = makeTestHttpClient(() => {
         return new Response(
           JSON.stringify({ id: "not-a-number", name: "Sakurako" }),
@@ -168,8 +232,9 @@ describe("HttpClient utils", () => {
       ).pipe(Effect.provide(layer), Effect.flip);
 
       const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpFetchError);
-      expect(error.status).toBeUndefined();
+      expect(error).toBeInstanceOf(HttpNetworkError);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.status).toBe(200);
       expect(error.message).toContain("Failed to parse response JSON");
     });
   });
