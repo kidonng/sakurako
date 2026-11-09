@@ -20,8 +20,8 @@ import {
   type HttpFetchError,
 } from "../../utils/HttpClient.ts";
 export {
+  HttpNetworkError,
   HttpNotFoundError,
-  HttpServerStatusError,
   HttpTimeoutError,
 } from "../../utils/HttpClient.ts";
 import getUrls from "get-urls";
@@ -608,14 +608,6 @@ const downloadSingleImage = Effect.fnUntraced(function* (
           `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
         ).pipe(Effect.as(undefined as string | undefined)),
       HttpRateLimitError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpClientStatusError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpServerStatusError: (error) =>
         Effect.logWarning(
           `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
         ).pipe(Effect.as(undefined as string | undefined)),

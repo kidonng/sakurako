@@ -53,38 +53,6 @@ export class HttpRateLimitError extends Schema.TaggedError<
   }
 }
 
-export class HttpClientStatusError extends Schema.TaggedError<
-  HttpClientStatusError,
-  {
-    readonly brand: unique symbol;
-  }
->()("HttpClientStatusError", {
-  url: Schema.String,
-  status: Schema.Finite,
-  statusText: Schema.optional(Schema.String),
-  detail: Schema.optional(Schema.String),
-}) {
-  override get message(): string {
-    return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
-  }
-}
-
-export class HttpServerStatusError extends Schema.TaggedError<
-  HttpServerStatusError,
-  {
-    readonly brand: unique symbol;
-  }
->()("HttpServerStatusError", {
-  url: Schema.String,
-  status: Schema.Finite,
-  statusText: Schema.optional(Schema.String),
-  detail: Schema.optional(Schema.String),
-}) {
-  override get message(): string {
-    return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
-  }
-}
-
 export class HttpTimeoutError extends Schema.TaggedError<
   HttpTimeoutError,
   {
@@ -107,10 +75,14 @@ export class HttpNetworkError extends Schema.TaggedError<
 >()("HttpNetworkError", {
   url: Schema.String,
   status: Schema.optional(Schema.Finite),
-  detail: Schema.String,
+  statusText: Schema.optional(Schema.String),
+  detail: Schema.optional(Schema.String),
 }) {
   override get message(): string {
-    return this.detail;
+    if (this.status !== undefined) {
+      return `HTTP ${this.status}${this.statusText ? ` ${this.statusText}` : ""}`.trim();
+    }
+    return this.detail ?? "Unknown error";
   }
 }
 
@@ -118,8 +90,6 @@ export type HttpFetchError =
   | HttpNotFoundError
   | HttpNoContentError
   | HttpRateLimitError
-  | HttpClientStatusError
-  | HttpServerStatusError
   | HttpTimeoutError
   | HttpNetworkError;
 
@@ -188,15 +158,7 @@ export function executeWithResponse<A, E, R>(
             detail,
           });
         }
-        if (status >= 500) {
-          return yield* new HttpServerStatusError({
-            url,
-            status,
-            statusText,
-            detail,
-          });
-        }
-        return yield* new HttpClientStatusError({
+        return yield* new HttpNetworkError({
           url,
           status,
           statusText,
@@ -283,7 +245,6 @@ export function fetchJson<A, I, RD>(
             (error) =>
               new HttpNetworkError({
                 url: request.url,
-                status: response.status,
                 detail: `Failed to parse response JSON: ${String(error)}`,
               }),
           ),

@@ -8,12 +8,10 @@ import {
   executeWithResponse,
   fetchJson,
   fetchText,
-  HttpClientStatusError,
   HttpNetworkError,
   HttpNoContentError,
   HttpNotFoundError,
   HttpRateLimitError,
-  HttpServerStatusError,
   HttpTimeoutError,
 } from "../../src/utils/HttpClient.ts";
 
@@ -114,36 +112,36 @@ describe("HttpClient utils", () => {
       expect(error.message).toContain("HTTP 429 Too Many Requests");
     });
 
-    it("fails with HttpClientStatusError on other 4xx status", async () => {
-      const layer = makeTestHttpClient(
+    it("fails with HttpNetworkError on other non-2xx status", async () => {
+      const layer403 = makeTestHttpClient(
         () => new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
       );
-      const program = fetchText(
+      const program403 = fetchText(
         HttpClientRequest.get("https://example.com/api"),
-      ).pipe(Effect.provide(layer), Effect.flip);
-      const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpClientStatusError);
-      expect(error._tag).toBe("HttpClientStatusError");
-      if (error instanceof HttpClientStatusError) {
-        expect(error.status).toBe(403);
+      ).pipe(Effect.provide(layer403), Effect.flip);
+      const error403 = await Effect.runPromise(program403);
+      expect(error403).toBeInstanceOf(HttpNetworkError);
+      expect(error403._tag).toBe("HttpNetworkError");
+      if (error403 instanceof HttpNetworkError) {
+        expect(error403.status).toBe(403);
+        expect(error403.statusText).toBe("Forbidden");
       }
-      expect(error.message).toContain("HTTP 403 Forbidden");
-    });
+      expect(error403.message).toContain("HTTP 403 Forbidden");
 
-    it("fails with HttpServerStatusError on 5xx status", async () => {
-      const layer = makeTestHttpClient(
+      const layer500 = makeTestHttpClient(
         () => new Response("Server Error", { status: 500, statusText: "Internal Server Error" }),
       );
-      const program = fetchText(
+      const program500 = fetchText(
         HttpClientRequest.get("https://example.com/api"),
-      ).pipe(Effect.provide(layer), Effect.flip);
-      const error = await Effect.runPromise(program);
-      expect(error).toBeInstanceOf(HttpServerStatusError);
-      expect(error._tag).toBe("HttpServerStatusError");
-      if (error instanceof HttpServerStatusError) {
-        expect(error.status).toBe(500);
+      ).pipe(Effect.provide(layer500), Effect.flip);
+      const error500 = await Effect.runPromise(program500);
+      expect(error500).toBeInstanceOf(HttpNetworkError);
+      expect(error500._tag).toBe("HttpNetworkError");
+      if (error500 instanceof HttpNetworkError) {
+        expect(error500.status).toBe(500);
+        expect(error500.statusText).toBe("Internal Server Error");
       }
-      expect(error.message).toContain("HTTP 500 Internal Server Error");
+      expect(error500.message).toContain("HTTP 500 Internal Server Error");
     });
 
     it("fails with HttpTimeoutError when response reading times out", async () => {
@@ -247,7 +245,7 @@ describe("HttpClient utils", () => {
       expect(error).toBeInstanceOf(HttpNetworkError);
       expect(error._tag).toBe("HttpNetworkError");
       if (error instanceof HttpNetworkError) {
-        expect(error.status).toBe(200);
+        expect(error.status).toBeUndefined();
       }
       expect(error.message).toContain("Failed to parse response JSON");
     });

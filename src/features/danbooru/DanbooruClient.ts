@@ -95,10 +95,6 @@ export class DanbooruClient extends Context.Service<
             HttpNotFoundError: () => new DanbooruNotFoundError({ queryTags }),
             HttpNoContentError: () => new DanbooruNotFoundError({ queryTags }),
             HttpRateLimitError: () => new DanbooruRateLimitError(),
-            HttpClientStatusError: (err) =>
-              new DanbooruApiError({ status: err.status, message: err.message }),
-            HttpServerStatusError: (err) =>
-              new DanbooruApiError({ status: err.status, message: err.message }),
             HttpTimeoutError: (err) =>
               new DanbooruApiError({ status: 0, message: err.message }),
             HttpNetworkError: (err) =>

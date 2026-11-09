@@ -7,7 +7,7 @@ import {
   extractFirstParagraph,
   extractUrls,
   HttpNotFoundError,
-  HttpServerStatusError,
+  HttpNetworkError,
   HttpTimeoutError,
   isScrapingResult,
   prepareOutgoingImage,
@@ -323,8 +323,8 @@ describe("LinkPreviewEngine", () => {
     expect(second && isScrapingResult("Failure")(second)).toBe(true);
     if (second && isScrapingResult("Failure")(second)) {
       expect(second.url).toBe("https://fail.com");
-      expect(second.error).toBeInstanceOf(HttpServerStatusError);
-      if (second.error instanceof HttpServerStatusError) {
+      expect(second.error).toBeInstanceOf(HttpNetworkError);
+      if (second.error instanceof HttpNetworkError) {
         expect(second.error.status).toBe(500);
       }
       expect(second.error.message).toContain("HTTP 500");

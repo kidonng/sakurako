@@ -190,10 +190,6 @@ export const danbooruCustomizer: SiteCustomizer = {
           Effect.succeed(undefined as PageMetadata | undefined),
         HttpRateLimitError: () =>
           Effect.succeed(undefined as PageMetadata | undefined),
-        HttpClientStatusError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
-        HttpServerStatusError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
         HttpTimeoutError: () =>
           Effect.succeed(undefined as PageMetadata | undefined),
         HttpNetworkError: () =>
