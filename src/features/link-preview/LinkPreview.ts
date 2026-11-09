@@ -602,28 +602,6 @@ const downloadSingleImage = Effect.fnUntraced(function* (
       }),
     { timeoutDuration },
   ).pipe(
-    Effect.catchTags({
-      HttpNotFoundError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpRateLimitError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpTimeoutError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpNetworkError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-      HttpNoContentError: (error) =>
-        Effect.logWarning(
-          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
-        ).pipe(Effect.as(undefined as string | undefined)),
-    }),
     Effect.catch((error) =>
       Effect.logWarning(
         `Failed to fetch image locally for ${targetUrl}: ${formatErrorDetail(error)}`,

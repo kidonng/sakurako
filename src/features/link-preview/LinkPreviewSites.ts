@@ -184,17 +184,15 @@ export const danbooruCustomizer: SiteCustomizer = {
         fallbackImage,
       };
     }).pipe(
-      Effect.catchTag("HttpNotFoundError", (err) => Effect.fail(err)),
-      Effect.catchTags({
-        HttpNoContentError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
-        HttpRateLimitError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
-        HttpTimeoutError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
-        HttpNetworkError: () =>
-          Effect.succeed(undefined as PageMetadata | undefined),
-      }),
+      Effect.catchTag(
+        [
+          "HttpNoContentError",
+          "HttpRateLimitError",
+          "HttpTimeoutError",
+          "HttpNetworkError",
+        ],
+        () => Effect.succeed(undefined as PageMetadata | undefined),
+      ),
     ),
 };
 

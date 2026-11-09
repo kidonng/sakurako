@@ -91,15 +91,21 @@ export class DanbooruClient extends Context.Service<
           timeoutDuration: "10 seconds",
         }).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
-          Effect.catchTags({
-            HttpNotFoundError: () => new DanbooruNotFoundError({ queryTags }),
-            HttpNoContentError: () => new DanbooruNotFoundError({ queryTags }),
-            HttpRateLimitError: () => new DanbooruRateLimitError(),
-            HttpTimeoutError: (err) =>
-              new DanbooruApiError({ status: 0, message: err.message }),
-            HttpNetworkError: (err) =>
-              new DanbooruApiError({ status: err.status ?? 0, message: err.message }),
-          }),
+          Effect.catchTag(["HttpNotFoundError", "HttpNoContentError"], () =>
+            new DanbooruNotFoundError({ queryTags }),
+          ),
+          Effect.catchTag("HttpRateLimitError", () =>
+            new DanbooruRateLimitError(),
+          ),
+          Effect.catchTag(["HttpTimeoutError", "HttpNetworkError"], (err) =>
+            new DanbooruApiError({
+              status:
+                "status" in err && typeof err.status === "number"
+                  ? err.status
+                  : 0,
+              message: err.message,
+            }),
+          ),
         );
       });
 
