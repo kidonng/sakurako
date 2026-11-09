@@ -188,6 +188,8 @@ export const danbooruCustomizer: SiteCustomizer = {
       Effect.catchTags({
         HttpNoContentError: () =>
           Effect.succeed(undefined as PageMetadata | undefined),
+        HttpRateLimitError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
         HttpClientStatusError: () =>
           Effect.succeed(undefined as PageMetadata | undefined),
         HttpServerStatusError: () =>

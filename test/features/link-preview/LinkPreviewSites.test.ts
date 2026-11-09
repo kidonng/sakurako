@@ -287,6 +287,19 @@ describe("LinkPreviewSites", () => {
         expect(error.status).toBe(404);
       }
     });
+
+    it("returns undefined to fall back when post JSON returns 429", async () => {
+      const httpLayer = makeTestHttpClient(() => {
+        return new Response("Too Many Requests", { status: 429 });
+      });
+
+      const metadata = await Effect.runPromise(
+        danbooruCustomizer.scrape!({
+          url: new URL("https://danbooru.donmai.us/posts/9999999"),
+        }).pipe(Effect.provide(httpLayer)),
+      );
+      expect(metadata).toBeUndefined();
+    });
   });
 
   describe("pixivCustomizer", () => {
