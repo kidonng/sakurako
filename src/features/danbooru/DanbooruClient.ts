@@ -3,13 +3,12 @@ import { Context, Effect, Layer, Schema } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
-  HttpClientResponse,
   Url,
 } from "effect/http";
 import {
   DANBOORU_USER_AGENT,
   executeWithResponse,
-  HttpFetchError,
+  fetchJson,
 } from "../../utils/HttpClient.ts";
 
 export const DanbooruPostSchema = Schema.Struct({
@@ -88,44 +87,22 @@ export class DanbooruClient extends Context.Service<
           HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
         );
 
-        return yield* executeWithResponse(
-          request,
-          (response) =>
-            Effect.gen(function* () {
-              if (response.status === 204) {
-                return yield* new DanbooruNotFoundError({ queryTags });
-              }
-              const post = yield* HttpClientResponse.schemaBodyJson(
-                DanbooruPostSchema,
-              )(response).pipe(
-                Effect.mapError(
-                  (err) =>
-                    new HttpFetchError({
-                      url: request.url,
-                      status: response.status,
-                      detail: `Failed to decode Danbooru post JSON: ${String(err)}`,
-                    }),
-                ),
-              );
-              return post;
-            }),
-          { timeoutDuration: "10 seconds" },
-        ).pipe(
+        return yield* fetchJson(request, DanbooruPostSchema, {
+          timeoutDuration: "10 seconds",
+        }).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
-          Effect.mapError((error) => {
-            if (error._tag === "HttpFetchError") {
-              if (error.status === 404) {
-                return new DanbooruNotFoundError({ queryTags });
-              }
-              if (error.status === 429) {
-                return new DanbooruRateLimitError();
-              }
-              return new DanbooruApiError({
-                status: error.status ?? 0,
-                message: error.message,
-              });
-            }
-            return error;
+          Effect.catchTags({
+            HttpNotFoundError: () => new DanbooruNotFoundError({ queryTags }),
+            HttpNoContentError: () => new DanbooruNotFoundError({ queryTags }),
+            HttpRateLimitError: () => new DanbooruRateLimitError(),
+            HttpClientStatusError: (err) =>
+              new DanbooruApiError({ status: err.status, message: err.message }),
+            HttpServerStatusError: (err) =>
+              new DanbooruApiError({ status: err.status, message: err.message }),
+            HttpTimeoutError: (err) =>
+              new DanbooruApiError({ status: 0, message: err.message }),
+            HttpNetworkError: (err) =>
+              new DanbooruApiError({ status: err.status ?? 0, message: err.message }),
           }),
         );
       });
