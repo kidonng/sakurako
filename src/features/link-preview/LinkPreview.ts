@@ -17,24 +17,12 @@ import {
   cancelResponse,
   executeWithResponse,
   fetchText,
-  HttpClientStatusError,
-  HttpNetworkError,
-  HttpNoContentError,
-  HttpNotFoundError,
-  HttpRateLimitError,
-  HttpServerStatusError,
-  HttpTimeoutError,
   type HttpFetchError,
 } from "../../utils/HttpClient.ts";
 export {
-  HttpClientStatusError,
-  HttpNetworkError,
-  HttpNoContentError,
   HttpNotFoundError,
-  HttpRateLimitError,
   HttpServerStatusError,
   HttpTimeoutError,
-  type HttpFetchError,
 } from "../../utils/HttpClient.ts";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";

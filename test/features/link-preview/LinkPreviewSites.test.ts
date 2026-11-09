@@ -283,7 +283,9 @@ describe("LinkPreviewSites", () => {
         }).pipe(Effect.provide(httpLayer), Effect.flip),
       );
       expect(error._tag).toBe("HttpNotFoundError");
-      expect(error.status).toBe(404);
+      if (error._tag === "HttpNotFoundError") {
+        expect(error.status).toBe(404);
+      }
     });
   });
 

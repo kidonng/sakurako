@@ -36,7 +36,7 @@ export interface DecisionsImageUrlPart {
   };
 }
 
-export interface DecisionsStateContext {
+interface DecisionsStateContext {
   readonly user_message: string;
   readonly previews: Record<
     string,
@@ -49,7 +49,7 @@ export interface DecisionsStateContext {
   >;
 }
 
-export type DecisionsState =
+type DecisionsState =
   | DecisionsStateContext
   | ReadonlyArray<DecisionsStateContext | DecisionsImageUrlPart>;
 

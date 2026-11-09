@@ -90,8 +90,10 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpNotFoundError);
       expect(error._tag).toBe("HttpNotFoundError");
-      expect(error.status).toBe(404);
-      expect(error.statusText).toBe("Not Found");
+      if (error instanceof HttpNotFoundError) {
+        expect(error.status).toBe(404);
+        expect(error.statusText).toBe("Not Found");
+      }
       expect(error.message).toContain("HTTP 404 Not Found");
       expect(bodyCancelled).toBe(true);
     });
@@ -106,7 +108,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpRateLimitError);
       expect(error._tag).toBe("HttpRateLimitError");
-      expect(error.status).toBe(429);
+      if (error instanceof HttpRateLimitError) {
+        expect(error.status).toBe(429);
+      }
       expect(error.message).toContain("HTTP 429 Too Many Requests");
     });
 
@@ -120,7 +124,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpClientStatusError);
       expect(error._tag).toBe("HttpClientStatusError");
-      expect(error.status).toBe(403);
+      if (error instanceof HttpClientStatusError) {
+        expect(error.status).toBe(403);
+      }
       expect(error.message).toContain("HTTP 403 Forbidden");
     });
 
@@ -134,7 +140,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpServerStatusError);
       expect(error._tag).toBe("HttpServerStatusError");
-      expect(error.status).toBe(500);
+      if (error instanceof HttpServerStatusError) {
+        expect(error.status).toBe(500);
+      }
       expect(error.message).toContain("HTTP 500 Internal Server Error");
     });
 
@@ -176,7 +184,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpNetworkError);
       expect(error._tag).toBe("HttpNetworkError");
-      expect(error.status).toBeUndefined();
+      if (error instanceof HttpNetworkError) {
+        expect(error.status).toBeUndefined();
+      }
       expect(error.message).toContain("Failed to read response text");
     });
   });
@@ -213,7 +223,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpNoContentError);
       expect(error._tag).toBe("HttpNoContentError");
-      expect(error.status).toBe(204);
+      if (error instanceof HttpNoContentError) {
+        expect(error.status).toBe(204);
+      }
     });
 
     it("fails with HttpNetworkError on schema validation failure", async () => {
@@ -234,7 +246,9 @@ describe("HttpClient utils", () => {
       const error = await Effect.runPromise(program);
       expect(error).toBeInstanceOf(HttpNetworkError);
       expect(error._tag).toBe("HttpNetworkError");
-      expect(error.status).toBe(200);
+      if (error instanceof HttpNetworkError) {
+        expect(error.status).toBe(200);
+      }
       expect(error.message).toContain("Failed to parse response JSON");
     });
   });

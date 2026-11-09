@@ -160,9 +160,9 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
       (error) =>
         new SauceNaoError({
           cause:
-            error.status !== undefined
+            "status" in error && error.status !== undefined
               ? `SauceNao HTTP returned status ${error.status}`
-              : (error.detail ?? error.message),
+              : error.message,
         }),
     ),
   );
