@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
   BlockedHostError,
   formatPreview,
-  HttpFetchError,
+  HttpNotFoundError,
+  HttpTimeoutError,
   type ScrapingResult,
 } from "../../../src/features/link-preview/LinkPreview.ts";
 
@@ -12,7 +13,7 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://a.com",
-        error: new HttpFetchError({
+        error: new HttpNotFoundError({
           url: "https://a.com",
           status: 404,
           statusText: "Not Found",
@@ -22,7 +23,7 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://b.com",
-        error: new HttpFetchError({ url: "https://b.com", detail: "Timeout" }),
+        error: new HttpTimeoutError({ url: "https://b.com", detail: "Timeout" }),
       },
     ];
     expect(formatPreview(results)).toBeNull();
@@ -149,7 +150,7 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://fail.com",
-        error: new HttpFetchError({
+        error: new HttpNotFoundError({
           url: "https://fail.com",
           status: 404,
           detail: "HTTP status 404",
@@ -179,7 +180,7 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://fail.com",
-        error: new HttpFetchError({
+        error: new HttpNotFoundError({
           url: "https://fail.com",
           status: 404,
           statusText: "Not Found",
@@ -353,7 +354,7 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://example2.com",
-        error: new HttpFetchError({
+        error: new HttpTimeoutError({
           url: "https://example2.com",
           detail: "Timeout",
         }),

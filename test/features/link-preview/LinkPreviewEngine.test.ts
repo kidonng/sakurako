@@ -6,7 +6,9 @@ import {
   BlockedHostError,
   extractFirstParagraph,
   extractUrls,
-  HttpFetchError,
+  HttpNotFoundError,
+  HttpServerStatusError,
+  HttpTimeoutError,
   isScrapingResult,
   prepareOutgoingImage,
   scrapeAll,
@@ -225,9 +227,8 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-
-    expect(error).toBeInstanceOf(HttpFetchError);
-    if (error instanceof HttpFetchError) {
+    expect(error).toBeInstanceOf(HttpNotFoundError);
+    if (error instanceof HttpNotFoundError) {
       expect(error.status).toBe(404);
     }
     expect(error.message).toContain("HTTP 404 Not Found");
@@ -248,8 +249,7 @@ describe("LinkPreviewEngine", () => {
         Effect.flip,
       ),
     );
-
-    expect(error).toBeInstanceOf(HttpFetchError);
+    expect(error).toBeInstanceOf(HttpTimeoutError);
     expect(error.message).toContain("timed out");
   });
 
@@ -323,8 +323,8 @@ describe("LinkPreviewEngine", () => {
     expect(second && isScrapingResult("Failure")(second)).toBe(true);
     if (second && isScrapingResult("Failure")(second)) {
       expect(second.url).toBe("https://fail.com");
-      expect(second.error).toBeInstanceOf(HttpFetchError);
-      if (second.error instanceof HttpFetchError) {
+      expect(second.error).toBeInstanceOf(HttpServerStatusError);
+      if (second.error instanceof HttpServerStatusError) {
         expect(second.error.status).toBe(500);
       }
       expect(second.error.message).toContain("HTTP 500");

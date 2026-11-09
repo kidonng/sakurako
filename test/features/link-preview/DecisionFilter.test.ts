@@ -7,7 +7,7 @@ import {
   OPENROUTER_DECISIONS_URL,
 } from "../../../src/features/link-preview/DecisionFilter.ts";
 import {
-  HttpFetchError,
+  HttpNotFoundError,
   isScrapingResult,
   type ScrapingResult,
 } from "../../../src/features/link-preview/LinkPreview.ts";
@@ -58,7 +58,11 @@ describe("filterPreviewResults", () => {
       {
         _tag: "Failure",
         url: "https://fail.com",
-        error: new HttpFetchError({ url: "https://fail.com", detail: "404" }),
+        error: new HttpNotFoundError({
+          url: "https://fail.com",
+          status: 404,
+          detail: "404",
+        }),
       },
     ];
 
@@ -270,7 +274,11 @@ describe("filterPreviewResults", () => {
       {
         _tag: "Failure",
         url: "https://fail.com",
-        error: new HttpFetchError({ url: "https://fail.com", detail: "404" }),
+        error: new HttpNotFoundError({
+          url: "https://fail.com",
+          status: 404,
+          detail: "404",
+        }),
       },
       {
         _tag: "Success",

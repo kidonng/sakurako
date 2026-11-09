@@ -17,9 +17,25 @@ import {
   cancelResponse,
   executeWithResponse,
   fetchText,
-  HttpFetchError,
+  HttpClientStatusError,
+  HttpNetworkError,
+  HttpNoContentError,
+  HttpNotFoundError,
+  HttpRateLimitError,
+  HttpServerStatusError,
+  HttpTimeoutError,
+  type HttpFetchError,
 } from "../../utils/HttpClient.ts";
-export { HttpFetchError } from "../../utils/HttpClient.ts";
+export {
+  HttpClientStatusError,
+  HttpNetworkError,
+  HttpNoContentError,
+  HttpNotFoundError,
+  HttpRateLimitError,
+  HttpServerStatusError,
+  HttpTimeoutError,
+  type HttpFetchError,
+} from "../../utils/HttpClient.ts";
 import getUrls from "get-urls";
 import { Address4, Address6 } from "ip-address";
 import createMetascraper from "metascraper";
@@ -598,11 +614,36 @@ const downloadSingleImage = Effect.fnUntraced(function* (
       }),
     { timeoutDuration },
   ).pipe(
-    Effect.catchTag("HttpFetchError", (error) =>
-      Effect.logWarning(
-        `Failed to fetch image locally for ${targetUrl}: ${error.status !== undefined ? `HTTP ${error.status}${error.statusText ? ` ${error.statusText}` : ""}`.trim() : (error.detail ?? "Unknown error")}`,
-      ).pipe(Effect.as(undefined as string | undefined)),
-    ),
+    Effect.catchTags({
+      HttpNotFoundError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpRateLimitError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpClientStatusError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpServerStatusError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpTimeoutError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpNetworkError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+      HttpNoContentError: (error) =>
+        Effect.logWarning(
+          `Failed to fetch image locally for ${targetUrl}: ${error.message}`,
+        ).pipe(Effect.as(undefined as string | undefined)),
+    }),
     Effect.catch((error) =>
       Effect.logWarning(
         `Failed to fetch image locally for ${targetUrl}: ${formatErrorDetail(error)}`,

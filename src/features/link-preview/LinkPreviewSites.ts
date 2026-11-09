@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import type createMetascraper from "metascraper";
 import { type Duration, Effect, Option, Predicate } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import { formatDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
 import { DanbooruPostSchema } from "../danbooru/DanbooruClient.ts";
 import { DanbooruTagMatcher } from "../danbooru/DanbooruTagMatcher.ts";
@@ -9,8 +9,8 @@ import type { PageMetadata } from "./LinkPreview.ts";
 import {
   DANBOORU_USER_AGENT,
   DEFAULT_USER_AGENT,
-  executeWithResponse,
-  HttpFetchError,
+  fetchJson,
+  type HttpFetchError,
 } from "../../utils/HttpClient.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
@@ -153,38 +153,9 @@ export const danbooruCustomizer: SiteCustomizer = {
         HttpClientRequest.setHeader("Accept", "application/json"),
       );
 
-      const post = yield* executeWithResponse(
-        request,
-        (response) =>
-          Effect.gen(function* () {
-            if (response.status === 404) {
-              return yield* new HttpFetchError({
-                url: jsonUrl,
-                status: 404,
-                statusText: "Not Found",
-              });
-            }
-            if (response.status !== 200) {
-              return yield* new HttpFetchError({
-                url: jsonUrl,
-                status: response.status,
-              });
-            }
-            return yield* HttpClientResponse.schemaBodyJson(DanbooruPostSchema)(
-              response,
-            ).pipe(
-              Effect.mapError(
-                (err) =>
-                  new HttpFetchError({
-                    url: jsonUrl,
-                    status: response.status,
-                    detail: `Failed to decode Danbooru post JSON: ${String(err)}`,
-                  }),
-              ),
-            );
-          }),
-        { timeoutDuration },
-      );
+      const post = yield* fetchJson(request, DanbooruPostSchema, {
+        timeoutDuration,
+      });
 
       const postTags = [
         post.tag_string_character,
@@ -213,12 +184,19 @@ export const danbooruCustomizer: SiteCustomizer = {
         fallbackImage,
       };
     }).pipe(
-      Effect.catchTag("HttpFetchError", (err) =>
-        // oxlint-disable-next-line effecttsgo/effect-succeed-with-void
-        err.status === 404
-          ? Effect.fail(err)
-          : Effect.succeed(undefined as PageMetadata | undefined),
-      ),
+      Effect.catchTag("HttpNotFoundError", (err) => Effect.fail(err)),
+      Effect.catchTags({
+        HttpNoContentError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
+        HttpClientStatusError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
+        HttpServerStatusError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
+        HttpTimeoutError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
+        HttpNetworkError: () =>
+          Effect.succeed(undefined as PageMetadata | undefined),
+      }),
     ),
 };
 

@@ -282,8 +282,7 @@ describe("LinkPreviewSites", () => {
           url: new URL("https://danbooru.donmai.us/posts/9999999"),
         }).pipe(Effect.provide(httpLayer), Effect.flip),
       );
-
-      expect(error._tag).toBe("HttpFetchError");
+      expect(error._tag).toBe("HttpNotFoundError");
       expect(error.status).toBe(404);
     });
   });
