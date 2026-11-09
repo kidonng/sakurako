@@ -8,25 +8,24 @@ import {
   DanbooruNotFoundError,
 } from "../../../src/features/danbooru/DanbooruClient.ts";
 import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
-import type { IncomingMessage } from "../../../src/SnowLuma.ts";
+import { createMockMessage } from "../../TestMessage.ts";
+
+function getTextSegment(reply: unknown): string {
+  if (typeof reply === "string") return reply;
+  if (Array.isArray(reply)) {
+    const textSegment = (
+      reply as { type: string; data: Record<string, unknown> }[]
+    ).find((s) => s.type === "text");
+    return textSegment?.data.text?.toString() ?? "";
+  }
+  return "";
+}
 
 describe("handleDanbooruMessage", () => {
   it("rejects queries with more than 2 tags", async () => {
-    let replied = "";
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr tag1 tag2 tag3" } }],
-      },
-      context: {
-        reply: (msg: string) => {
-          replied = msg;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr tag1 tag2 tag3" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -40,30 +39,18 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    expect(replied).toBe("[标签数量超出限制，最多支持 2 个]");
+    expect(lastReply()).toBe("[标签数量超出限制，最多支持 2 个]");
   });
 
   it("replies with formatted title, link, and image when search succeeds, prompting Chinese tag when user input differs", async () => {
-    let replyPayload: unknown = null;
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr white_hair" } }],
-      },
-      context: {
-        reply: (payload: unknown) => {
-          replyPayload = payload;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr white_hair" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -86,20 +73,18 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    expect(replyPayload).toBeDefined();
-    expect(Array.isArray(replyPayload)).toBe(true);
-    const arr = replyPayload as {
+    const reply = lastReply();
+    expect(Array.isArray(reply)).toBe(true);
+    const arr = reply as {
       type: string;
       data: Record<string, unknown>;
     }[];
-    const textSegment = arr.find((s) => s.type === "text");
-    expect(textSegment).toBeDefined();
-    const text = textSegment?.data.text?.toString() ?? "";
+    const text = getTextSegment(reply);
 
     // Should prompt Chinese tag because user input "white_hair" != Chinese translation "白发"
     expect(text).toContain("🔍 白发\n");
@@ -114,21 +99,9 @@ describe("handleDanbooruMessage", () => {
   });
 
   it("omits search hint when user input matches Chinese translation", async () => {
-    let replyPayload: unknown = null;
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr 白发" } }],
-      },
-      context: {
-        reply: (payload: unknown) => {
-          replyPayload = payload;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr 白发" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -151,39 +124,21 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    const arr = replyPayload as {
-      type: string;
-      data: Record<string, unknown>;
-    }[];
-    const textSegment = arr.find((s) => s.type === "text");
-    const text = textSegment?.data.text?.toString() ?? "";
-
+    const text = getTextSegment(lastReply());
     // No search hint because user input "白发" == Chinese translation "白发"
     expect(text).not.toContain("🔍");
     expect(text).toContain("https://danbooru.donmai.us/posts/101");
   });
 
   it("hints corrected Chinese tag for partial or typo input", async () => {
-    let replyPayload: unknown = null;
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr 初音" } }],
-      },
-      context: {
-        reply: (payload: unknown) => {
-          replyPayload = payload;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr 初音" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -206,38 +161,20 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    const arr = replyPayload as {
-      type: string;
-      data: Record<string, unknown>;
-    }[];
-    const textSegment = arr.find((s) => s.type === "text");
-    const text = textSegment?.data.text?.toString() ?? "";
-
+    const text = getTextSegment(lastReply());
     expect(text).toContain("🔍 初音未来\n");
     expect(text).not.toContain("VOCALOID");
   });
 
   it("omits search hint when user input matches character base name without series suffix", async () => {
-    let replyPayload: unknown = null;
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr 御坂美琴" } }],
-      },
-      context: {
-        reply: (payload: unknown) => {
-          replyPayload = payload;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr 御坂美琴" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -262,37 +199,19 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    const arr = replyPayload as {
-      type: string;
-      data: Record<string, unknown>;
-    }[];
-    const textSegment = arr.find((s) => s.type === "text");
-    const text = textSegment?.data.text?.toString() ?? "";
-
+    const text = getTextSegment(lastReply());
     expect(text).not.toContain("🔍");
   });
 
   it("replies with not found message when Danbooru returns DanbooruNotFoundError", async () => {
-    let replied = "";
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr test" } }],
-      },
-      context: {
-        reply: (msg: string) => {
-          replied = msg;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr test" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -306,30 +225,18 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    expect(replied).toBe("[未找到符合条件的图片]");
+    expect(lastReply()).toBe("[未找到符合条件的图片]");
   });
 
   it("replies when input terms yield no valid tags", async () => {
-    let replied = "";
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr ????" } }],
-      },
-      context: {
-        reply: (msg: string) => {
-          replied = msg;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr ????" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -342,30 +249,18 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    expect(replied).toBe("[未找到匹配的标签]");
+    expect(lastReply()).toBe("[未找到匹配的标签]");
   });
 
   it("replies with download failure message when image download fails", async () => {
-    let replied = "";
-    const fakeItem = {
-      event: {
-        post_type: "message",
-        message_type: "group",
-        user_id: 10001,
-        message: [{ type: "text", data: { text: "/dbr" } }],
-      },
-      context: {
-        reply: (msg: string) => {
-          replied = msg;
-          return Promise.resolve();
-        },
-      },
-    } as unknown as IncomingMessage;
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr" } }],
+    });
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
@@ -392,11 +287,35 @@ describe("handleDanbooruMessage", () => {
     });
 
     await Effect.runPromise(
-      handleDanbooruMessage(fakeItem).pipe(
+      handleDanbooruMessage(item).pipe(
         Effect.provide(Layer.merge(MatcherMock, ClientMock)),
       ),
     );
 
-    expect(replied).toBe("[下载图片失败]");
+    expect(lastReply()).toBe("[下载图片失败]");
+  });
+
+  it("ignores non-dbr commands silently", async () => {
+    const { item, getReplies } = createMockMessage({
+      message: [{ type: "text", data: { text: "hello world" } }],
+    });
+
+    const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
+    });
+    const ClientMock = Layer.succeed(DanbooruClient, {
+      getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(item).pipe(
+        Effect.provide(Layer.merge(MatcherMock, ClientMock)),
+      ),
+    );
+
+    expect(getReplies().length).toBe(0);
   });
 });

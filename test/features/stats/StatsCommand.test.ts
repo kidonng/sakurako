@@ -1,38 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
-import type { OneBotGroupMessageEvent } from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
 import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
 import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.tsx";
 import { StatsRepository } from "../../../src/features/stats/StatsRepository.ts";
-import type { IncomingMessage } from "../../../src/SnowLuma.ts";
+import { createMockMessage } from "../../TestMessage.ts";
 
 describe("StatsCommand", () => {
   it("ignores non-command messages", async () => {
-    let quoted = false;
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 100,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "hello there" } }],
-        raw_message: "hello there",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        quote: () => {
-          quoted = true;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, getReplies } = createMockMessage({
+      raw_message: "hello there",
+      message: [{ type: "text", data: { text: "hello there" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -59,32 +41,18 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(quoted).toBe(false);
+    expect(getReplies().length).toBe(0);
   });
 
   it("ignores non-group messages", async () => {
-    let quoted = false;
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "private",
-        sub_type: "friend",
-        message_id: 100,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat" } }],
-        raw_message: "/stat",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as unknown as OneBotGroupMessageEvent,
-      context: {
-        quote: () => {
-          quoted = true;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, getReplies } = createMockMessage({
+      raw_message: "/stat",
+      message: [{ type: "text", data: { text: "/stat" } }],
+      message_type: "private",
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -110,35 +78,19 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(quoted).toBe(false);
+    expect(getReplies().length).toBe(0);
   });
 
   it("handles /stat command and sends image directly", async () => {
-    let repliedPayload: unknown = null;
     let queryStartDate: string | undefined = undefined;
 
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 101,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat" } }],
-        raw_message: "/stat",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        reply: (payload: unknown) => {
-          repliedPayload = payload;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, lastReply } = createMockMessage({
+      raw_message: "/stat",
+      message: [{ type: "text", data: { text: "/stat" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -181,32 +133,21 @@ describe("StatsCommand", () => {
     );
 
     expect(queryStartDate).toBeDefined(); // Last 30 days query has startDate
-    expect(repliedPayload).toBeDefined();
-    expect(JSON.stringify(repliedPayload)).toContain("base64://");
+    const replied = lastReply();
+    expect(replied).toBeDefined();
+    expect(JSON.stringify(replied)).toContain("base64://");
   });
 
   it("handles /stat all command without startDate", async () => {
     let queryStartDate: string | undefined = "init";
 
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 102,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat all" } }],
-        raw_message: "/stat all",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        reply: () => Promise.resolve({} as never),
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item } = createMockMessage({
+      raw_message: "/stat all",
+      message: [{ type: "text", data: { text: "/stat all" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -252,30 +193,13 @@ describe("StatsCommand", () => {
   });
 
   it("replies with fallback text when group has no stats (Review Focus 4)", async () => {
-    let repliedText: unknown = null;
-
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 103,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat" } }],
-        raw_message: "/stat",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        reply: (payload: unknown) => {
-          repliedText = payload;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, lastReply } = createMockMessage({
+      raw_message: "/stat",
+      message: [{ type: "text", data: { text: "/stat" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -302,33 +226,17 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(repliedText).toBe("本群暂无统计数据。");
+    expect(lastReply()).toBe("本群暂无统计数据。");
   });
-  it("replies with fallback text when group has interaction rows but 0 messages", async () => {
-    let repliedText: unknown = null;
 
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 107,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat" } }],
-        raw_message: "/stat",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        reply: (payload: unknown) => {
-          repliedText = payload;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+  it("replies with fallback text when group has interaction rows but 0 messages", async () => {
+    const { item, lastReply } = createMockMessage({
+      raw_message: "/stat",
+      message: [{ type: "text", data: { text: "/stat" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -368,34 +276,17 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(repliedText).toBe("本群暂无统计数据。");
+    expect(lastReply()).toBe("本群暂无统计数据。");
   });
 
   it("throttles rapid repeated /stat queries in same group (Review Focus 5)", async () => {
-    let callCount = 0;
-
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 104,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/stat" } }],
-        raw_message: "/stat",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        reply: () => {
-          callCount += 1;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, getReplies } = createMockMessage({
+      raw_message: "/stat",
+      message: [{ type: "text", data: { text: "/stat" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -433,39 +324,22 @@ describe("StatsCommand", () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         yield* handleStatsCommand(item);
-        expect(callCount).toBe(1);
+        expect(getReplies().length).toBe(1);
 
         yield* handleStatsCommand(item);
-        expect(callCount).toBe(1);
+        expect(getReplies().length).toBe(1);
       }).pipe(Effect.provide(layer)),
     );
   });
 
   it("handles /me command and quotes formatted personal stats", async () => {
-    let quotedText: unknown = null;
-
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 105,
-        group_id: 10001,
-        user_id: 20001,
-        message: [{ type: "text", data: { text: "/me" } }],
-        raw_message: "/me",
-        font: 0,
-        sender: { user_id: 20001, nickname: "Alice" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        quote: (payload: unknown) => {
-          quotedText = payload;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, lastReply } = createMockMessage({
+      raw_message: "/me",
+      message: [{ type: "text", data: { text: "/me" } }],
+      self_id: 123456,
+      user_id: 20001,
+      sender: { user_id: 20001, nickname: "Alice" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -510,8 +384,9 @@ describe("StatsCommand", () => {
       ),
     );
 
-    expect(typeof quotedText).toBe("string");
-    const text = quotedText as string;
+    const reply = lastReply();
+    expect(typeof reply).toBe("string");
+    const text = reply as string;
     expect(text).toContain("个人群聊统计 (近 30 天 / 历史累计)");
     expect(text).toContain("消息总计：200 / 800 条 (排名第 2 / 1)");
     expect(text).toContain("媒体消息：50 / 200 条");
@@ -520,30 +395,13 @@ describe("StatsCommand", () => {
   });
 
   it("handles /me for user with 0 messages (Review Focus 3)", async () => {
-    let quotedText: unknown = null;
-
-    const item: IncomingMessage = {
-      event: {
-        time: 1700000000,
-        self_id: 123456,
-        post_type: "message",
-        message_type: "group",
-        sub_type: "normal",
-        message_id: 106,
-        group_id: 10001,
-        user_id: 99999,
-        message: [{ type: "text", data: { text: "/me" } }],
-        raw_message: "/me",
-        font: 0,
-        sender: { user_id: 99999, nickname: "Newbie" },
-      } as OneBotGroupMessageEvent,
-      context: {
-        quote: (payload: unknown) => {
-          quotedText = payload;
-          return Promise.resolve({} as never);
-        },
-      } as unknown as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
-    };
+    const { item, lastReply } = createMockMessage({
+      raw_message: "/me",
+      message: [{ type: "text", data: { text: "/me" } }],
+      self_id: 123456,
+      user_id: 99999,
+      sender: { user_id: 99999, nickname: "Newbie" },
+    });
 
     const mockRepo = StatsRepository.of({
       initSchema: Effect.void,
@@ -588,7 +446,7 @@ describe("StatsCommand", () => {
       ),
     );
 
-    const text = quotedText as string;
+    const text = lastReply() as string;
     expect(text).toContain("排名第 - / -");
     expect(text).toContain("消息总计：0 / 0 条");
   });

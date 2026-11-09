@@ -1,54 +1,9 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import type { SnowLumaEventContextWithQuote } from "@snowluma/sdk";
-import type { OneBotMessageEvent } from "@snowluma/sdk/types";
 import { Effect } from "effect";
 import { handleSauceMessage } from "../../../src/features/sauce/Sauce.ts";
-import type { IncomingMessage } from "../../../src/SnowLuma.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
-
-function createMockItem(params: {
-  raw_message: string;
-  message?: unknown;
-  user_id?: number;
-  self_id?: number;
-  getMessageResponse?: unknown;
-  getMessageError?: boolean;
-  onGetMessage?: (id: number) => void;
-}) {
-  const sentReplies: unknown[] = [];
-  const item: IncomingMessage = {
-    event: {
-      raw_message: params.raw_message,
-      message: params.message ?? params.raw_message,
-      post_type: "message",
-      message_type: "group",
-      user_id: params.user_id ?? 10001,
-      self_id: params.self_id ?? 99999,
-    } as unknown as OneBotMessageEvent,
-    context: {
-      client: {
-        getMessage: async (id: number) => {
-          params.onGetMessage?.(id);
-          if (params.getMessageError) {
-            throw new Error("OneBot get_msg error");
-          }
-          return (params.getMessageResponse ?? {
-            message: [],
-          }) as Record<string, unknown>;
-        },
-      },
-      reply: async (msg: unknown) => {
-        sentReplies.push(msg);
-      },
-    } as unknown as SnowLumaEventContextWithQuote<OneBotMessageEvent>,
-  };
-
-  return {
-    item,
-    getReplies: () => sentReplies,
-  };
-}
+import { createMockMessage } from "../../TestMessage.ts";
 
 const mockSauceNaoSuccess = {
   header: {
@@ -75,7 +30,7 @@ const dummyHttpLayer = makeTestHttpClient(() =>
 
 describe("handleSauceMessage", () => {
   it("replies with formatted text when quoting a message with an image", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -105,7 +60,7 @@ describe("handleSauceMessage", () => {
 
   it("replies with formatted text when quoting a message with a negative message ID", async () => {
     let queriedMessageId: number | undefined;
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=-1946661968] /sauce",
       getMessageResponse: {
         message: [
@@ -143,7 +98,7 @@ describe("handleSauceMessage", () => {
       return Response.json(mockSauceNaoSuccess);
     });
 
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -174,7 +129,7 @@ describe("handleSauceMessage", () => {
   });
 
   it("triggers search in group chat when message contains auto-prepended @author segment", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345][CQ:at,qq=10002] /sauce",
       getMessageResponse: {
         message: [
@@ -203,7 +158,7 @@ describe("handleSauceMessage", () => {
   });
 
   it("replies with notice when message is /sauce without a quote reply", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "/sauce",
     });
 
@@ -217,7 +172,7 @@ describe("handleSauceMessage", () => {
   });
 
   it("replies with notice when quoted message has no image", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -260,7 +215,7 @@ describe("handleSauceMessage", () => {
       }),
     );
 
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -288,7 +243,7 @@ describe("handleSauceMessage", () => {
       () => new Response("Server error", { status: 500 }),
     );
 
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
@@ -312,7 +267,7 @@ describe("handleSauceMessage", () => {
   });
 
   it("replies with notice when getMessage fails with an error", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageError: true,
     });
@@ -336,7 +291,7 @@ describe("handleSauceMessage", () => {
     ];
 
     for (const msg of tests) {
-      const { item, getReplies } = createMockItem({
+      const { item, getReplies } = createMockMessage({
         raw_message: msg,
       });
 
@@ -349,7 +304,7 @@ describe("handleSauceMessage", () => {
   });
 
   it("does nothing when message is sent by the bot itself", async () => {
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       user_id: 99999,
       self_id: 99999,
@@ -383,7 +338,7 @@ describe("handleSauceMessage", () => {
 
     const httpLayer = makeTestHttpClient(() => Response.json(cpHackResponse));
 
-    const { item, getReplies } = createMockItem({
+    const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
         message: [
