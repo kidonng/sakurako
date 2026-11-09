@@ -92,6 +92,60 @@ describe("LinkPreviewEngine", () => {
     expect(result.image).toBe("https://example.com/cover.png");
   });
 
+  it("scrapes metadata from GB2312 HTML page correctly without mojibake", async () => {
+    const prefix = new TextEncoder().encode(
+      '<!DOCTYPE html><html><head><meta charset="gb2312"><title>',
+    );
+    // "杭州临平通报" in GBK/GB2312 bytes
+    const gbkTitle = [
+      0xba, 0xbc, 0xd6, 0xdd, 0xc1, 0xd9, 0xc6, 0xbd, 0xcd, 0xa8, 0xb1, 0xa8,
+    ];
+    // Note: for simplicity in constructing fixture, description is ASCII or GBK:
+    // Let's also encode description in GBK:
+    // 警: 0xbe 0xaf, 情: 0xc7 0xe9, 通: 0xcd 0xa8, 报: 0xb1 0xa8
+    const gbkDesc = [0xbe, 0xaf, 0xc7, 0xe9, 0xcd, 0xa8, 0xb1, 0xa8];
+    const descPrefix = new TextEncoder().encode(
+      '</title><meta name="description" content="',
+    );
+    const descSuffix = new TextEncoder().encode(
+      '"></head><body></body></html>',
+    );
+    const body = new Uint8Array(
+      prefix.length +
+        gbkTitle.length +
+        descPrefix.length +
+        gbkDesc.length +
+        descSuffix.length,
+    );
+    let offset = 0;
+    body.set(prefix, offset);
+    offset += prefix.length;
+    body.set(gbkTitle, offset);
+    offset += gbkTitle.length;
+    body.set(descPrefix, offset);
+    offset += descPrefix.length;
+    body.set(gbkDesc, offset);
+    offset += gbkDesc.length;
+    body.set(descSuffix, offset);
+
+    const result = await Effect.runPromise(
+      scrapeMetadata("https://news.cnr.cn/test.shtml").pipe(
+        Effect.provide(
+          makeTestHttpClient(
+            () =>
+              new Response(body, {
+                status: 200,
+                headers: { "Content-Type": "text/html" },
+              }),
+          ),
+        ),
+      ),
+    );
+
+    expect(result.title).toBe("杭州临平通报");
+    expect(result.description).toBe("警情通报");
+  });
+
   it("resolves relative images against redirected response.url", async () => {
     const mockHtml = `
       <!DOCTYPE html>

@@ -193,6 +193,96 @@ export function executeWithResponse<A, E, R>(
   });
 }
 
+function normalizeEncoding(label: string): string {
+  const cleaned = label
+    .trim()
+    .toLowerCase()
+    .replace(/^["']|["']$/g, "");
+  const unhyphenated = cleaned.replace(/[-_]/g, "");
+  if (unhyphenated === "gb2312" || unhyphenated === "gbk") {
+    return "gbk";
+  }
+  if (unhyphenated === "gb18030") {
+    return "gb18030";
+  }
+  if (unhyphenated === "utf8") {
+    return "utf-8";
+  }
+  return cleaned;
+}
+
+function isGenericEncoding(encoding?: string): boolean {
+  if (!encoding) return true;
+  return (
+    encoding === "iso-8859-1" ||
+    encoding === "windows-1252" ||
+    encoding === "us-ascii" ||
+    encoding === "ascii"
+  );
+}
+
+function tryDecode(bytes: Uint8Array, encoding: string): string | undefined {
+  try {
+    return new TextDecoder(
+      encoding as unknown as ConstructorParameters<typeof TextDecoder>[0],
+    ).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeResponseBody(buffer: ArrayBuffer, contentType?: string): string {
+  const bytes = new Uint8Array(buffer);
+  const headerMatch = (contentType ?? "").match(
+    /charset\s*=\s*["']?([a-zA-Z0-9_-]+)/i,
+  );
+  const rawHeaderCharset = headerMatch?.[1];
+  const headerEncoding = rawHeaderCharset
+    ? normalizeEncoding(rawHeaderCharset)
+    : undefined;
+
+  const snippet = new TextDecoder("latin1").decode(bytes.slice(0, 2048));
+  const metaMatch =
+    snippet.match(/<meta\s+[^>]*[\s;?]?charset\s*=\s*["']?([a-zA-Z0-9_-]+)/i) ||
+    snippet.match(
+      /<meta\s+[^>]*content\s*=\s*["'][^"']*charset=([a-zA-Z0-9_-]+)/i,
+    ) ||
+    snippet.match(/<meta\s+[^>]*charset=([a-zA-Z0-9_-]+)[^>]*content\s*=/i) ||
+    snippet.match(/<\?xml\s+[^>]*encoding\s*=\s*["']([a-zA-Z0-9_-]+)/i);
+  const rawMetaCharset = metaMatch?.[1];
+  const metaEncoding = rawMetaCharset
+    ? normalizeEncoding(rawMetaCharset)
+    : undefined;
+
+  const candidateEncoding =
+    !headerEncoding || isGenericEncoding(headerEncoding)
+      ? metaEncoding
+      : headerEncoding;
+
+  if (candidateEncoding && candidateEncoding !== "utf-8") {
+    const decoded = tryDecode(bytes, candidateEncoding);
+    if (decoded !== undefined) {
+      return decoded;
+    }
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    if (metaEncoding) {
+      const decoded = tryDecode(bytes, metaEncoding);
+      if (decoded !== undefined) {
+        return decoded;
+      }
+    }
+    const gbkDecoded = tryDecode(bytes, "gb18030");
+    if (gbkDecoded !== undefined) {
+      return gbkDecoded;
+    }
+    return new TextDecoder().decode(bytes);
+  }
+}
+
 export function fetchText(
   request: HttpClientRequest.HttpClientRequest,
   options?: RequestExecutionOptions,
@@ -205,7 +295,7 @@ export function fetchText(
     request,
     (response) =>
       Effect.gen(function* () {
-        const text = yield* response.text.pipe(
+        const buffer = yield* response.arrayBuffer.pipe(
           Effect.mapError(
             (error) =>
               new HttpNetworkError({
@@ -213,6 +303,10 @@ export function fetchText(
                 detail: `Failed to read response text: ${error.message}`,
               }),
           ),
+        );
+        const text = decodeResponseBody(
+          buffer,
+          response.headers["content-type"],
         );
         const url = response.url || request.url;
         return { text, url };

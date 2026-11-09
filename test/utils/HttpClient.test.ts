@@ -32,6 +32,86 @@ describe("HttpClient utils", () => {
       expect(result.url).toBe("https://example.com/page");
     });
 
+    it('decodes GB2312 HTML response when specified in <meta charset="gb2312">', async () => {
+      const prefix = new TextEncoder().encode(
+        '<!DOCTYPE html><html><head><meta charset="gb2312"><title>',
+      );
+      // "杭州临平" in GBK/GB2312 bytes
+      const gbkTitle = [0xba, 0xbc, 0xd6, 0xdd, 0xc1, 0xd9, 0xc6, 0xbd];
+      const suffix = new TextEncoder().encode(
+        "</title></head><body></body></html>",
+      );
+      const body = new Uint8Array(
+        prefix.length + gbkTitle.length + suffix.length,
+      );
+      body.set(prefix, 0);
+      body.set(gbkTitle, prefix.length);
+      body.set(suffix, prefix.length + gbkTitle.length);
+
+      const layer = makeTestHttpClient(() => {
+        return new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        });
+      });
+
+      const program = fetchText(
+        HttpClientRequest.get("https://news.cnr.cn/native/gd/test.shtml"),
+      ).pipe(Effect.provide(layer));
+
+      const result = await Effect.runPromise(program);
+      expect(result.text).toContain("杭州临平");
+    });
+
+    it("decodes response when charset is specified in Content-Type header", async () => {
+      const gbkBytes = new Uint8Array([
+        0xba, 0xbc, 0xd6, 0xdd, 0xc1, 0xd9, 0xc6, 0xbd,
+      ]);
+      const layer = makeTestHttpClient(() => {
+        return new Response(gbkBytes, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=gbk" },
+        });
+      });
+
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/test.txt"),
+      ).pipe(Effect.provide(layer));
+
+      const result = await Effect.runPromise(program);
+      expect(result.text).toBe("杭州临平");
+    });
+
+    it('overrides generic ISO-8859-1 Content-Type with HTML <meta charset="gb2312">', async () => {
+      const prefix = new TextEncoder().encode(
+        '<!DOCTYPE html><html><head><meta charset="gb2312"><title>',
+      );
+      const gbkTitle = [0xba, 0xbc, 0xd6, 0xdd, 0xc1, 0xd9, 0xc6, 0xbd];
+      const suffix = new TextEncoder().encode(
+        "</title></head><body></body></html>",
+      );
+      const body = new Uint8Array(
+        prefix.length + gbkTitle.length + suffix.length,
+      );
+      body.set(prefix, 0);
+      body.set(gbkTitle, prefix.length);
+      body.set(suffix, prefix.length + gbkTitle.length);
+
+      const layer = makeTestHttpClient(() => {
+        return new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=iso-8859-1" },
+        });
+      });
+
+      const program = fetchText(
+        HttpClientRequest.get("https://example.com/legacy.html"),
+      ).pipe(Effect.provide(layer));
+
+      const result = await Effect.runPromise(program);
+      expect(result.text).toContain("杭州临平");
+    });
+
     it("automatically attaches DEFAULT_USER_AGENT when User-Agent is unset", async () => {
       let capturedUa: string | undefined;
       const layer = makeTestHttpClient((req) => {
@@ -98,7 +178,11 @@ describe("HttpClient utils", () => {
 
     it("fails with HttpRateLimitError on 429 status and cancels response body", async () => {
       const layer = makeTestHttpClient(
-        () => new Response("Rate Limited", { status: 429, statusText: "Too Many Requests" }),
+        () =>
+          new Response("Rate Limited", {
+            status: 429,
+            statusText: "Too Many Requests",
+          }),
       );
       const program = fetchText(
         HttpClientRequest.get("https://example.com/api"),
@@ -114,7 +198,8 @@ describe("HttpClient utils", () => {
 
     it("fails with HttpNetworkError on other non-2xx status", async () => {
       const layer403 = makeTestHttpClient(
-        () => new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+        () =>
+          new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
       );
       const program403 = fetchText(
         HttpClientRequest.get("https://example.com/api"),
@@ -129,7 +214,11 @@ describe("HttpClient utils", () => {
       expect(error403.message).toContain("HTTP 403 Forbidden");
 
       const layer500 = makeTestHttpClient(
-        () => new Response("Server Error", { status: 500, statusText: "Internal Server Error" }),
+        () =>
+          new Response("Server Error", {
+            status: 500,
+            statusText: "Internal Server Error",
+          }),
       );
       const program500 = fetchText(
         HttpClientRequest.get("https://example.com/api"),
@@ -213,7 +302,9 @@ describe("HttpClient utils", () => {
     });
 
     it("fails with HttpNoContentError when fetchJson receives 204", async () => {
-      const layer = makeTestHttpClient(() => new Response(null, { status: 204 }));
+      const layer = makeTestHttpClient(
+        () => new Response(null, { status: 204 }),
+      );
       const program = fetchJson(
         HttpClientRequest.get("https://example.com/empty"),
         TestSchema,
