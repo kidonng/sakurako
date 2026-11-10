@@ -39,6 +39,15 @@ export class DanbooruApiError extends Schema.TaggedError<
   message: Schema.String,
 }) {}
 
+const toDanbooruApiError = (err: {
+  readonly message: string;
+  readonly status?: number;
+}) =>
+  new DanbooruApiError({
+    status: err.status ?? 0,
+    message: err.message,
+  });
+
 const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
 export const withDanbooruUserAgent = HttpClientRequest.setHeader(
   "User-Agent",
@@ -99,14 +108,7 @@ export class DanbooruClient extends Context.Service<
           ),
           Effect.catchTag(
             ["HttpTimeoutError", "HttpNetworkError"],
-            (err) =>
-              new DanbooruApiError({
-                status:
-                  "status" in err && typeof err.status === "number"
-                    ? err.status
-                    : 0,
-                message: err.message,
-              }),
+            toDanbooruApiError,
           ),
         );
       });
@@ -118,16 +120,7 @@ export class DanbooruClient extends Context.Service<
 
         return yield* fetchImage(request).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
-          Effect.mapError((err) => {
-            const status =
-              "status" in err && typeof err.status === "number"
-                ? err.status
-                : 0;
-            return new DanbooruApiError({
-              status,
-              message: err.message,
-            });
-          }),
+          Effect.mapError(toDanbooruApiError),
         );
       });
 
