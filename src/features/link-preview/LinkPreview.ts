@@ -446,7 +446,6 @@ const DEFAULT_ACCEPT_HEADER = "text/html";
 export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
   function* (
     url: string,
-    timeoutDuration: Duration.Input = "10 seconds",
   ): Effect.fn.Return<
     PageMetadata,
     ScrapeMetadataError,
@@ -468,7 +467,6 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     if (customizer?.scrape) {
       const customMetadata = yield* customizer.scrape({
         url: urlObj,
-        timeoutDuration,
       });
       if (customMetadata) {
         return customMetadata;
@@ -478,9 +476,7 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const request = HttpClientRequest.get(url).pipe(
       HttpClientRequest.accept(DEFAULT_ACCEPT_HEADER),
     );
-    const { text: html, url: targetUrl } = yield* fetchText(request, {
-      timeoutDuration,
-    });
+    const { text: html, url: targetUrl } = yield* fetchText(request);
     const metadata = yield* Effect.tryPromise({
       try: () => scraper({ html, url: targetUrl }),
       catch: (cause) => new ParseMetadataError({ url, cause }),
@@ -652,7 +648,6 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
       results,
       openrouterApiKey,
       openrouterDecisionModel,
-      undefined,
       undefined,
       userImages,
     );

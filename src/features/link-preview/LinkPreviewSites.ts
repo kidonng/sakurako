@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import type createMetascraper from "metascraper";
-import { type Duration, Effect, Predicate } from "effect";
+import { Effect, Predicate } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { resolveDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
 import {
@@ -39,7 +39,6 @@ export interface SiteCustomizer {
   }) => SiteFormatOptions;
   readonly scrape?: (context: {
     readonly url: URL;
-    readonly timeoutDuration?: Duration.Input;
   }) => Effect.Effect<
     PageMetadata | undefined,
     HttpFetchError,
@@ -118,7 +117,7 @@ export const danbooruCustomizer: SiteCustomizer = {
   formatItem: () => ({
     hideDescription: true,
   }),
-  scrape: ({ url, timeoutDuration }) =>
+  scrape: ({ url }) =>
     Effect.gen(function* () {
       const postMatch = url.pathname.match(DANBOORU_POST_REGEX);
       if (!postMatch || !postMatch[1]) {
@@ -131,9 +130,7 @@ export const danbooruCustomizer: SiteCustomizer = {
         HttpClientRequest.acceptJson,
       );
 
-      const post = yield* fetchJson(request, DanbooruPostSchema, {
-        timeoutDuration,
-      });
+      const post = yield* fetchJson(request, DanbooruPostSchema);
 
       const title = yield* resolveDanbooruTitle(post);
       const image = post.large_file_url ?? post.file_url;

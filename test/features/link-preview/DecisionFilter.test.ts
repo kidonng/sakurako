@@ -608,7 +608,6 @@ describe("filterPreviewResults", () => {
         Redacted.make("fake-key"),
         "perplexity/pplx-decider-flash-v1.2",
         0.7,
-        "5 seconds",
         ["data:image/jpeg;base64,abc12345"],
       ).pipe(Effect.provide(layer)),
     );

@@ -14,7 +14,6 @@ import {
 import {
   HttpNetworkError,
   HttpNotFoundError,
-  HttpTimeoutError,
 } from "../../../src/utils/HttpClient.ts";
 
 describe("LinkPreviewEngine", () => {
@@ -271,26 +270,6 @@ describe("LinkPreviewEngine", () => {
     }
     expect(error.message).toContain("HTTP 404 Not Found");
   });
-  it("times out when response body reading stalls", async () => {
-    const layer = makeTestHttpClient(() => {
-      const stream = new ReadableStream({
-        start() {
-          // Intentionally stalls without emitting data
-        },
-      });
-      return new Response(stream, { status: 200 });
-    });
-
-    const error = await Effect.runPromise(
-      scrapeMetadata("https://example.com/stalled", "50 millis").pipe(
-        Effect.provide(layer),
-        Effect.flip,
-      ),
-    );
-    expect(error).toBeInstanceOf(HttpTimeoutError);
-    expect(error.message).toContain("timed out");
-  });
-
   it("blocks SSRF attempts on localhost and private IP addresses", async () => {
     const dummyLayer = makeTestHttpClient(() => new Response(""));
 

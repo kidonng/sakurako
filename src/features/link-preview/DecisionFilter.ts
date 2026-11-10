@@ -1,6 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import {
-  type Duration,
   Effect,
   Predicate,
   type Redacted,
@@ -21,7 +20,6 @@ import { truncate } from "../../utils/TextWidth.ts";
 export const OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
 const DEFAULT_THRESHOLD = 0.7;
-const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
 interface DecisionsNoulCriteria {
   readonly true: string;
@@ -129,7 +127,6 @@ export const filterPreviewResults = Effect.fn(
   apiKey?: Redacted.Redacted<string>,
   model: string = DEFAULT_DECISION_MODEL,
   threshold: number = DEFAULT_THRESHOLD,
-  timeoutDuration: Duration.Input = DEFAULT_TIMEOUT,
   userImages?: ReadonlyArray<string>,
 ) {
   if (!apiKey || results.length === 0) {
@@ -211,9 +208,7 @@ export const filterPreviewResults = Effect.fn(
       HttpClientRequest.bodyJson(payload),
     );
 
-    const responseData = yield* fetchJson(request, DecisionsResponseSchema, {
-      timeoutDuration,
-    }).pipe(
+    const responseData = yield* fetchJson(request, DecisionsResponseSchema).pipe(
       Effect.mapError(
         (cause) =>
           new DecisionFilterError({

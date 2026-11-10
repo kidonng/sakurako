@@ -94,9 +94,7 @@ export class DanbooruClient extends Context.Service<
           withDanbooruUserAgent,
         );
 
-        return yield* fetchJson(request, DanbooruPostSchema, {
-          timeoutDuration: "10 seconds",
-        }).pipe(
+        return yield* fetchJson(request, DanbooruPostSchema).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.catchTag(
             ["HttpNotFoundError", "HttpNoContentError"],

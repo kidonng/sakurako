@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Redacted, Schema } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientRequest, Url } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
 
@@ -138,7 +138,6 @@ function extractUrl(data: SauceNaoItemData | undefined): string | undefined {
 export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   imageUrl: string,
   apiKey?: Redacted.Redacted<string>,
-  timeoutDuration: Duration.Input = "10 seconds",
 ): Effect.fn.Return<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
   const urlParams: Record<string, string> = {
     output_type: "2",
@@ -153,9 +152,7 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   const request = HttpClientRequest.get(
     Url.setUrlParams(new URL(SAUCENAO_API_URL), urlParams).toString(),
   );
-  const json = yield* fetchJson(request, SauceNaoResponseSchema, {
-    timeoutDuration,
-  }).pipe(
+  const json = yield* fetchJson(request, SauceNaoResponseSchema).pipe(
     Effect.mapError(
       (error) =>
         new SauceNaoError({
