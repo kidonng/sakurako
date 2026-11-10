@@ -1,13 +1,14 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource satori/jsx */
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { BunFileSystem, BunPath } from "@effect/platform-bun";
+import { BunFileSystem } from "@effect/platform-bun";
 import { Context, Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
-import { Path } from "effect/Path";
 import satori from "satori";
 import sharp from "sharp";
 import type { LeaderboardResult } from "./StatsRepository.ts";
+
+export const FONT_PATH = "assets/fonts/MiSans-Normal.ttf";
 
 export interface RenderLeaderboardOptions {
   readonly groupName?: string;
@@ -48,16 +49,11 @@ export class StatsRenderer extends Context.Service<
     StatsRenderer,
     Effect.gen(function* () {
       const fs = yield* FileSystem;
-      const path = yield* Path;
-      const fontPath = path.join(
-        import.meta.dir,
-        "../../../assets/fonts/MiSans-Normal.ttf",
-      );
-      const fontBytes = yield* fs.readFile(fontPath).pipe(
+      const fontBytes = yield* fs.readFile(FONT_PATH).pipe(
         Effect.mapError(
           (err) =>
             new Error(
-              `Failed to read font file at ${fontPath}: ${String(err)}`,
+              `Failed to read font file at ${FONT_PATH}: ${String(err)}`,
             ),
         ),
         Effect.orDie,
@@ -288,5 +284,5 @@ export class StatsRenderer extends Context.Service<
         renderLeaderboard,
       });
     }),
-  ).pipe(Layer.provide(BunFileSystem.layer), Layer.provide(BunPath.layer));
+  ).pipe(Layer.provide(BunFileSystem.layer));
 }

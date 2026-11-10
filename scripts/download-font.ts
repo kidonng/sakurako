@@ -3,6 +3,7 @@ import { BunFileSystem, BunPath, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
+import { FONT_PATH } from "../src/features/stats/StatsRenderer.tsx";
 
 const FONT_URL = "https://hyperos.mi.com/font-download/MiSans.zip";
 const TARGET_ENTRY = "MiSans/ttf/MiSans-Normal.ttf";
@@ -18,10 +19,7 @@ class FontDownloadError extends Schema.TaggedError<
 const mainProgram = Effect.gen(function* () {
   const fs = yield* FileSystem;
   const path = yield* Path;
-  const outputFile = path.join(
-    import.meta.dir,
-    "../assets/fonts/MiSans-Normal.ttf",
-  );
+  const outputFile = path.resolve(FONT_PATH);
   const outputDir = path.dirname(outputFile);
 
   const exists = yield* fs.exists(outputFile);
