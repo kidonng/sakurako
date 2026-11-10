@@ -2,10 +2,12 @@ import { describe, expect, it } from "bun:test";
 import {
   BlockedHostError,
   formatPreview,
-  HttpNotFoundError,
-  HttpTimeoutError,
   type ScrapingResult,
 } from "../../../src/features/link-preview/LinkPreview.ts";
+import {
+  HttpNotFoundError,
+  HttpTimeoutError,
+} from "../../../src/utils/HttpClient.ts";
 
 describe("formatPreview", () => {
   it("returns null when all results are failures", () => {
@@ -23,7 +25,10 @@ describe("formatPreview", () => {
       {
         _tag: "Failure",
         url: "https://b.com",
-        error: new HttpTimeoutError({ url: "https://b.com", detail: "Timeout" }),
+        error: new HttpTimeoutError({
+          url: "https://b.com",
+          detail: "Timeout",
+        }),
       },
     ];
     expect(formatPreview(results)).toBeNull();

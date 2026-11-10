@@ -22,7 +22,6 @@ interface SiteFormatOptions {
   readonly description?: string;
 }
 
-export { DANBOORU_USER_AGENT, DEFAULT_USER_AGENT };
 export const DEFAULT_ACCEPT_HEADER =
   "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 

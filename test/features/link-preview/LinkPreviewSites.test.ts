@@ -5,8 +5,6 @@ import { Effect, Layer } from "effect";
 import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import {
-  DANBOORU_USER_AGENT,
-  DEFAULT_USER_AGENT,
   danbooruCustomizer,
   extractPixivArtworkId,
   findSiteCustomizer,
@@ -16,6 +14,10 @@ import {
   pixivCustomizer,
   shouldFetchImageLocally,
 } from "../../../src/features/link-preview/LinkPreviewSites.ts";
+import {
+  DANBOORU_USER_AGENT,
+  DEFAULT_USER_AGENT,
+} from "../../../src/utils/HttpClient.ts";
 
 describe("LinkPreviewSites", () => {
   describe("findSiteCustomizer", () => {

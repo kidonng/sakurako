@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Logger, Redacted } from "effect";
 import { HttpBody } from "effect/http";
+import { DEFAULT_DECISION_MODEL } from "../../../src/Config.ts";
 import {
-  DEFAULT_DECISION_MODEL,
   filterPreviewResults,
   OPENROUTER_DECISIONS_URL,
 } from "../../../src/features/link-preview/DecisionFilter.ts";
 import {
-  HttpNotFoundError,
   isScrapingResult,
   type ScrapingResult,
 } from "../../../src/features/link-preview/LinkPreview.ts";
+import { HttpNotFoundError } from "../../../src/utils/HttpClient.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 
 function extractJsonBody(req: { body: unknown }): unknown {

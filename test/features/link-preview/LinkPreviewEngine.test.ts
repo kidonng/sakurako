@@ -6,14 +6,16 @@ import {
   BlockedHostError,
   extractFirstParagraph,
   extractUrls,
-  HttpNotFoundError,
-  HttpNetworkError,
-  HttpTimeoutError,
   isScrapingResult,
   prepareOutgoingImage,
   scrapeAll,
   scrapeMetadata,
 } from "../../../src/features/link-preview/LinkPreview.ts";
+import {
+  HttpNetworkError,
+  HttpNotFoundError,
+  HttpTimeoutError,
+} from "../../../src/utils/HttpClient.ts";
 import { DEFAULT_ACCEPT_HEADER } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewEngine", () => {

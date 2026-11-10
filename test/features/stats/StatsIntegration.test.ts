@@ -8,9 +8,9 @@ import type {
 } from "@snowluma/sdk/types";
 import { Effect, Layer } from "effect";
 import {
-  handleStatsCollectorMessage,
-  handleStatsCollectorNotice,
-} from "../../../src/index.ts";
+  handleStatsMessage,
+  handleStatsNotice,
+} from "../../../src/features/stats/StatsCollector.ts";
 import { handleStatsCommand } from "../../../src/features/stats/StatsCommand.ts";
 import { StatsCooldown } from "../../../src/features/stats/StatsCooldown.ts";
 import { StatsRenderer } from "../../../src/features/stats/StatsRenderer.tsx";
@@ -52,7 +52,7 @@ describe("StatsIntegration", () => {
         } as OneBotGroupMessageEvent,
         context: {} as SnowLumaEventContextWithQuote<OneBotGroupMessageEvent>,
       };
-      yield* handleStatsCollectorMessage(msgEvent);
+      yield* handleStatsMessage(msgEvent);
 
       // 2. User 1002 pokes someone
       const pokeEvent: IncomingNotice = {
@@ -68,7 +68,7 @@ describe("StatsIntegration", () => {
         } as unknown as OneBotNoticeEvent,
         context: {} as SnowLumaEventContextWithQuote<OneBotNoticeEvent>,
       };
-      yield* handleStatsCollectorNotice(pokeEvent);
+      yield* handleStatsNotice(pokeEvent);
 
       // 3. User 1001 executes /me
       let quotedMeText: unknown = null;

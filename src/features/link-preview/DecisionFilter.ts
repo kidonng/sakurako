@@ -14,7 +14,6 @@ import { truncate } from "../../utils/TextWidth.ts";
 
 export const OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
-export { DEFAULT_DECISION_MODEL } from "../../Config.ts";
 const DEFAULT_THRESHOLD = 0.7;
 const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
@@ -186,12 +185,10 @@ export const filterPreviewResults = Effect.fn(
       userImages && userImages.length > 0
         ? [
             stateContext,
-            ...userImages.map(
-              (url): DecisionsImageUrlPart => ({
-                type: "image_url",
-                image_url: { url },
-              }),
-            ),
+            ...userImages.map((url): DecisionsImageUrlPart => ({
+              type: "image_url",
+              image_url: { url },
+            })),
           ]
         : stateContext;
 

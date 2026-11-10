@@ -23,11 +23,6 @@ import { StatsRepository } from "./features/stats/StatsRepository.ts";
 import { SnowLumaClient } from "./SnowLuma.ts";
 import { shouldProcessEvent } from "./utils/MessageGuard.ts";
 
-export {
-  handleStatsMessage as handleStatsCollectorMessage,
-  handleStatsNotice as handleStatsCollectorNotice,
-};
-
 export const logStartupInfo = Effect.fnUntraced(function* (
   client: SnowLumaWebSocketClient | undefined,
   config: BotConfig,
