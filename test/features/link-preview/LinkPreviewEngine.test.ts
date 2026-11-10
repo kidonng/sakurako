@@ -16,7 +16,6 @@ import {
   HttpNotFoundError,
   HttpTimeoutError,
 } from "../../../src/utils/HttpClient.ts";
-import { DEFAULT_ACCEPT_HEADER } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewEngine", () => {
   it("extracts and normalizes URLs from text", () => {
@@ -172,7 +171,7 @@ describe("LinkPreviewEngine", () => {
     );
   });
 
-  it("sends Sakurako/1.0 User-Agent and standard Accept headers by default", async () => {
+  it("sends Sakurako/1.0 User-Agent and text/html Accept header by default", async () => {
     let capturedUserAgent: string | undefined;
     let capturedAccept: string | undefined;
     const layer = makeTestHttpClient((req) => {
@@ -187,24 +186,7 @@ describe("LinkPreviewEngine", () => {
     );
 
     expect(capturedUserAgent).toBe("Sakurako/1.0");
-    expect(capturedAccept).toBe(DEFAULT_ACCEPT_HEADER);
-  });
-
-  it("sends custom Danbooru User-Agent header for Danbooru URLs", async () => {
-    let capturedUserAgent: string | undefined;
-    const layer = makeTestHttpClient((req) => {
-      capturedUserAgent = req.headers["user-agent"];
-      return new Response("<html><head><title>Danbooru</title></head></html>", {
-        status: 200,
-      });
-    });
-    await Effect.runPromise(
-      scrapeMetadata("https://danbooru.donmai.us/posts/12459835").pipe(
-        Effect.provide(layer),
-      ),
-    );
-
-    expect(capturedUserAgent).toBe("Sakurako/1.0 (user #898759)");
+    expect(capturedAccept).toBe("text/html");
   });
 
   it("handles missing title, description, image gracefully", async () => {

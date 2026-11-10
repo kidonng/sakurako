@@ -8,47 +8,37 @@ import {
   danbooruCustomizer,
   extractPixivArtworkId,
   findSiteCustomizer,
-  getUserAgent,
   githubCustomizer,
   hackerNewsCustomizer,
   pixivCustomizer,
-  shouldFetchImageLocally,
 } from "../../../src/features/link-preview/LinkPreviewSites.ts";
-import {
-  DANBOORU_USER_AGENT,
-  DEFAULT_USER_AGENT,
-} from "../../../src/utils/HttpClient.ts";
 
 describe("LinkPreviewSites", () => {
   describe("findSiteCustomizer", () => {
     it("matches github.com URLs case-insensitively", () => {
       expect(
-        findSiteCustomizer("https://github.com/kidonng/sakurako")?.name,
-      ).toBe("github.com");
-      expect(
-        findSiteCustomizer("https://WWW.GITHUB.COM/owner/repo")?.name,
-      ).toBe("github.com");
+        findSiteCustomizer("https://github.com/kidonng/sakurako")?.id,
+      ).toBe("github");
+      expect(findSiteCustomizer("https://GITHUB.COM/owner/repo")?.id).toBe(
+        "github",
+      );
     });
 
     it("matches news.ycombinator.com URLs", () => {
       expect(
-        findSiteCustomizer("https://news.ycombinator.com/item?id=12345")?.name,
-      ).toBe("news.ycombinator.com");
-      expect(
-        findSiteCustomizer("https://www.news.ycombinator.com/item?id=12345")
-          ?.name,
-      ).toBe("news.ycombinator.com");
+        findSiteCustomizer("https://news.ycombinator.com/item?id=12345")?.id,
+      ).toBe("hacker-news");
     });
     it("matches danbooru.donmai.us and related donmai.us URLs", () => {
       expect(
-        findSiteCustomizer("https://danbooru.donmai.us/posts/12459835")?.name,
-      ).toBe("danbooru.donmai.us");
+        findSiteCustomizer("https://danbooru.donmai.us/posts/12459835")?.id,
+      ).toBe("danbooru");
       expect(
-        findSiteCustomizer("https://testbooru.donmai.us/posts/1")?.name,
-      ).toBe("danbooru.donmai.us");
+        findSiteCustomizer("https://testbooru.donmai.us/posts/1")?.id,
+      ).toBe("danbooru");
       expect(
-        findSiteCustomizer("https://safebooru.donmai.us/posts/1")?.name,
-      ).toBe("danbooru.donmai.us");
+        findSiteCustomizer("https://safebooru.donmai.us/posts/1")?.id,
+      ).toBe("danbooru");
     });
 
     it("returns undefined for unrecognized or invalid URLs", () => {
@@ -307,11 +297,11 @@ describe("LinkPreviewSites", () => {
   describe("pixivCustomizer", () => {
     it("matches pixiv.net and www.pixiv.net", () => {
       expect(
-        findSiteCustomizer("https://www.pixiv.net/artworks/82775556")?.name,
-      ).toBe("pixiv.net");
+        findSiteCustomizer("https://www.pixiv.net/artworks/82775556")?.id,
+      ).toBe("pixiv");
       expect(
-        findSiteCustomizer("https://pixiv.net/artworks/82775556")?.name,
-      ).toBe("pixiv.net");
+        findSiteCustomizer("https://pixiv.net/artworks/82775556")?.id,
+      ).toBe("pixiv");
       expect(
         findSiteCustomizer("https://other.com/artworks/82775556"),
       ).toBeUndefined();
@@ -376,33 +366,6 @@ describe("LinkPreviewSites", () => {
       expect(
         extractPixivArtworkId(new URL("https://www.pixiv.net/users/999")),
       ).toBeUndefined();
-    });
-  });
-
-  describe("getUserAgent", () => {
-    it("returns default UA for generic websites", () => {
-      expect(getUserAgent("https://example.com")).toBe(DEFAULT_USER_AGENT);
-      expect(getUserAgent("https://github.com/kidonng/sakurako")).toBe(
-        DEFAULT_USER_AGENT,
-      );
-      expect(getUserAgent(new URL("https://example.com"))).toBe("Sakurako/1.0");
-    });
-
-    it("returns Danbooru UA for danbooru domains", () => {
-      expect(getUserAgent("https://danbooru.donmai.us/posts/12459835")).toBe(
-        DANBOORU_USER_AGENT,
-      );
-      expect(
-        getUserAgent(new URL("https://danbooru.donmai.us/posts/12459835")),
-      ).toBe(DANBOORU_USER_AGENT);
-    });
-  });
-
-  describe("shouldFetchImageLocally", () => {
-    it("returns true by default for generic websites", () => {
-      expect(shouldFetchImageLocally("https://example.com/cover.png")).toBe(
-        true,
-      );
     });
   });
 });

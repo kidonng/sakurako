@@ -7,7 +7,6 @@ import { DanbooruPostSchema } from "../danbooru/DanbooruClient.ts";
 import type { PageMetadata } from "./LinkPreview.ts";
 import {
   DANBOORU_USER_AGENT,
-  DEFAULT_USER_AGENT,
   fetchJson,
   type HttpFetchError,
 } from "../../utils/HttpClient.ts";
@@ -22,14 +21,11 @@ interface SiteFormatOptions {
   readonly description?: string;
 }
 
-export const DEFAULT_ACCEPT_HEADER =
-  "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+export const DEFAULT_ACCEPT_HEADER = "text/html";
 
 export interface SiteCustomizer {
-  readonly name: string;
+  readonly id: string;
   readonly match: (url: URL) => boolean;
-  readonly userAgent?: string;
-  readonly fetchImageLocally?: boolean;
   readonly metascraperRules?: {
     readonly description?: (
       context: MetascraperRuleContext,
@@ -55,11 +51,8 @@ export interface SiteCustomizer {
 }
 
 export const githubCustomizer: SiteCustomizer = {
-  name: "github.com",
-  match: (url) => {
-    const host = url.hostname.toLowerCase();
-    return host === "github.com" || host === "www.github.com";
-  },
+  id: "github",
+  match: (url) => url.hostname.toLowerCase() === "github.com",
   formatItem: ({ isSingle }) => ({
     hideDescription: true,
     hideTitle: isSingle,
@@ -67,13 +60,8 @@ export const githubCustomizer: SiteCustomizer = {
 };
 
 export const hackerNewsCustomizer: SiteCustomizer = {
-  name: "news.ycombinator.com",
-  match: (url) => {
-    const host = url.hostname.toLowerCase();
-    return (
-      host === "news.ycombinator.com" || host === "www.news.ycombinator.com"
-    );
-  },
+  id: "hacker-news",
+  match: (url) => url.hostname.toLowerCase() === "news.ycombinator.com",
   formatItem: () => ({
     hideImage: true,
   }),
@@ -81,11 +69,7 @@ export const hackerNewsCustomizer: SiteCustomizer = {
     description: ({ htmlDom, url }) => {
       try {
         const urlObj = new URL(url);
-        const host = urlObj.hostname.toLowerCase();
-        if (
-          host !== "news.ycombinator.com" &&
-          host !== "www.news.ycombinator.com"
-        ) {
+        if (urlObj.hostname.toLowerCase() !== "news.ycombinator.com") {
           return undefined;
         }
 
@@ -129,12 +113,11 @@ export const hackerNewsCustomizer: SiteCustomizer = {
 const DANBOORU_POST_REGEX = /^\/posts\/(\d+)/;
 
 export const danbooruCustomizer: SiteCustomizer = {
-  name: "danbooru.donmai.us",
+  id: "danbooru",
   match: (url) => {
     const host = url.hostname.toLowerCase();
     return host === "donmai.us" || host.endsWith(".donmai.us");
   },
-  userAgent: DANBOORU_USER_AGENT,
   formatItem: () => ({
     hideDescription: true,
   }),
@@ -192,7 +175,7 @@ export function extractPixivArtworkId(
 }
 
 export const pixivCustomizer: SiteCustomizer = {
-  name: "pixiv.net",
+  id: "pixiv",
   match: (url) => {
     const host = url.hostname.toLowerCase();
     return host === "pixiv.net" || host.endsWith(".pixiv.net");
@@ -232,16 +215,6 @@ export function findSiteCustomizer(
   } catch {
     return undefined;
   }
-}
-
-export function getUserAgent(rawUrl: string | URL): string {
-  const customizer = findSiteCustomizer(rawUrl);
-  return customizer?.userAgent ?? DEFAULT_USER_AGENT;
-}
-
-export function shouldFetchImageLocally(rawUrl: string | URL): boolean {
-  const customizer = findSiteCustomizer(rawUrl);
-  return customizer?.fetchImageLocally ?? true;
 }
 
 function createSiteMetascraperPlugin(): () => createMetascraper.Rules {

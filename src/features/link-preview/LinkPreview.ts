@@ -14,6 +14,7 @@ import {
 } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
+  DEFAULT_USER_AGENT,
   fetchImage,
   fetchText,
   type HttpFetchError,
@@ -27,9 +28,7 @@ import metascraperTitle from "metascraper-title";
 import {
   DEFAULT_ACCEPT_HEADER,
   findSiteCustomizer,
-  getUserAgent,
   type MetascraperRuleContext,
-  shouldFetchImageLocally,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
 import { filterPreviewResults } from "./DecisionFilter.ts";
@@ -477,7 +476,7 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     }
 
     const request = HttpClientRequest.get(url).pipe(
-      HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+      HttpClientRequest.setHeader("User-Agent", DEFAULT_USER_AGENT),
       HttpClientRequest.setHeader("Accept", DEFAULT_ACCEPT_HEADER),
     );
     const { text: html, url: targetUrl } = yield* fetchText(request, {
@@ -538,12 +537,8 @@ const downloadSingleImage = Effect.fnUntraced(function* (
     return undefined;
   }
 
-  if (!shouldFetchImageLocally(targetUrl)) {
-    return targetUrl;
-  }
-
   const request = HttpClientRequest.get(targetUrl).pipe(
-    HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
+    HttpClientRequest.setHeader("User-Agent", DEFAULT_USER_AGENT),
   );
 
   return yield* fetchImage(request, { timeoutDuration }).pipe(
