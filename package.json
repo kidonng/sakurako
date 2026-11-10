@@ -27,6 +27,7 @@
   "scripts": {
     "check": "tsc",
     "format": "bun fmt",
+    "fix": "oxlint --fix; knip --fix; bun fmt",
     "download-font": "bun scripts/download-font.ts",
     "download-tags": "bun scripts/download-danbooru-tags.ts",
     "inspect-msg": "bun scripts/inspect-msg.ts",

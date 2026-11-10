@@ -2,8 +2,7 @@
 import { Cause, Duration, Effect, Option, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-export const DEFAULT_USER_AGENT = "Sakurako/1.0";
-export const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
+const DEFAULT_USER_AGENT = "Sakurako/1.0";
 const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
 
 export interface FetchImageOptions extends RequestExecutionOptions {

@@ -3,13 +3,12 @@ import type createMetascraper from "metascraper";
 import { type Duration, Effect, Predicate } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { resolveDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
-import { DanbooruPostSchema } from "../danbooru/DanbooruClient.ts";
-import type { PageMetadata } from "./LinkPreview.ts";
 import {
-  DANBOORU_USER_AGENT,
-  fetchJson,
-  type HttpFetchError,
-} from "../../utils/HttpClient.ts";
+  DanbooruPostSchema,
+  withDanbooruUserAgent,
+} from "../danbooru/DanbooruClient.ts";
+import type { PageMetadata } from "./LinkPreview.ts";
+import { fetchJson, type HttpFetchError } from "../../utils/HttpClient.ts";
 
 export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
 
@@ -20,8 +19,6 @@ interface SiteFormatOptions {
   readonly title?: string;
   readonly description?: string;
 }
-
-export const DEFAULT_ACCEPT_HEADER = "text/html";
 
 export interface SiteCustomizer {
   readonly id: string;
@@ -130,8 +127,8 @@ export const danbooruCustomizer: SiteCustomizer = {
 
       const jsonUrl = `${url.origin}/posts/${postMatch[1]}.json`;
       const request = HttpClientRequest.get(jsonUrl).pipe(
-        HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
-        HttpClientRequest.setHeader("Accept", "application/json"),
+        withDanbooruUserAgent,
+        HttpClientRequest.acceptJson,
       );
 
       const post = yield* fetchJson(request, DanbooruPostSchema, {

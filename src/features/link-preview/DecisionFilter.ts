@@ -1,5 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
+import {
+  type Duration,
+  Effect,
+  Predicate,
+  type Redacted,
+  Schema,
+} from "effect";
 import stringWidth from "string-width";
 import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
@@ -201,7 +207,7 @@ export const filterPreviewResults = Effect.fn(
     const request = yield* HttpClientRequest.post(
       OPENROUTER_DECISIONS_URL,
     ).pipe(
-      HttpClientRequest.bearerToken(Redacted.value(apiKey)),
+      HttpClientRequest.bearerToken(apiKey),
       HttpClientRequest.bodyJson(payload),
     );
 

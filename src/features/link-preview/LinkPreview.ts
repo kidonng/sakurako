@@ -14,7 +14,6 @@ import {
 } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
-  DEFAULT_USER_AGENT,
   fetchImage,
   fetchText,
   type HttpFetchError,
@@ -26,7 +25,6 @@ import metascraperDescription from "metascraper-description";
 import metascraperImage from "metascraper-image";
 import metascraperTitle from "metascraper-title";
 import {
-  DEFAULT_ACCEPT_HEADER,
   findSiteCustomizer,
   type MetascraperRuleContext,
   siteMetascraperPlugin,
@@ -443,6 +441,8 @@ function isPrivateHost(hostname: string): boolean {
   return false;
 }
 
+const DEFAULT_ACCEPT_HEADER = "text/html";
+
 export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
   function* (
     url: string,
@@ -476,8 +476,7 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     }
 
     const request = HttpClientRequest.get(url).pipe(
-      HttpClientRequest.setHeader("User-Agent", DEFAULT_USER_AGENT),
-      HttpClientRequest.setHeader("Accept", DEFAULT_ACCEPT_HEADER),
+      HttpClientRequest.accept(DEFAULT_ACCEPT_HEADER),
     );
     const { text: html, url: targetUrl } = yield* fetchText(request, {
       timeoutDuration,
@@ -537,9 +536,7 @@ const downloadSingleImage = Effect.fnUntraced(function* (
     return undefined;
   }
 
-  const request = HttpClientRequest.get(targetUrl).pipe(
-    HttpClientRequest.setHeader("User-Agent", DEFAULT_USER_AGENT),
-  );
+  const request = HttpClientRequest.get(targetUrl);
 
   return yield* fetchImage(request, { timeoutDuration }).pipe(
     Effect.catch((error) =>

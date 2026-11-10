@@ -1,11 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Context, Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest, Url } from "effect/http";
-import {
-  DANBOORU_USER_AGENT,
-  fetchImage,
-  fetchJson,
-} from "../../utils/HttpClient.ts";
+import { fetchImage, fetchJson } from "../../utils/HttpClient.ts";
 
 export const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
@@ -43,7 +39,13 @@ export class DanbooruApiError extends Schema.TaggedError<
   message: Schema.String,
 }) {}
 
-const DANBOORU_API_BASE = "https://danbooru.donmai.us/posts/random.json";
+const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
+export const withDanbooruUserAgent = HttpClientRequest.setHeader(
+  "User-Agent",
+  DANBOORU_USER_AGENT,
+);
+
+const DANBOORU_API_RANDOM_POST = "https://danbooru.donmai.us/posts/random.json";
 
 export class DanbooruClient extends Context.Service<
   DanbooruClient,
@@ -76,11 +78,11 @@ export class DanbooruClient extends Context.Service<
         }
         const queryTags = queryTagsList.join(" ");
 
-        const targetUrl = Url.setUrlParams(new URL(DANBOORU_API_BASE), {
+        const targetUrl = Url.setUrlParams(new URL(DANBOORU_API_RANDOM_POST), {
           tags: queryTags,
         }).toString();
         const request = HttpClientRequest.get(targetUrl).pipe(
-          HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
+          withDanbooruUserAgent,
         );
 
         return yield* fetchJson(request, DanbooruPostSchema, {
@@ -112,9 +114,7 @@ export class DanbooruClient extends Context.Service<
       const downloadImage = Effect.fnUntraced(function* (
         url: string,
       ): Effect.fn.Return<string, DanbooruApiError> {
-        const request = HttpClientRequest.get(url).pipe(
-          HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
-        );
+        const request = HttpClientRequest.get(url).pipe(withDanbooruUserAgent);
 
         return yield* fetchImage(request).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
