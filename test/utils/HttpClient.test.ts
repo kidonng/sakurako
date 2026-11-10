@@ -8,6 +8,7 @@ import {
   executeWithResponse,
   fetchJson,
   fetchText,
+  fetchImage,
   HttpNetworkError,
   HttpNoContentError,
   HttpNotFoundError,
@@ -372,6 +373,118 @@ describe("HttpClient utils", () => {
       const result = await Effect.runPromise(program);
       expect(result).toBe("read-me");
       expect(bodyCancelled).toBe(false);
+    });
+  });
+
+  describe("fetchImage", () => {
+    it("downloads image and encodes to base64 URI", async () => {
+      const mockBytes = new Uint8Array([1, 2, 3, 4]);
+      const layer = makeTestHttpClient(() => {
+        return new Response(mockBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/pic.png"),
+      ).pipe(Effect.provide(layer));
+
+      const result = await Effect.runPromise(program);
+      expect(result).toBe(
+        `base64://${Buffer.from(mockBytes).toString("base64")}`,
+      );
+    });
+
+    it("fails with HttpNetworkError when Content-Type is missing or not image", async () => {
+      const layer = makeTestHttpClient(() => {
+        return new Response("<html>not image</html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/page"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.message).toContain("Unsupported or non-image Content-Type");
+    });
+
+    it("fails with HttpNetworkError when Content-Type is image/svg+xml", async () => {
+      const layer = makeTestHttpClient(() => {
+        return new Response("<svg></svg>", {
+          status: 200,
+          headers: { "Content-Type": "image/svg+xml" },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/vector.svg"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.message).toContain("Unsupported or non-image Content-Type");
+    });
+
+    it("fails with HttpNetworkError when declared Content-Length exceeds maxBytes", async () => {
+      const layer = makeTestHttpClient(() => {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: {
+            "Content-Type": "image/jpeg",
+            "Content-Length": "20000000",
+          },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/huge.jpg"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.message).toContain("Image size exceeds limit");
+    });
+
+    it("fails with HttpNetworkError when body size exceeds maxBytes", async () => {
+      const oversizedBytes = new Uint8Array(11 * 1024 * 1024);
+      const layer = makeTestHttpClient(() => {
+        return new Response(oversizedBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/oversized.jpg"),
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.message).toContain("Image size exceeds limit");
+    });
+
+    it("respects custom maxBytes option", async () => {
+      const mockBytes = new Uint8Array([1, 2, 3, 4, 5]);
+      const layer = makeTestHttpClient(() => {
+        return new Response(mockBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      });
+
+      const program = fetchImage(
+        HttpClientRequest.get("https://example.com/small.jpg"),
+        { maxBytes: 4 },
+      ).pipe(Effect.provide(layer), Effect.flip);
+
+      const error = await Effect.runPromise(program);
+      expect(error._tag).toBe("HttpNetworkError");
+      expect(error.message).toContain("Image size exceeds limit");
     });
   });
 });

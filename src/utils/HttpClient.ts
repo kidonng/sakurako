@@ -4,6 +4,11 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 export const DEFAULT_USER_AGENT = "Sakurako/1.0";
 export const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
+const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
+
+export interface FetchImageOptions extends RequestExecutionOptions {
+  readonly maxBytes?: number;
+}
 
 export class HttpNotFoundError extends Schema.TaggedError<
   HttpNotFoundError,
@@ -343,6 +348,65 @@ export function fetchJson<A, I, RD>(
               }),
           ),
         );
+      }),
+    options,
+  );
+}
+
+export function fetchImage(
+  request: HttpClientRequest.HttpClientRequest,
+  options?: FetchImageOptions,
+): Effect.Effect<string, HttpFetchError, HttpClient.HttpClient> {
+  return executeWithResponse(
+    request,
+    (response) =>
+      Effect.gen(function* () {
+        const rawContentType = response.headers["content-type"];
+        const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
+        if (
+          !contentType ||
+          !contentType.startsWith("image/") ||
+          contentType === "image/svg+xml"
+        ) {
+          cancelResponse(response);
+          return yield* new HttpNetworkError({
+            url: request.url,
+            detail: `Unsupported or non-image Content-Type: ${rawContentType ?? "missing"}`,
+          });
+        }
+
+        const maxBytes = options?.maxBytes ?? DEFAULT_MAX_IMAGE_BYTES;
+        const declaredLengthStr = response.headers["content-length"];
+        if (declaredLengthStr) {
+          const declaredLength = Number(declaredLengthStr);
+          if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+            cancelResponse(response);
+            return yield* new HttpNetworkError({
+              url: request.url,
+              detail: `Image size exceeds limit (Content-Length ${declaredLength} > ${maxBytes} bytes)`,
+            });
+          }
+        }
+
+        const buffer = yield* response.arrayBuffer.pipe(
+          Effect.mapError(
+            (error) =>
+              new HttpNetworkError({
+                url: request.url,
+                detail: `Failed to read image body: ${error.message}`,
+              }),
+          ),
+        );
+
+        if (buffer.byteLength > maxBytes) {
+          return yield* new HttpNetworkError({
+            url: request.url,
+            detail: `Image size exceeds limit (${buffer.byteLength} > ${maxBytes} bytes)`,
+          });
+        }
+
+        const base64 = Buffer.from(buffer).toString("base64");
+        return `base64://${base64}`;
       }),
     options,
   );

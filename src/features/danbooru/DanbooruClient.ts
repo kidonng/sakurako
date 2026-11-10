@@ -1,13 +1,9 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Context, Effect, Layer, Schema } from "effect";
-import {
-  HttpClient,
-  HttpClientRequest,
-  Url,
-} from "effect/http";
+import { HttpClient, HttpClientRequest, Url } from "effect/http";
 import {
   DANBOORU_USER_AGENT,
-  executeWithResponse,
+  fetchImage,
   fetchJson,
 } from "../../utils/HttpClient.ts";
 
@@ -91,20 +87,24 @@ export class DanbooruClient extends Context.Service<
           timeoutDuration: "10 seconds",
         }).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
-          Effect.catchTag(["HttpNotFoundError", "HttpNoContentError"], () =>
-            new DanbooruNotFoundError({ queryTags }),
+          Effect.catchTag(
+            ["HttpNotFoundError", "HttpNoContentError"],
+            () => new DanbooruNotFoundError({ queryTags }),
           ),
-          Effect.catchTag("HttpRateLimitError", () =>
-            new DanbooruRateLimitError(),
+          Effect.catchTag(
+            "HttpRateLimitError",
+            () => new DanbooruRateLimitError(),
           ),
-          Effect.catchTag(["HttpTimeoutError", "HttpNetworkError"], (err) =>
-            new DanbooruApiError({
-              status:
-                "status" in err && typeof err.status === "number"
-                  ? err.status
-                  : 0,
-              message: err.message,
-            }),
+          Effect.catchTag(
+            ["HttpTimeoutError", "HttpNetworkError"],
+            (err) =>
+              new DanbooruApiError({
+                status:
+                  "status" in err && typeof err.status === "number"
+                    ? err.status
+                    : 0,
+                message: err.message,
+              }),
           ),
         );
       });
@@ -116,13 +116,7 @@ export class DanbooruClient extends Context.Service<
           HttpClientRequest.setHeader("User-Agent", DANBOORU_USER_AGENT),
         );
 
-        return yield* executeWithResponse(request, (response) =>
-          Effect.gen(function* () {
-            const buffer = yield* response.arrayBuffer;
-            const base64 = Buffer.from(buffer).toString("base64");
-            return `base64://${base64}`;
-          }),
-        ).pipe(
+        return yield* fetchImage(request).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.mapError((err) => {
             const status =

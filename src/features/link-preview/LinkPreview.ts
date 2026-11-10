@@ -14,8 +14,7 @@ import {
 } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import {
-  cancelResponse,
-  executeWithResponse,
+  fetchImage,
   fetchText,
   type HttpFetchError,
 } from "../../utils/HttpClient.ts";
@@ -197,7 +196,6 @@ class SendLinkPreviewReplyError extends Schema.TaggedError<
   cause: Schema.Defect(),
 }) {}
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MiB
 const DEFAULT_IMAGE_TIMEOUT: Duration.Input = "5 seconds";
 
 function isSvgUrl(url: string): boolean {
@@ -556,60 +554,13 @@ const downloadSingleImage = Effect.fnUntraced(function* (
     HttpClientRequest.setHeader("User-Agent", getUserAgent(urlObj)),
   );
 
-  const downloadEffect = executeWithResponse(
-    request,
-    (response) =>
-      Effect.gen(function* () {
-        const rawContentType = response.headers["content-type"];
-        const contentType = rawContentType?.split(";")[0]?.trim().toLowerCase();
-        if (
-          !contentType ||
-          !contentType.startsWith("image/") ||
-          contentType === "image/svg+xml"
-        ) {
-          cancelResponse(response);
-          yield* Effect.logWarning(
-            `Blocked non-image or unsupported Content-Type (${rawContentType ?? "missing"}) for image URL: ${targetUrl}`,
-          );
-          return undefined;
-        }
-
-        const declaredLengthStr = response.headers["content-length"];
-        if (declaredLengthStr) {
-          const declaredLength = Number(declaredLengthStr);
-          if (
-            Number.isFinite(declaredLength) &&
-            declaredLength > MAX_IMAGE_BYTES
-          ) {
-            cancelResponse(response);
-            yield* Effect.logWarning(
-              `Blocked oversized image (Content-Length ${declaredLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${targetUrl}`,
-            );
-            return undefined;
-          }
-        }
-
-        const buffer = yield* response.arrayBuffer;
-        if (buffer.byteLength > MAX_IMAGE_BYTES) {
-          yield* Effect.logWarning(
-            `Blocked oversized image (${buffer.byteLength} > ${MAX_IMAGE_BYTES} bytes) for image URL: ${targetUrl}`,
-          );
-          return undefined;
-        }
-
-        const base64 = Buffer.from(buffer).toString("base64");
-        return `base64://${base64}` as string | undefined;
-      }),
-    { timeoutDuration },
-  ).pipe(
+  return yield* fetchImage(request, { timeoutDuration }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
         `Failed to fetch image locally for ${targetUrl}: ${formatErrorDetail(error)}`,
       ).pipe(Effect.as(undefined as string | undefined)),
     ),
   );
-
-  return yield* downloadEffect;
 });
 
 function isPrepareImageOptions(
