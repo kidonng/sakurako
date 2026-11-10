@@ -1,3 +1,7 @@
+/* oxlint-disable effecttsgo/unstable-api-usage */
+import { Effect, Option } from "effect";
+import { DanbooruTagMatcher } from "./DanbooruTagMatcher.ts";
+
 export interface DanbooruPostTitleMeta {
   readonly id: number;
   readonly tag_string_character: string;
@@ -27,6 +31,30 @@ export function cleanArtistName(name: string): string {
   const cleaned = name.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim();
   return cleaned || name;
 }
+export function extractDanbooruPostTags(post: DanbooruPostTitleMeta): string[] {
+  return [
+    post.tag_string_character,
+    post.tag_string_copyright,
+    post.tag_string_artist,
+  ]
+    .join(" ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+export const resolveDanbooruTitle = Effect.fnUntraced(function* (
+  post: DanbooruPostTitleMeta,
+) {
+  const tags = extractDanbooruPostTags(post);
+  const matcherOpt = yield* Effect.serviceOption(DanbooruTagMatcher);
+  let translations: ReadonlyMap<string, string> | undefined;
+  if (Option.isSome(matcherOpt) && tags.length > 0) {
+    translations = yield* matcherOpt.value.getTagTranslations(tags);
+  }
+  return formatDanbooruTitle(post, translations);
+});
+
 export function formatDanbooruTitle(
   post: DanbooruPostTitleMeta,
   translations?: ReadonlyMap<string, string>,

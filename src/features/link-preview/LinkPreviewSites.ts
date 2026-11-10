@@ -1,10 +1,9 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import type createMetascraper from "metascraper";
-import { type Duration, Effect, Option, Predicate } from "effect";
+import { type Duration, Effect, Predicate } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
-import { formatDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
+import { resolveDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
 import { DanbooruPostSchema } from "../danbooru/DanbooruClient.ts";
-import { DanbooruTagMatcher } from "../danbooru/DanbooruTagMatcher.ts";
 import type { PageMetadata } from "./LinkPreview.ts";
 import {
   DANBOORU_USER_AGENT,
@@ -157,23 +156,7 @@ export const danbooruCustomizer: SiteCustomizer = {
         timeoutDuration,
       });
 
-      const postTags = [
-        post.tag_string_character,
-        post.tag_string_copyright,
-        post.tag_string_artist,
-      ]
-        .join(" ")
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      const matcherOpt = yield* Effect.serviceOption(DanbooruTagMatcher);
-      let translations: ReadonlyMap<string, string> | undefined;
-      if (Option.isSome(matcherOpt) && postTags.length > 0) {
-        translations = yield* matcherOpt.value.getTagTranslations(postTags);
-      }
-
-      const title = formatDanbooruTitle(post, translations);
+      const title = yield* resolveDanbooruTitle(post);
       const image = post.large_file_url ?? post.file_url;
       const fallbackImage = post.preview_file_url;
 

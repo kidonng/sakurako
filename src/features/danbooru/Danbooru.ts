@@ -12,8 +12,8 @@ import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { DanbooruClient } from "./DanbooruClient.ts";
 import {
   cleanArtistName,
-  formatDanbooruTitle,
   parseCharacterSeries,
+  resolveDanbooruTitle,
 } from "./DanbooruFormatter.ts";
 import { DanbooruTagMatcher } from "./DanbooruTagMatcher.ts";
 
@@ -131,17 +131,7 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
       return;
     }
 
-    const postTags = [
-      post.tag_string_character,
-      post.tag_string_copyright,
-      post.tag_string_artist,
-    ]
-      .join(" ")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-    const postTranslations = yield* matcher.getTagTranslations(postTags);
-    const title = formatDanbooruTitle(post, postTranslations);
+    const title = yield* resolveDanbooruTitle(post);
 
     let textContent = "";
     if (searchTags.length > 0) {

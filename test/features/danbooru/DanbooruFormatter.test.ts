@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { formatDanbooruTitle } from "../../../src/features/danbooru/DanbooruFormatter.ts";
+import { Effect, Layer } from "effect";
+import {
+  extractDanbooruPostTags,
+  formatDanbooruTitle,
+  resolveDanbooruTitle,
+} from "../../../src/features/danbooru/DanbooruFormatter.ts";
+import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 
 describe("formatDanbooruTitle", () => {
   it("formats single character with series stripped and put into copyright", () => {
@@ -169,5 +175,60 @@ describe("formatDanbooruTitle", () => {
     expect(title).toBe(
       "茵蒂克丝、御坂妹妹、御坂美琴、Nyandex、白井黑子 (魔法禁书目录) 画师 Akari_Ryuryuwa",
     );
+  });
+});
+
+describe("extractDanbooruPostTags", () => {
+  it("extracts and splits character, copyright, and artist tags", () => {
+    const tags = extractDanbooruPostTags({
+      id: 1,
+      tag_string_character: "  moriya_suwako   cirno ",
+      tag_string_copyright: "touhou",
+      tag_string_artist: "moni_monico",
+    });
+    expect(tags).toEqual(["moriya_suwako", "cirno", "touhou", "moni_monico"]);
+  });
+
+  it("handles blank tag strings", () => {
+    const tags = extractDanbooruPostTags({
+      id: 2,
+      tag_string_character: "   ",
+      tag_string_copyright: "",
+      tag_string_artist: "",
+    });
+    expect(tags).toEqual([]);
+  });
+});
+
+describe("resolveDanbooruTitle", () => {
+  const post = {
+    id: 12459835,
+    tag_string_character: "moriya_suwako",
+    tag_string_copyright: "touhou",
+    tag_string_artist: "moni_monico",
+  };
+
+  it("resolves title with translations when DanbooruTagMatcher is provided", async () => {
+    const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      getTagTranslations: () =>
+        Effect.succeed(
+          new Map([
+            ["moriya_suwako", "泄矢诹访子（东方Project）"],
+            ["touhou", "东方Project"],
+          ]),
+        ),
+    });
+
+    const title = await Effect.runPromise(
+      resolveDanbooruTitle(post).pipe(Effect.provide(MatcherMock)),
+    );
+    expect(title).toBe("泄矢诹访子 (东方Project) 画师 moni_monico");
+  });
+
+  it("falls back to English tags when DanbooruTagMatcher is omitted", async () => {
+    const title = await Effect.runPromise(resolveDanbooruTitle(post));
+    expect(title).toBe("moriya suwako (touhou) 画师 moni_monico");
   });
 });
