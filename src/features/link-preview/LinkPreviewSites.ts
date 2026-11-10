@@ -160,9 +160,7 @@ export const danbooruCustomizer: SiteCustomizer = {
 
 const PIXIV_ARTWORKS_REGEX = /^(?:\/[a-zA-Z-]+)?\/artworks\/(\d+)(?:\/.*)?$/;
 
-export function extractPixivArtworkId(
-  rawUrl: string | URL,
-): string | undefined {
+function extractPixivArtworkId(rawUrl: string | URL): string | undefined {
   try {
     const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
     return url.pathname.match(PIXIV_ARTWORKS_REGEX)?.[1];

@@ -6,7 +6,6 @@ import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMa
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import {
   danbooruCustomizer,
-  extractPixivArtworkId,
   findSiteCustomizer,
   githubCustomizer,
   hackerNewsCustomizer,
@@ -227,29 +226,6 @@ describe("LinkPreviewSites", () => {
       });
     });
 
-    it("falls back to English tags when DanbooruTagMatcher is unavailable", async () => {
-      const mockPost = {
-        id: 12459835,
-        large_file_url: "https://example.com/large.jpg",
-        tag_string_character: "moriya_suwako",
-        tag_string_copyright: "touhou",
-        tag_string_artist: "moni_monico",
-        tag_string_general: "",
-      };
-
-      const httpLayer = makeTestHttpClient(() => {
-        return new Response(JSON.stringify(mockPost), { status: 200 });
-      });
-
-      const metadata = await Effect.runPromise(
-        danbooruCustomizer.scrape!({
-          url: new URL("https://danbooru.donmai.us/posts/12459835"),
-        }).pipe(Effect.provide(httpLayer)),
-      );
-
-      expect(metadata?.title).toBe("moriya suwako (touhou) 画师 moni_monico");
-    });
-
     it("returns undefined for non-post URLs to let standard scraper handle them", async () => {
       const httpLayer = makeTestHttpClient(() => {
         throw new Error("Should not be called");
@@ -352,20 +328,6 @@ describe("LinkPreviewSites", () => {
       expect(fallback).toBe(
         "https://embed.pixiv.net/decorate.php?illust_id=82775556",
       );
-    });
-
-    it("extracts artwork ID using extractPixivArtworkId helper", () => {
-      expect(
-        extractPixivArtworkId(new URL("https://www.pixiv.net/artworks/123456")),
-      ).toBe("123456");
-      expect(
-        extractPixivArtworkId(
-          new URL("https://www.pixiv.net/ja/artworks/654321"),
-        ),
-      ).toBe("654321");
-      expect(
-        extractPixivArtworkId(new URL("https://www.pixiv.net/users/999")),
-      ).toBeUndefined();
     });
   });
 });

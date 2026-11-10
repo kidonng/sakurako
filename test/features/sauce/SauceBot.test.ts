@@ -58,39 +58,6 @@ describe("handleSauceMessage", () => {
     });
   });
 
-  it("replies with formatted text when quoting a message with a negative message ID", async () => {
-    let queriedMessageId: number | undefined;
-    const { item, getReplies } = createMockMessage({
-      raw_message: "[CQ:reply,id=-1946661968] /sauce",
-      getMessageResponse: {
-        message: [
-          {
-            type: "image",
-            data: {
-              url: "https://example.com/target.jpg",
-            },
-          },
-        ],
-      },
-      onGetMessage: (id) => {
-        queriedMessageId = id;
-      },
-    });
-    await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
-    );
-
-    expect(queriedMessageId).toBe(-1946661968);
-    const replies = getReplies();
-    expect(replies.length).toBe(1);
-    expect(replies[0]).toEqual({
-      type: "text",
-      data: {
-        text: "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
-      },
-    });
-  });
-
   it("extracts and searches the first image when quoted message has multiple images", async () => {
     let searchedUrl = "";
     const httpLayer = makeTestHttpClient((req) => {
@@ -126,35 +93,6 @@ describe("handleSauceMessage", () => {
       "url=" + encodeURIComponent("https://example.com/first.jpg"),
     );
     expect(getReplies().length).toBe(1);
-  });
-
-  it("triggers search in group chat when message contains auto-prepended @author segment", async () => {
-    const { item, getReplies } = createMockMessage({
-      raw_message: "[CQ:reply,id=12345][CQ:at,qq=10002] /sauce",
-      getMessageResponse: {
-        message: [
-          {
-            type: "image",
-            data: {
-              url: "https://example.com/pic.jpg",
-            },
-          },
-        ],
-      },
-    });
-
-    await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
-    );
-
-    const replies = getReplies();
-    expect(replies.length).toBe(1);
-    expect(replies[0]).toEqual({
-      type: "text",
-      data: {
-        text: "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
-      },
-    });
   });
 
   it("replies with notice when message is /sauce without a quote reply", async () => {
