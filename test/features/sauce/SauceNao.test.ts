@@ -2,11 +2,8 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Redacted } from "effect";
 import {
-  PRIMARY_ORIGIN_DBS,
   SauceNaoError,
   searchSauce,
-  selectBestSauceResult,
-  SIMILARITY_ORIGIN_TOLERANCE,
   TARGET_SAUCENAO_DBS,
 } from "../../../src/features/sauce/SauceNao.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";

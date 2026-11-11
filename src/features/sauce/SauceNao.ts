@@ -87,16 +87,16 @@ const SauceNaoResponseSchema = Schema.Struct({
   results: Schema.optional(Schema.Array(SauceNaoItemSchema)),
 });
 
-export const PRIMARY_ORIGIN_DBS = new Set([
+const PRIMARY_ORIGIN_DBS = new Set([
   5, // Pixiv
   8, // Nico Nico Seiga
   11, // Nijie
   44, // Skeb
 ]);
 
-export const SIMILARITY_ORIGIN_TOLERANCE = 2.0;
+const SIMILARITY_ORIGIN_TOLERANCE = 2.0;
 
-export function selectBestSauceResult(
+function selectBestSauceResult(
   results: readonly (typeof SauceNaoItemSchema.Type)[] | undefined,
   minSimilarity: number,
 ): typeof SauceNaoItemSchema.Type | null {
@@ -126,7 +126,7 @@ export function selectBestSauceResult(
   }
 
   const cutoff = maxSimilarity - SIMILARITY_ORIGIN_TOLERANCE;
-  let bestOriginCandidate: (typeof SauceNaoItemSchema.Type) | undefined;
+  let bestOriginCandidate: typeof SauceNaoItemSchema.Type | undefined;
   let bestOriginSimilarity = -1;
 
   for (const candidate of validCandidates) {
