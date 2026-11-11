@@ -89,6 +89,13 @@ const SauceNaoResponseSchema = Schema.Struct({
 
 const DANBOORU_DB = 9;
 
+const PRIMARY_ORIGIN_DBS = new Set([
+  5, // Pixiv
+  8, // Nico Nico Seiga
+  11, // Nijie
+  44, // Skeb
+]);
+
 const PREFERRED_BOORU_DBS = new Set([
   9, // Danbooru
   12, // Yande.re
@@ -99,10 +106,15 @@ const PREFERRED_BOORU_DBS = new Set([
 
 const SIMILARITY_BOORU_TOLERANCE = 2.0;
 
+interface SelectedSauceCandidate {
+  readonly urlItem: typeof SauceNaoItemSchema.Type;
+  readonly metadataItem: typeof SauceNaoItemSchema.Type;
+}
+
 function selectBestSauceResult(
   results: readonly (typeof SauceNaoItemSchema.Type)[] | undefined,
   minSimilarity: number,
-): typeof SauceNaoItemSchema.Type | null {
+): SelectedSauceCandidate | null {
   if (!results || results.length === 0) {
     return null;
   }
@@ -133,30 +145,43 @@ function selectBestSauceResult(
   let bestDanbooruSimilarity = -1;
   let bestOtherBooruCandidate: typeof SauceNaoItemSchema.Type | undefined;
   let bestOtherBooruSimilarity = -1;
+  let bestOriginCandidate: typeof SauceNaoItemSchema.Type | undefined;
+  let bestOriginSimilarity = -1;
 
   for (const candidate of validCandidates) {
     const indexId = candidate.header?.index_id;
     const sim = candidate.header?.similarity ?? 0;
-    if (
-      indexId !== undefined &&
-      PREFERRED_BOORU_DBS.has(indexId) &&
-      sim >= cutoff
-    ) {
-      if (indexId === DANBOORU_DB) {
-        if (sim > bestDanbooruSimilarity) {
-          bestDanbooruSimilarity = sim;
-          bestDanbooruCandidate = candidate;
+    if (indexId !== undefined && sim >= cutoff) {
+      if (PREFERRED_BOORU_DBS.has(indexId)) {
+        if (indexId === DANBOORU_DB) {
+          if (sim > bestDanbooruSimilarity) {
+            bestDanbooruSimilarity = sim;
+            bestDanbooruCandidate = candidate;
+          }
+        } else {
+          if (sim > bestOtherBooruSimilarity) {
+            bestOtherBooruSimilarity = sim;
+            bestOtherBooruCandidate = candidate;
+          }
         }
-      } else {
-        if (sim > bestOtherBooruSimilarity) {
-          bestOtherBooruSimilarity = sim;
-          bestOtherBooruCandidate = candidate;
+      }
+      if (PRIMARY_ORIGIN_DBS.has(indexId)) {
+        if (sim > bestOriginSimilarity) {
+          bestOriginSimilarity = sim;
+          bestOriginCandidate = candidate;
         }
       }
     }
   }
 
-  return bestDanbooruCandidate ?? bestOtherBooruCandidate ?? highestMatch;
+  const urlItem =
+    bestDanbooruCandidate ?? bestOtherBooruCandidate ?? highestMatch;
+  const metadataItem = bestOriginCandidate ?? urlItem;
+
+  return {
+    urlItem,
+    metadataItem,
+  };
 }
 const SAUCENAO_API_URL = "https://saucenao.com/search.php";
 
@@ -169,10 +194,12 @@ function extractTitle(data: SauceNaoItemData | undefined): string {
 
   if (typeof data.source === "string" && data.source.trim().length > 0) {
     const source = data.source.trim();
-    if (typeof data.part === "string" && data.part.trim().length > 0) {
-      return `${source} ${data.part.trim()}`;
+    if (!source.startsWith("http://") && !source.startsWith("https://")) {
+      if (typeof data.part === "string" && data.part.trim().length > 0) {
+        return `${source} ${data.part.trim()}`;
+      }
+      return source;
     }
-    return source;
   }
 
   if (typeof data.material === "string" && data.material.trim().length > 0) {
@@ -260,16 +287,23 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   }
 
   const minSimilarity = json.header?.minimum_similarity ?? 0;
-  const best = selectBestSauceResult(json.results, minSimilarity);
-  if (!best) {
+  const match = selectBestSauceResult(json.results, minSimilarity);
+  if (!match) {
     return null;
   }
 
-  const similarity = best.header?.similarity ?? 0;
-  const data = best.data;
-  const title = extractTitle(data);
-  const author = extractAuthor(data);
-  const url = extractUrl(data);
+  const { urlItem, metadataItem } = match;
+  let title = extractTitle(metadataItem.data);
+  if (title === "未知标题" && metadataItem !== urlItem) {
+    title = extractTitle(urlItem.data);
+  }
+  const author =
+    extractAuthor(metadataItem.data) ?? extractAuthor(urlItem.data);
+  const url = extractUrl(urlItem.data);
+  const similarity = Math.max(
+    metadataItem.header?.similarity ?? 0,
+    urlItem.header?.similarity ?? 0,
+  );
 
   const titleLine =
     author && author !== title ? `${title} by ${author}` : title;

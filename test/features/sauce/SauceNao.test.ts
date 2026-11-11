@@ -272,23 +272,25 @@ describe("searchSauce", () => {
     );
   });
 
-  it("prefers booru archive platform (Danbooru) over origin (Pixiv) when within 2.0% similarity tolerance", async () => {
+  it("combines Japanese title and author from Pixiv with permanent URL from Danbooru", async () => {
     const mockResponse = {
       header: { status: 0, minimum_similarity: 60.0 },
       results: [
         {
           header: { similarity: "91.50", index_id: 5 }, // Pixiv
           data: {
-            title: "Original Art",
-            member_name: "OriginalArtist",
-            ext_urls: ["https://www.pixiv.net/artworks/1"],
+            title: "【Skeb】ギターを練習するテトさん",
+            member_name: "やすたんげ",
+            pixiv_id: 83289249,
           },
         },
         {
           header: { similarity: "90.20", index_id: 9 }, // Danbooru
           data: {
-            title: "Booru Archive",
-            ext_urls: ["https://danbooru.donmai.us/posts/1"],
+            source:
+              "https://i.pximg.net/img-original/img/2020/07/28/21/25/23/83289249",
+            creator: ["yasutange"],
+            ext_urls: ["https://danbooru.donmai.us/post/show/4022014"],
           },
         },
       ],
@@ -300,9 +302,44 @@ describe("searchSauce", () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result?.title).toBe("Booru Archive");
-    expect(result?.url).toBe("https://danbooru.donmai.us/posts/1");
-    expect(result?.similarity).toBe(90.2);
+    expect(result?.title).toBe("【Skeb】ギターを練習するテトさん");
+    expect(result?.author).toBe("やすたんげ");
+    expect(result?.url).toBe("https://danbooru.donmai.us/post/show/4022014");
+    expect(result?.similarity).toBe(91.5);
+    expect(result?.formattedText).toBe(
+      "【Skeb】ギターを練習するテトさん by やすたんげ\nhttps://danbooru.donmai.us/post/show/4022014",
+    );
+  });
+
+  it("does not treat raw HTTP/HTTPS source URLs as titles for Danbooru", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "85.00", index_id: 9 }, // Danbooru only
+          data: {
+            source:
+              "https://i.pximg.net/img-original/img/2020/07/28/21/25/23/83289249",
+            creator: ["yasutange"],
+            material: "Synthesizer V",
+            ext_urls: ["https://danbooru.donmai.us/post/show/4022014"],
+          },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Synthesizer V");
+    expect(result?.author).toBe("yasutange");
+    expect(result?.url).toBe("https://danbooru.donmai.us/post/show/4022014");
+    expect(result?.formattedText).toBe(
+      "Synthesizer V by yasutange\nhttps://danbooru.donmai.us/post/show/4022014",
+    );
   });
 
   it("prefers Danbooru over other boorus within 2.0% similarity tolerance", async () => {
