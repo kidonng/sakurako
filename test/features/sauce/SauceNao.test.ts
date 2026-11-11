@@ -2,8 +2,11 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Redacted } from "effect";
 import {
+  PRIMARY_ORIGIN_DBS,
   SauceNaoError,
   searchSauce,
+  selectBestSauceResult,
+  SIMILARITY_ORIGIN_TOLERANCE,
   TARGET_SAUCENAO_DBS,
 } from "../../../src/features/sauce/SauceNao.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
@@ -270,5 +273,144 @@ describe("searchSauce", () => {
     expect(searchParams.getAll("dbs[]")).toEqual(
       TARGET_SAUCENAO_DBS.map(String),
     );
+  });
+
+  it("prefers primary origin platform (Pixiv) over booru when within 2.0% similarity tolerance", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "91.50", index_id: 9 }, // Danbooru
+          data: {
+            title: "Booru Reupload",
+            ext_urls: ["https://danbooru.donmai.us/posts/1"],
+          },
+        },
+        {
+          header: { similarity: "90.20", index_id: 5 }, // Pixiv
+          data: {
+            title: "Original Art",
+            member_name: "OriginalArtist",
+            ext_urls: ["https://www.pixiv.net/artworks/1"],
+          },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Original Art");
+    expect(result?.author).toBe("OriginalArtist");
+    expect(result?.url).toBe("https://www.pixiv.net/artworks/1");
+    expect(result?.similarity).toBe(90.2);
+  });
+
+  it("prefers higher similarity match when difference exceeds 2.0% tolerance even if lower match is an origin platform", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "95.00", index_id: 9 }, // Danbooru
+          data: {
+            title: "Clear Match",
+            ext_urls: ["https://danbooru.donmai.us/posts/2"],
+          },
+        },
+        {
+          header: { similarity: "75.00", index_id: 5 }, // Pixiv
+          data: {
+            title: "Low Confidence Pixiv",
+            member_name: "SomeArtist",
+            ext_urls: ["https://www.pixiv.net/artworks/2"],
+          },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Clear Match");
+    expect(result?.similarity).toBe(95.0);
+  });
+
+  it("returns highest similarity candidate among non-origin platforms", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "82.00", index_id: 25 }, // Gelbooru
+          data: { title: "Lower Non-Origin" },
+        },
+        {
+          header: { similarity: "89.00", index_id: 9 }, // Danbooru
+          data: { title: "Higher Non-Origin" },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Higher Non-Origin");
+    expect(result?.similarity).toBe(89.0);
+  });
+
+  it("returns null when all candidates have similarity below minimum_similarity", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "58.00", index_id: 5 },
+          data: { title: "Low similarity" },
+        },
+        {
+          header: { similarity: "40.00", index_id: 9 },
+          data: { title: "Even lower" },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("safely handles candidates with missing index_id or missing similarity", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: {},
+          data: { title: "Missing Similarity" },
+        },
+        {
+          header: { similarity: "78.00" }, // missing index_id
+          data: { title: "Valid Non-Origin" },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Valid Non-Origin");
+    expect(result?.similarity).toBe(78.0);
   });
 });

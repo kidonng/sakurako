@@ -28,7 +28,6 @@ export const TARGET_SAUCENAO_DBS = [
   38, // H-Misc (e-hentai)
   44, // Skeb
 ] as const;
-
 export class SauceNaoError extends Schema.TaggedError<
   SauceNaoError,
   {
@@ -88,6 +87,65 @@ const SauceNaoResponseSchema = Schema.Struct({
   results: Schema.optional(Schema.Array(SauceNaoItemSchema)),
 });
 
+export const PRIMARY_ORIGIN_DBS = new Set([
+  5, // Pixiv
+  8, // Nico Nico Seiga
+  11, // Nijie
+  44, // Skeb
+]);
+
+export const SIMILARITY_ORIGIN_TOLERANCE = 2.0;
+
+export function selectBestSauceResult(
+  results: readonly (typeof SauceNaoItemSchema.Type)[] | undefined,
+  minSimilarity: number,
+): typeof SauceNaoItemSchema.Type | null {
+  if (!results || results.length === 0) {
+    return null;
+  }
+
+  const validCandidates = results.filter((item) => {
+    const sim = item.header?.similarity ?? 0;
+    return sim >= minSimilarity;
+  });
+
+  if (validCandidates.length === 0) {
+    return null;
+  }
+
+  let highestMatch = validCandidates[0]!;
+  let maxSimilarity = highestMatch.header?.similarity ?? 0;
+
+  for (let i = 1; i < validCandidates.length; i++) {
+    const item = validCandidates[i]!;
+    const sim = item.header?.similarity ?? 0;
+    if (sim > maxSimilarity) {
+      maxSimilarity = sim;
+      highestMatch = item;
+    }
+  }
+
+  const cutoff = maxSimilarity - SIMILARITY_ORIGIN_TOLERANCE;
+  let bestOriginCandidate: (typeof SauceNaoItemSchema.Type) | undefined;
+  let bestOriginSimilarity = -1;
+
+  for (const candidate of validCandidates) {
+    const indexId = candidate.header?.index_id;
+    const sim = candidate.header?.similarity ?? 0;
+    if (
+      indexId !== undefined &&
+      PRIMARY_ORIGIN_DBS.has(indexId) &&
+      sim >= cutoff
+    ) {
+      if (sim > bestOriginSimilarity) {
+        bestOriginSimilarity = sim;
+        bestOriginCandidate = candidate;
+      }
+    }
+  }
+
+  return bestOriginCandidate ?? highestMatch;
+}
 const SAUCENAO_API_URL = "https://saucenao.com/search.php";
 
 function extractTitle(data: SauceNaoItemData | undefined): string {
@@ -189,21 +247,14 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
     });
   }
 
-  const results = json.results;
-  if (!Array.isArray(results) || results.length === 0) {
-    return null;
-  }
-  const first = results[0];
-  if (!first) {
-    return null;
-  }
-  const similarity = first.header?.similarity ?? 0;
   const minSimilarity = json.header?.minimum_similarity ?? 0;
-  if (similarity < minSimilarity) {
+  const best = selectBestSauceResult(json.results, minSimilarity);
+  if (!best) {
     return null;
   }
 
-  const data = first.data;
+  const similarity = best.header?.similarity ?? 0;
+  const data = best.data;
   const title = extractTitle(data);
   const author = extractAuthor(data);
   const url = extractUrl(data);
