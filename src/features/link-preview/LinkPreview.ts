@@ -338,7 +338,7 @@ export function formatPreview(
         });
 
         const rawTitle = options?.title ?? data.title;
-        let line = "";
+        let line: string;
         if (rawTitle) {
           line = `${num}. ${truncate(rawTitle)}`;
           if (!options?.hideDescription) {
@@ -386,7 +386,7 @@ function trimTrailingUrlPunctuation(url: string): string {
       (stripped.match(/\(/g)?.length ?? 0) >=
         (stripped.match(/\)/g)?.length ?? 0) &&
       (stripped.match(/\[/g)?.length ?? 0) >=
-        (stripped.match(/\]/g)?.length ?? 0);
+        (stripped.match(/]/g)?.length ?? 0);
     const next = balanced ? stripped : stripped.replace(/[)\]]$/, "");
     if (next === cleaned) {
       return cleaned;
@@ -396,14 +396,14 @@ function trimTrailingUrlPunctuation(url: string): string {
 }
 
 function stripCqCodes(text: string): string {
-  return text.replace(/\[CQ:[^\]]+\]/g, " ");
+  return text.replace(/\[CQ:[^\]]+]/g, " ");
 }
 
 export function sanitizeUserMessageForDecision(rawMessage: string): string {
   return rawMessage
-    .replace(/\[CQ:image,[^\]]+\]/g, "[图片]")
-    .replace(/\[CQ:at,[^\]]+\]/g, "@用户")
-    .replace(/\[CQ:[^\]]+\]/g, "")
+    .replace(/\[CQ:image,[^\]]+]/g, "[图片]")
+    .replace(/\[CQ:at,[^\]]+]/g, "@用户")
+    .replace(/\[CQ:[^\]]+]/g, "")
     .trim();
 }
 
@@ -463,7 +463,7 @@ export function extractUrls(text: string): ReadonlyArray<string> {
 }
 
 function isPrivateHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const lower = hostname.toLowerCase().replace(/^\[|]$/g, "");
   if (
     lower === "localhost" ||
     lower.endsWith(".localhost") ||
