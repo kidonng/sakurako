@@ -4,6 +4,7 @@ import { Effect, Redacted } from "effect";
 import {
   SauceNaoError,
   searchSauce,
+  TARGET_SAUCENAO_DBS,
 } from "../../../src/features/sauce/SauceNao.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 
@@ -221,12 +222,53 @@ describe("searchSauce", () => {
       ).pipe(Effect.provide(layer)),
     );
 
-    expect(requestedUrl).toContain("api_key=secret_sauce_key");
-    expect(requestedUrl).toContain("output_type=2");
-    expect(requestedUrl).toContain("db=999");
-    expect(requestedUrl).toContain("numres=1");
-    expect(requestedUrl).toContain(
-      "url=" + encodeURIComponent("https://example.com/pic.png"),
+    const searchParams = new URL(requestedUrl).searchParams;
+    expect(searchParams.get("api_key")).toBe("secret_sauce_key");
+    expect(searchParams.get("output_type")).toBe("2");
+    expect(searchParams.get("numres")).toBe("5");
+    expect(searchParams.get("db")).toBeNull();
+    expect(searchParams.get("url")).toBe("https://example.com/pic.png");
+    expect(searchParams.getAll("dbs[]")).toEqual(
+      TARGET_SAUCENAO_DBS.map(String),
+    );
+  });
+
+  it("queries SauceNao with numres=5, no db=999, and dbs[] for all target databases", async () => {
+    let requestedUrl = "";
+    const mockResponse = {
+      header: {
+        status: 0,
+        minimum_similarity: 60.0,
+      },
+      results: [
+        {
+          header: {
+            similarity: "80.00",
+            index_id: 5,
+          },
+          data: {
+            title: "Test Image",
+          },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient((req) => {
+      requestedUrl = req.url;
+      return Response.json(mockResponse);
+    });
+
+    await Effect.runPromise(
+      searchSauce("https://example.com/pic.png").pipe(Effect.provide(layer)),
+    );
+
+    const searchParams = new URL(requestedUrl).searchParams;
+    expect(searchParams.get("output_type")).toBe("2");
+    expect(searchParams.get("numres")).toBe("5");
+    expect(searchParams.get("db")).toBeNull();
+    expect(searchParams.get("url")).toBe("https://example.com/pic.png");
+    expect(searchParams.getAll("dbs[]")).toEqual(
+      TARGET_SAUCENAO_DBS.map(String),
     );
   });
 });

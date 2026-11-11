@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Effect, Redacted, Schema } from "effect";
-import { HttpClient, HttpClientRequest, Url } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
 
 export interface SauceResult {
@@ -10,6 +10,24 @@ export interface SauceResult {
   readonly formattedText: string;
   readonly similarity: number;
 }
+
+export const TARGET_SAUCENAO_DBS = [
+  5, // pixiv
+  8, // nico nico seiga
+  9, // danbooru
+  11, // nijie
+  12, // yande.re
+  16, // FAKKU
+  18, // H-Misc (nhentai)
+  21, // Anime
+  22, // H-Anime
+  25, // Gelbooru
+  26, // Konachan
+  28, // Anime-Pictures
+  37, // MangaDex
+  38, // H-Misc (e-hentai)
+  44, // Skeb
+] as const;
 
 export class SauceNaoError extends Schema.TaggedError<
   SauceNaoError,
@@ -139,19 +157,18 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
   imageUrl: string,
   apiKey?: Redacted.Redacted<string>,
 ): Effect.fn.Return<SauceResult | null, SauceNaoError, HttpClient.HttpClient> {
-  const urlParams: Record<string, string> = {
-    output_type: "2",
-    numres: "1",
-    db: "999",
-    url: imageUrl,
-  };
+  const requestUrl = new URL(SAUCENAO_API_URL);
+  requestUrl.searchParams.set("output_type", "2");
+  requestUrl.searchParams.set("numres", "5");
+  requestUrl.searchParams.set("url", imageUrl);
+  for (const db of TARGET_SAUCENAO_DBS) {
+    requestUrl.searchParams.append("dbs[]", String(db));
+  }
   if (apiKey) {
-    urlParams.api_key = Redacted.value(apiKey);
+    requestUrl.searchParams.set("api_key", Redacted.value(apiKey));
   }
 
-  const request = HttpClientRequest.get(
-    Url.setUrlParams(new URL(SAUCENAO_API_URL), urlParams).toString(),
-  );
+  const request = HttpClientRequest.get(requestUrl.toString());
   const json = yield* fetchJson(request, SauceNaoResponseSchema).pipe(
     Effect.mapError(
       (error) =>
