@@ -154,8 +154,20 @@ describe("filterPreviewResults", () => {
     expect(captured.requestBody?.state?.previews?.preview_1?.url).toBe(
       "https://t.me/promo",
     );
-    expect(captured.requestBody?.questions?.preview_0?.type).toBe("noul");
-    expect(captured.requestBody?.questions?.preview_1?.type).toBe("noul");
+    expect(
+      (
+        captured.requestBody?.questions
+          ?.preview_0_description_has_substantive_info ??
+        captured.requestBody?.questions?.preview_0
+      )?.type,
+    ).toBe("noul");
+    expect(
+      (
+        captured.requestBody?.questions
+          ?.preview_1_description_has_substantive_info ??
+        captured.requestBody?.questions?.preview_1
+      )?.type,
+    ).toBe("noul");
 
     expect(filtered).toHaveLength(2);
     const firstItem = results[0] as Extract<
@@ -291,7 +303,9 @@ describe("filterPreviewResults", () => {
         questions: Record<string, unknown>;
       };
       // Only one question should be generated for the one Success item
-      expect(Object.keys(body.questions)).toEqual(["preview_1"]);
+      expect(Object.keys(body.questions)).toEqual([
+        "preview_1_title_is_meaningful",
+      ]);
 
       return new Response(
         JSON.stringify({
@@ -562,7 +576,10 @@ describe("filterPreviewResults", () => {
       ),
     );
 
-    expect(captured.body?.questions?.preview_0).toBeDefined();
+    expect(
+      captured.body?.questions?.preview_0_description_has_substantive_info ??
+        captured.body?.questions?.preview_0,
+    ).toBeDefined();
     expect(
       captured.body?.questions?.preview_0_standard_is_sufficient,
     ).toBeUndefined();
@@ -598,7 +615,11 @@ describe("filterPreviewResults", () => {
 
     const previewItem: ScrapingResult = {
       _tag: "Success",
-      data: { url: "https://example.com", title: "Example" },
+      data: {
+        url: "https://example.com",
+        title: "Example",
+        description: "Example Description",
+      },
     };
 
     await Effect.runPromise(
@@ -620,9 +641,12 @@ describe("filterPreviewResults", () => {
       type: "image_url",
       image_url: { url: "data:image/jpeg;base64,abc12345" },
     });
-    expect(captured.body?.questions?.preview_0?.instructions).toContain(
-      "user's message and attached images in `state`",
-    );
+    expect(
+      (
+        captured.body?.questions?.preview_0_description_has_substantive_info ??
+        captured.body?.questions?.preview_0
+      )?.instructions,
+    ).toContain("user's message and attached images in `state`");
   });
 
   it("preserves object state when userImages is empty or undefined", async () => {
@@ -650,7 +674,11 @@ describe("filterPreviewResults", () => {
 
     const previewItem: ScrapingResult = {
       _tag: "Success",
-      data: { url: "https://example.com", title: "Example" },
+      data: {
+        url: "https://example.com",
+        title: "Example",
+        description: "Example Description",
+      },
     };
 
     await Effect.runPromise(
@@ -664,8 +692,241 @@ describe("filterPreviewResults", () => {
     const state = captured.body?.state as Record<string, unknown>;
     expect(Array.isArray(state)).toBe(false);
     expect(state?.user_message).toBe("clean message");
-    expect(captured.body?.questions?.preview_0?.instructions).toContain(
-      "compared to `user_message`",
+    expect(
+      (
+        captured.body?.questions?.preview_0_description_has_substantive_info ??
+        captured.body?.questions?.preview_0
+      )?.instructions,
+    ).toContain("compared to `user_message`");
+  });
+
+  it("cascade-fails entire preview when title score is below 0.3", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/unhydrated",
+          title: "Loading...",
+          description: "Substantive article description with plenty of detail",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0_title_is_meaningful: { type: "noul", noul: 0.1 },
+            preview_0_description_has_substantive_info: {
+              type: "noul",
+              noul: 0.95,
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "check this link",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
     );
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toEqual({
+      _tag: "Filtered",
+      url: "https://example.com/unhydrated",
+    });
+  });
+
+  it("strips description when below 0.7 but keeps title when title passes", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://www.youtube.com/watch?v=AoNnbz237E0",
+          title: "Bliss (Windows XP)",
+          description: "Enjoy the videos and music you love on YouTube.",
+          image: "https://i.ytimg.com/vi/AoNnbz237E0/maxresdefault.jpg",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0_title_is_meaningful: { type: "noul", noul: 0.85 },
+            preview_0_description_has_substantive_info: {
+              type: "noul",
+              noul: 0.25,
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "https://www.youtube.com/watch?v=AoNnbz237E0",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: {
+        url: "https://www.youtube.com/watch?v=AoNnbz237E0",
+        title: "Bliss (Windows XP)",
+        description: undefined,
+        image: "https://i.ytimg.com/vi/AoNnbz237E0/maxresdefault.jpg",
+      },
+      expanded: false,
+    });
+  });
+
+  it("omits description question when description is absent and preserves title and image", async () => {
+    const captured: { questions?: Record<string, unknown> } = {};
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/item",
+          title: "Legitimate Title",
+          image: "https://example.com/cover.jpg",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient((req) => {
+      const body = extractJsonBody(req) as {
+        questions?: Record<string, unknown>;
+      };
+      captured.questions = body.questions;
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0_title_is_meaningful: { type: "noul", noul: 0.9 },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "some message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(captured.questions?.preview_0_title_is_meaningful).toBeDefined();
+    expect(
+      captured.questions?.preview_0_description_has_substantive_info,
+    ).toBeUndefined();
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: {
+        url: "https://example.com/item",
+        title: "Legitimate Title",
+        description: undefined,
+        image: "https://example.com/cover.jpg",
+      },
+      expanded: false,
+    });
+  });
+
+  it("strips generic icon image locally without asking image question", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/page",
+          title: "My Great Article",
+          description: "Substantive article contents here",
+          image: "https://example.com/assets/logo.png",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0_title_is_meaningful: { type: "noul", noul: 0.9 },
+            preview_0_description_has_substantive_info: {
+              type: "noul",
+              noul: 0.85,
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "check article",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(filtered[0]).toEqual({
+      _tag: "Success",
+      data: {
+        url: "https://example.com/page",
+        title: "My Great Article",
+        description: "Substantive article contents here",
+        image: undefined,
+      },
+      expanded: false,
+    });
+  });
+
+  it("filters preview card when neither title nor image survives (anchor invariant)", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/orphan",
+          description: "This description has high value but no title or image anchor",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient(() => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            preview_0_description_has_substantive_info: {
+              type: "noul",
+              noul: 0.95,
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults(
+        "check orphan",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    expect(filtered[0]).toEqual({
+      _tag: "Filtered",
+      url: "https://example.com/orphan",
+    });
   });
 });

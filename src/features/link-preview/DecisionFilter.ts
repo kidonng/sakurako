@@ -1,10 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import {
-  Effect,
-  Predicate,
-  type Redacted,
-  Schema,
-} from "effect";
+import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
@@ -16,10 +11,14 @@ import {
   type ScrapingResult,
 } from "./LinkPreview.ts";
 import { truncate } from "../../utils/TextWidth.ts";
+import { isGenericIconUrl, isInvalidTitle } from "./DecisionHeuristics.ts";
 
 export const OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
-const DEFAULT_THRESHOLD = 0.7;
+export { DEFAULT_DECISION_MODEL } from "../../Config.ts";
+export const DEFAULT_THRESHOLD = 0.7;
+export const DEFAULT_TITLE_THRESHOLD = 0.3;
+const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
 interface DecisionsNoulCriteria {
   readonly true: string;
@@ -91,21 +90,31 @@ class DecisionFilterError extends Schema.TaggedError<
   }
 }
 
-const makeNoulQuestion = (
+const makeTitleQuestion = (key: string): DecisionsNoulQuestion => ({
+  type: "noul",
+  instructions: `Evaluate whether \`previews.${key}.title\` is a legitimate, meaningful content title rather than an unhydrated shell, loading placeholder, or generic error message.`,
+  criteria: {
+    true: "The title represents real page content, article title, media title, or specific topic, even if short or similar to the URL.",
+    false:
+      'The title is a generic site placeholder (e.g. "React App", "Home"), an unhydrated loading state, or an error shell.',
+  },
+});
+
+const makeDescriptionQuestion = (
   key: string,
   hasImages: boolean = false,
 ): DecisionsNoulQuestion => ({
   type: "noul",
   instructions: hasImages
-    ? `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to the user's message and attached images in \`state\`.`
-    : `Evaluate whether \`previews.${key}\` offers substantive incremental knowledge compared to \`user_message\`.`,
+    ? `Evaluate whether \`previews.${key}.description\` offers substantive incremental knowledge compared to the user's message and attached images in \`state\`.`
+    : `Evaluate whether \`previews.${key}.description\` offers substantive incremental knowledge compared to \`user_message\`.`,
   criteria: {
     true: hasImages
-      ? "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from the user's message and attached images."
-      : "The preview contains distinct, substantive details, technical explanations, or factual reporting absent from `user_message`.",
+      ? "The description contains distinct, substantive details, technical explanations, or factual reporting absent from the user's message and attached images."
+      : "The description contains distinct, substantive details, technical explanations, or factual reporting absent from `user_message`.",
     false: hasImages
-      ? "The preview is redundant with the user's message or attached images, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise."
-      : "The preview is redundant with `user_message`, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise.",
+      ? "The description is redundant with the user's message or attached images, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise."
+      : "The description is redundant with `user_message`, vacuous, generic site shell text (e.g. login wall, cookie banner), or promotional noise.",
   },
 });
 
@@ -154,76 +163,103 @@ export const filterPreviewResults = Effect.fn(
     > = {};
     const questions: Record<string, DecisionsNoulQuestion> = {};
     const sufficiencyAskedKeys = new Set<string>();
+    const titleAskedKeys = new Set<string>();
 
     const hasImages = Boolean(userImages && userImages.length > 0);
     for (const entry of successEntries) {
       const key = `preview_${entry.index}`;
-      const description = entry.data.description;
+      const rawTitle = entry.data.title;
+      const rawDescription = entry.data.description;
+
+      const hasRawTitle = rawTitle !== undefined && rawTitle.trim().length > 0;
+      const isTitleInvalid = hasRawTitle && isInvalidTitle(rawTitle);
+
       const isLongDescription =
-        description !== undefined &&
-        stringWidth(description) > DEFAULT_DESCRIPTION_MAX_WIDTH;
-      const standardTruncated = description
-        ? truncate(description, DEFAULT_DESCRIPTION_MAX_WIDTH)
+        rawDescription !== undefined &&
+        stringWidth(rawDescription) > DEFAULT_DESCRIPTION_MAX_WIDTH;
+      const standardTruncated = rawDescription
+        ? truncate(rawDescription, DEFAULT_DESCRIPTION_MAX_WIDTH)
         : undefined;
 
       previews[key] = {
         url: entry.data.url,
-        title: entry.data.title,
-        description,
+        title: hasRawTitle ? rawTitle : undefined,
+        description: rawDescription,
         standard_truncated: standardTruncated,
       };
-      questions[key] = makeNoulQuestion(key, hasImages);
 
-      if (isLongDescription) {
-        sufficiencyAskedKeys.add(key);
-        questions[`${key}_standard_is_sufficient`] =
-          makeSufficiencyQuestion(key);
+      if (hasRawTitle && !isTitleInvalid) {
+        titleAskedKeys.add(key);
+        questions[`${key}_title_is_meaningful`] = makeTitleQuestion(key);
+      }
+
+      if (rawDescription !== undefined && rawDescription.trim().length > 0) {
+        questions[`${key}_description_has_substantive_info`] =
+          makeDescriptionQuestion(key, hasImages);
+        if (isLongDescription) {
+          sufficiencyAskedKeys.add(key);
+          questions[`${key}_standard_is_sufficient`] =
+            makeSufficiencyQuestion(key);
+        }
       }
     }
-    const stateContext: DecisionsStateContext = {
-      user_message: rawMessage,
-      previews,
-    };
-    const state: DecisionsState =
-      userImages && userImages.length > 0
-        ? [
-            stateContext,
-            ...userImages.map((url): DecisionsImageUrlPart => ({
-              type: "image_url",
-              image_url: { url },
-            })),
-          ]
-        : stateContext;
 
-    const payload: DecisionsRequest = {
-      model,
-      state,
-      questions,
-    };
+    let answers: Record<string, typeof DecisionsAnswerSchema.Type> = {};
 
-    const request = yield* HttpClientRequest.post(
-      OPENROUTER_DECISIONS_URL,
-    ).pipe(
-      HttpClientRequest.bearerToken(apiKey),
-      HttpClientRequest.bodyJson(payload),
-    );
+    if (Object.keys(questions).length > 0) {
+      const stateContext: DecisionsStateContext = {
+        user_message: rawMessage,
+        previews,
+      };
+      const state: DecisionsState =
+        userImages && userImages.length > 0
+          ? [
+              stateContext,
+              ...userImages.map(
+                (url): DecisionsImageUrlPart => ({
+                  type: "image_url",
+                  image_url: { url },
+                }),
+              ),
+            ]
+          : stateContext;
 
-    const responseData = yield* fetchJson(request, DecisionsResponseSchema).pipe(
-      Effect.mapError(
-        (cause) =>
-          new DecisionFilterError({
-            cause: cause.detail ?? cause.message,
-          }),
-      ),
-    );
+      const payload: DecisionsRequest = {
+        model,
+        state,
+        questions,
+      };
 
-    if (!responseData.answers) {
-      return yield* new DecisionFilterError({
-        cause: "Missing or invalid 'answers' envelope in Decisions response",
-      });
+      const request = yield* HttpClientRequest.post(
+        OPENROUTER_DECISIONS_URL,
+      ).pipe(
+        HttpClientRequest.bearerToken(Redacted.value(apiKey)),
+        HttpClientRequest.bodyJson(payload),
+      );
+
+      const responseData = yield* fetchJson(
+        request,
+        DecisionsResponseSchema,
+        {
+          timeoutDuration: DEFAULT_TIMEOUT,
+        },
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DecisionFilterError({
+              cause: cause.detail ?? cause.message,
+            }),
+        ),
+      );
+
+      if (!responseData.answers) {
+        return yield* new DecisionFilterError({
+          cause: "Missing or invalid 'answers' envelope in Decisions response",
+        });
+      }
+
+      answers = responseData.answers ?? {};
     }
-
-    const answers = responseData.answers ?? {};
 
     const updated: ScrapingResult[] = [];
     for (let index = 0; index < results.length; index++) {
@@ -233,34 +269,112 @@ export const filterPreviewResults = Effect.fn(
         continue;
       }
       const key = `preview_${index}`;
-      const primaryAnswer =
-        answers[`${key}_has_substantive_info`] ?? answers[key];
-      const score = Predicate.isNumber(primaryAnswer?.noul)
-        ? primaryAnswer.noul
-        : undefined;
-      const passed = score !== undefined && score >= threshold;
-      if (passed) {
-        let expanded = false;
-        if (sufficiencyAskedKeys.has(key)) {
-          const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
-          const sufficiencyScore = Predicate.isNumber(sufficiencyAnswer?.noul)
-            ? sufficiencyAnswer.noul
+      const rawTitle = item.data.title;
+      const rawDescription = item.data.description;
+      const rawImage = item.data.image;
+      const rawFallbackImage = item.data.fallbackImage;
+
+      // Local image heuristic
+      const candidateImage =
+        rawImage && !isGenericIconUrl(rawImage) ? rawImage : undefined;
+      const candidateFallbackImage =
+        rawFallbackImage && !isGenericIconUrl(rawFallbackImage)
+          ? rawFallbackImage
+          : undefined;
+
+      // Title evaluation
+      const hasRawTitle = rawTitle !== undefined && rawTitle.trim().length > 0;
+      let titleValid = true;
+      let titleScore: number | undefined = undefined;
+      if (hasRawTitle) {
+        if (isInvalidTitle(rawTitle)) {
+          titleValid = false;
+        } else if (titleAskedKeys.has(key)) {
+          const titleAnswer =
+            answers[`${key}_title_is_meaningful`] ?? answers[key];
+          titleScore = Predicate.isNumber(titleAnswer?.noul)
+            ? titleAnswer.noul
             : undefined;
-          if (sufficiencyScore !== undefined && sufficiencyScore < threshold) {
-            expanded = true;
+          if (
+            titleScore === undefined ||
+            titleScore < DEFAULT_TITLE_THRESHOLD
+          ) {
+            titleValid = false;
           }
         }
-        updated.push({
-          ...item,
-          expanded,
-        });
-      } else {
-        const scoreText = score !== undefined ? String(score) : "unknown";
+      }
+
+      // Title cascade: if title was present and invalid, drop entire preview
+      if (hasRawTitle && !titleValid) {
+        const scoreText =
+          titleScore !== undefined ? String(titleScore) : "heuristic/unknown";
         yield* Effect.logInfo(
-          `Filtered link preview for ${item.data.url} (score: ${scoreText})`,
+          `Filtered link preview for ${item.data.url} (invalid title, score: ${scoreText})`,
         );
         updated.push(ScrapingFiltered({ url: item.data.url }));
+        continue;
       }
+
+      // Description evaluation
+      let survivingDescription: string | undefined = undefined;
+      let expanded = false;
+      if (rawDescription !== undefined && rawDescription.trim().length > 0) {
+        const descAnswer =
+          answers[`${key}_description_has_substantive_info`] ??
+          answers[`${key}_has_substantive_info`] ??
+          answers[key];
+        const descScore = Predicate.isNumber(descAnswer?.noul)
+          ? descAnswer.noul
+          : undefined;
+        const descPassed =
+          descScore !== undefined && descScore >= threshold;
+        if (descPassed) {
+          survivingDescription = rawDescription;
+          if (sufficiencyAskedKeys.has(key)) {
+            const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
+            const sufficiencyScore = Predicate.isNumber(
+              sufficiencyAnswer?.noul,
+            )
+              ? sufficiencyAnswer.noul
+              : undefined;
+            if (
+              sufficiencyScore !== undefined &&
+              sufficiencyScore < threshold
+            ) {
+              expanded = true;
+            }
+          }
+        } else {
+          const scoreText =
+            descScore !== undefined ? String(descScore) : "unknown";
+          yield* Effect.logInfo(
+            `Stripped link preview description for ${item.data.url} (score: ${scoreText})`,
+          );
+        }
+      }
+
+      const survivingTitle = hasRawTitle && titleValid ? rawTitle : undefined;
+
+      // Anchor invariant: preview must have at least surviving title or image
+      if (!survivingTitle && !candidateImage) {
+        yield* Effect.logInfo(
+          `Filtered link preview for ${item.data.url} (lacks surviving title or image anchor)`,
+        );
+        updated.push(ScrapingFiltered({ url: item.data.url }));
+        continue;
+      }
+
+      updated.push({
+        ...item,
+        data: {
+          ...item.data,
+          title: survivingTitle,
+          description: survivingDescription,
+          image: candidateImage,
+          fallbackImage: candidateFallbackImage,
+        },
+        expanded,
+      });
     }
 
     return updated;
