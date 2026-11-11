@@ -232,8 +232,7 @@ function prepareEffectiveScrapingResults(
         ? undefined
         : item.image;
     const rawFallbackImage =
-      options?.hideImage ||
-      (item.fallbackImage && isSvgUrl(item.fallbackImage))
+      options?.hideImage || (item.fallbackImage && isSvgUrl(item.fallbackImage))
         ? undefined
         : item.fallbackImage;
 
@@ -249,7 +248,6 @@ function prepareEffectiveScrapingResults(
     };
   });
 }
-
 
 export function formatPreview(
   results: ReadonlyArray<ScrapingResult>,

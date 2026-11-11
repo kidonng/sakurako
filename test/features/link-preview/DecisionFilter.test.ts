@@ -800,8 +800,9 @@ describe("filterPreviewResults", () => {
       const body = extractJsonBody(req) as {
         questions?: Record<string, unknown>;
       };
-      titleQuestionAsked =
-        Boolean(body.questions?.preview_0_title_is_meaningful);
+      titleQuestionAsked = Boolean(
+        body.questions?.preview_0_title_is_meaningful,
+      );
       return new Response(
         JSON.stringify({
           answers: {
@@ -987,7 +988,8 @@ describe("filterPreviewResults", () => {
         _tag: "Success",
         data: {
           url: "https://example.com/orphan",
-          description: "This description has high value but no title or image anchor",
+          description:
+            "This description has high value but no title or image anchor",
         },
       },
     ];

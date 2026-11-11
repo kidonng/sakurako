@@ -48,19 +48,23 @@ describe("DecisionHeuristics", () => {
     });
 
     it("flags URLs with icon, logo, favicon, avatar, or chevron keywords", () => {
-      expect(isGenericIconUrl("https://example.com/assets/logo.png")).toBe(true);
+      expect(isGenericIconUrl("https://example.com/assets/logo.png")).toBe(
+        true,
+      );
       expect(isGenericIconUrl("https://example.com/favicon.ico")).toBe(true);
-      expect(isGenericIconUrl("https://example.com/static/user-avatar.jpg")).toBe(
-        true,
-      );
-      expect(isGenericIconUrl("https://example.com/images/nav-chevron.png")).toBe(
-        true,
-      );
+      expect(
+        isGenericIconUrl("https://example.com/static/user-avatar.jpg"),
+      ).toBe(true);
+      expect(
+        isGenericIconUrl("https://example.com/images/nav-chevron.png"),
+      ).toBe(true);
       expect(isGenericIconUrl("https://example.com/ui/arrow-right.png")).toBe(
         true,
       );
       expect(isGenericIconUrl("https://example.com/spinner.gif")).toBe(true);
-      expect(isGenericIconUrl("https://example.com/placeholder.png")).toBe(true);
+      expect(isGenericIconUrl("https://example.com/placeholder.png")).toBe(
+        true,
+      );
       expect(isGenericIconUrl("https://example.com/icon-32x32.png")).toBe(true);
     });
 

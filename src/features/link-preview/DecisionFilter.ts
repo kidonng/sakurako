@@ -256,12 +256,10 @@ export const filterPreviewResults = Effect.fn(
         userImages && userImages.length > 0
           ? [
               stateContext,
-              ...userImages.map(
-                (url): DecisionsImageUrlPart => ({
-                  type: "image_url",
-                  image_url: { url },
-                }),
-              ),
+              ...userImages.map((url): DecisionsImageUrlPart => ({
+                type: "image_url",
+                image_url: { url },
+              })),
             ]
           : stateContext;
 
@@ -322,10 +320,7 @@ export const filterPreviewResults = Effect.fn(
         titleScore = Predicate.isNumber(titleAnswer?.noul)
           ? titleAnswer.noul
           : undefined;
-        if (
-          titleScore === undefined ||
-          titleScore < DEFAULT_TITLE_THRESHOLD
-        ) {
+        if (titleScore === undefined || titleScore < DEFAULT_TITLE_THRESHOLD) {
           titleValid = false;
         }
       }
@@ -352,15 +347,12 @@ export const filterPreviewResults = Effect.fn(
         const descScore = Predicate.isNumber(descAnswer?.noul)
           ? descAnswer.noul
           : undefined;
-        const descPassed =
-          descScore !== undefined && descScore >= threshold;
+        const descPassed = descScore !== undefined && descScore >= threshold;
         if (descPassed) {
           survivingDescription = rawDescription;
           if (sufficiencyAskedKeys.has(key)) {
             const sufficiencyAnswer = answers[`${key}_standard_is_sufficient`];
-            const sufficiencyScore = Predicate.isNumber(
-              sufficiencyAnswer?.noul,
-            )
+            const sufficiencyScore = Predicate.isNumber(sufficiencyAnswer?.noul)
               ? sufficiencyAnswer.noul
               : undefined;
             if (
