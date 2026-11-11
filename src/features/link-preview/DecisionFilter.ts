@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { type Duration, Effect, Predicate, Redacted, Schema } from "effect";
+import { Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
@@ -17,7 +17,6 @@ export const OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
 const DEFAULT_THRESHOLD = 0.7;
 const DEFAULT_TITLE_THRESHOLD = 0.3;
-const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
 interface DecisionsNoulCriteria {
   readonly true: string;
@@ -127,6 +126,48 @@ const makeSufficiencyQuestion = (key: string): DecisionsNoulQuestion => ({
   },
 });
 
+function applyLocalHeuristics(
+  results: ReadonlyArray<ScrapingResult>,
+): ReadonlyArray<ScrapingResult> {
+  const isSuccess = isScrapingResult("Success");
+  return results.map((item) => {
+    if (!isSuccess(item)) {
+      return item;
+    }
+    const rawTitle = item.data.title;
+    const rawImage = item.data.image;
+    const rawFallbackImage = item.data.fallbackImage;
+
+    const hasRawTitle = rawTitle !== undefined && rawTitle.trim().length > 0;
+    if (hasRawTitle && isInvalidTitle(rawTitle)) {
+      return ScrapingFiltered({ url: item.data.url });
+    }
+
+    const candidateImage =
+      rawImage && !isGenericIconUrl(rawImage) ? rawImage : undefined;
+    const candidateFallbackImage =
+      rawFallbackImage && !isGenericIconUrl(rawFallbackImage)
+        ? rawFallbackImage
+        : undefined;
+
+    const survivingTitle = hasRawTitle ? rawTitle : undefined;
+
+    if (!survivingTitle && !candidateImage) {
+      return ScrapingFiltered({ url: item.data.url });
+    }
+
+    return {
+      ...item,
+      data: {
+        ...item.data,
+        title: survivingTitle,
+        image: candidateImage,
+        fallbackImage: candidateFallbackImage,
+      },
+    };
+  });
+}
+
 export const filterPreviewResults = Effect.fn(
   "DecisionFilter.filterPreviewResults",
 )(function* (
@@ -137,17 +178,19 @@ export const filterPreviewResults = Effect.fn(
   threshold: number = DEFAULT_THRESHOLD,
   userImages?: ReadonlyArray<string>,
 ) {
-  if (!apiKey || results.length === 0) {
-    return results;
+  const localResults = applyLocalHeuristics(results);
+
+  if (!apiKey || localResults.length === 0) {
+    return localResults;
   }
 
   const isSuccess = isScrapingResult("Success");
-  const successEntries = results.flatMap((item, index) =>
+  const successEntries = localResults.flatMap((item, index) =>
     isSuccess(item) ? [{ index, data: item.data }] : [],
   );
 
   if (successEntries.length === 0) {
-    return results;
+    return localResults;
   }
 
   const filterEffect = Effect.gen(function* () {
@@ -171,7 +214,6 @@ export const filterPreviewResults = Effect.fn(
       const rawDescription = entry.data.description;
 
       const hasRawTitle = rawTitle !== undefined && rawTitle.trim().length > 0;
-      const isTitleInvalid = hasRawTitle && isInvalidTitle(rawTitle);
 
       const isLongDescription =
         rawDescription !== undefined &&
@@ -187,7 +229,7 @@ export const filterPreviewResults = Effect.fn(
         standard_truncated: standardTruncated,
       };
 
-      if (hasRawTitle && !isTitleInvalid) {
+      if (hasRawTitle) {
         titleAskedKeys.add(key);
         questions[`${key}_title_is_meaningful`] = makeTitleQuestion(key);
       }
@@ -239,9 +281,6 @@ export const filterPreviewResults = Effect.fn(
       const responseData = yield* fetchJson(
         request,
         DecisionsResponseSchema,
-        {
-          timeoutDuration: DEFAULT_TIMEOUT,
-        },
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -261,8 +300,8 @@ export const filterPreviewResults = Effect.fn(
     }
 
     const updated: ScrapingResult[] = [];
-    for (let index = 0; index < results.length; index++) {
-      const item = results[index]!;
+    for (let index = 0; index < localResults.length; index++) {
+      const item = localResults[index]!;
       if (!isSuccess(item)) {
         updated.push(item);
         continue;
@@ -270,43 +309,31 @@ export const filterPreviewResults = Effect.fn(
       const key = `preview_${index}`;
       const rawTitle = item.data.title;
       const rawDescription = item.data.description;
-      const rawImage = item.data.image;
-      const rawFallbackImage = item.data.fallbackImage;
-
-      // Local image heuristic
-      const candidateImage =
-        rawImage && !isGenericIconUrl(rawImage) ? rawImage : undefined;
-      const candidateFallbackImage =
-        rawFallbackImage && !isGenericIconUrl(rawFallbackImage)
-          ? rawFallbackImage
-          : undefined;
+      const candidateImage = item.data.image;
+      const candidateFallbackImage = item.data.fallbackImage;
 
       // Title evaluation
       const hasRawTitle = rawTitle !== undefined && rawTitle.trim().length > 0;
       let titleValid = true;
       let titleScore: number | undefined = undefined;
-      if (hasRawTitle) {
-        if (isInvalidTitle(rawTitle)) {
+      if (hasRawTitle && titleAskedKeys.has(key)) {
+        const titleAnswer =
+          answers[`${key}_title_is_meaningful`] ?? answers[key];
+        titleScore = Predicate.isNumber(titleAnswer?.noul)
+          ? titleAnswer.noul
+          : undefined;
+        if (
+          titleScore === undefined ||
+          titleScore < DEFAULT_TITLE_THRESHOLD
+        ) {
           titleValid = false;
-        } else if (titleAskedKeys.has(key)) {
-          const titleAnswer =
-            answers[`${key}_title_is_meaningful`] ?? answers[key];
-          titleScore = Predicate.isNumber(titleAnswer?.noul)
-            ? titleAnswer.noul
-            : undefined;
-          if (
-            titleScore === undefined ||
-            titleScore < DEFAULT_TITLE_THRESHOLD
-          ) {
-            titleValid = false;
-          }
         }
       }
 
       // Title cascade: if title was present and invalid, drop entire preview
       if (hasRawTitle && !titleValid) {
         const scoreText =
-          titleScore !== undefined ? String(titleScore) : "heuristic/unknown";
+          titleScore !== undefined ? String(titleScore) : "unknown";
         yield* Effect.logInfo(
           `Filtered link preview for ${item.data.url} (invalid title, score: ${scoreText})`,
         );
@@ -381,7 +408,7 @@ export const filterPreviewResults = Effect.fn(
     Effect.catch((error) =>
       Effect.logWarning(
         `Decision filter failed, falling back to original preview: ${String(error)}`,
-      ).pipe(Effect.as(results)),
+      ).pipe(Effect.as(localResults)),
     ),
   );
 

@@ -227,10 +227,15 @@ function prepareEffectiveScrapingResults(
     const rawDescription = options?.hideDescription
       ? undefined
       : (options?.description ?? item.description);
-    const rawImage = options?.hideImage ? undefined : item.image;
-    const rawFallbackImage = options?.hideImage
-      ? undefined
-      : item.fallbackImage;
+    const rawImage =
+      options?.hideImage || (item.image && isSvgUrl(item.image))
+        ? undefined
+        : item.image;
+    const rawFallbackImage =
+      options?.hideImage ||
+      (item.fallbackImage && isSvgUrl(item.fallbackImage))
+        ? undefined
+        : item.fallbackImage;
 
     return {
       ...result,

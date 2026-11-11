@@ -348,6 +348,89 @@ describe("filterPreviewResults", () => {
     expect(filtered).toEqual(results);
   });
 
+  it("applies local heuristics even when OpenRouter returns 500 error", async () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/unhydrated",
+          title: "React App",
+          description: "Some description",
+        },
+      },
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/page",
+          title: "Good Title",
+          image: "https://example.com/assets/logo.png",
+        },
+      },
+    ];
+
+    const failLayer = makeTestHttpClient(
+      () => new Response("Server error", { status: 500 }),
+    );
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(failLayer),
+      ),
+    );
+
+    expect(filtered[0]).toEqual({
+      _tag: "Filtered",
+      url: "https://example.com/unhydrated",
+    });
+    expect(filtered[1]).toEqual({
+      _tag: "Success",
+      data: {
+        url: "https://example.com/page",
+        title: "Good Title",
+        image: undefined,
+        fallbackImage: undefined,
+      },
+    });
+  });
+
+  it("does not generate description question when title is locally invalid", async () => {
+    const captured: { questions?: Record<string, unknown> } = {};
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com/404",
+          title: "404 Not Found",
+          description: "Error description that should not be asked",
+        },
+      },
+    ];
+
+    const layer = makeTestHttpClient((req) => {
+      const body = extractJsonBody(req) as {
+        questions?: Record<string, unknown>;
+      };
+      captured.questions = body.questions;
+      return new Response(JSON.stringify({ answers: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const filtered = await Effect.runPromise(
+      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
+        Effect.provide(layer),
+      ),
+    );
+
+    expect(
+      captured.questions?.preview_0_description_has_substantive_info,
+    ).toBeUndefined();
+    expect(filtered[0]).toEqual({
+      _tag: "Filtered",
+      url: "https://example.com/404",
+    });
+  });
   it("filters item when its answer key is missing from response", async () => {
     const results: ScrapingResult[] = [
       {
@@ -701,18 +784,24 @@ describe("filterPreviewResults", () => {
   });
 
   it("cascade-fails entire preview when title score is below 0.3", async () => {
+    let titleQuestionAsked = false;
     const results: ScrapingResult[] = [
       {
         _tag: "Success",
         data: {
-          url: "https://example.com/unhydrated",
-          title: "Loading...",
+          url: "https://example.com/item",
+          title: "A Legitimate Title That Fails Model Check",
           description: "Substantive article description with plenty of detail",
         },
       },
     ];
 
-    const layer = makeTestHttpClient(() => {
+    const layer = makeTestHttpClient((req) => {
+      const body = extractJsonBody(req) as {
+        questions?: Record<string, unknown>;
+      };
+      titleQuestionAsked =
+        Boolean(body.questions?.preview_0_title_is_meaningful);
       return new Response(
         JSON.stringify({
           answers: {
@@ -735,10 +824,11 @@ describe("filterPreviewResults", () => {
       ).pipe(Effect.provide(layer)),
     );
 
+    expect(titleQuestionAsked).toBe(true);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]).toEqual({
       _tag: "Filtered",
-      url: "https://example.com/unhydrated",
+      url: "https://example.com/item",
     });
   });
 
