@@ -205,13 +205,53 @@ function isSvgUrl(url: string): boolean {
   }
 }
 
+function prepareEffectiveScrapingResults(
+  results: ReadonlyArray<ScrapingResult>,
+  isSingle: boolean,
+): ReadonlyArray<ScrapingResult> {
+  const isSuccess = isScrapingResult("Success");
+  return results.map((result) => {
+    if (!isSuccess(result)) {
+      return result;
+    }
+    const item = result.data;
+    const customizer = findSiteCustomizer(item.url);
+    const options = customizer?.formatItem?.({
+      metadata: item,
+      isSingle,
+    });
+
+    const rawTitle = options?.hideTitle
+      ? undefined
+      : (options?.title ?? item.title);
+    const rawDescription = options?.hideDescription
+      ? undefined
+      : (options?.description ?? item.description);
+    const rawImage = options?.hideImage ? undefined : item.image;
+    const rawFallbackImage = options?.hideImage
+      ? undefined
+      : item.fallbackImage;
+
+    return {
+      ...result,
+      data: {
+        ...item,
+        title: rawTitle,
+        description: rawDescription,
+        image: rawImage,
+        fallbackImage: rawFallbackImage,
+      },
+    };
+  });
+}
+
+
 export function formatPreview(
   results: ReadonlyArray<ScrapingResult>,
 ): FormattedPreview | null {
   if (results.length === 0) {
     return null;
   }
-
   const isSuccess = isScrapingResult("Success");
 
   const hasValidPreview = results.some((r) => {
@@ -642,10 +682,14 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
         }
       }
     }
+    const effectiveResults = prepareEffectiveScrapingResults(
+      results,
+      results.length === 1,
+    );
     const cleanUserMessage = sanitizeUserMessageForDecision(event.raw_message);
     const filteredResults = yield* filterPreviewResults(
       cleanUserMessage,
-      results,
+      effectiveResults,
       openrouterApiKey,
       openrouterDecisionModel,
       undefined,

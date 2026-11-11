@@ -487,4 +487,129 @@ describe("handleLinkPreviewMessage", () => {
     const imgPart = state[1]?.image_url as { url: string };
     expect(imgPart.url.startsWith("data:image/jpeg;base64,")).toBe(true);
   });
+
+  it("does not generate description question for GitHub links with hideDescription: true", async () => {
+    const { item, lastReply } = createMockMessage({
+      raw_message: "https://github.com/Effect-TS/effect",
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+      }),
+    );
+
+    let capturedQuestions: Record<string, unknown> | undefined;
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        let raw = "";
+        if (
+          req.body &&
+          typeof req.body === "object" &&
+          "body" in req.body &&
+          req.body.body instanceof Uint8Array
+        ) {
+          raw = new TextDecoder().decode(req.body.body);
+        }
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          capturedQuestions = parsed.questions;
+        }
+        return new Response(
+          JSON.stringify({
+            answers: {},
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (req.url.includes("opengraph.githubassets.com")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+      return new Response(
+        '<html><head><title>GitHub - Effect-TS/effect</title><meta name="description" content="An effect system for TypeScript"><meta property="og:image" content="https://opengraph.githubassets.com/123/Effect-TS/effect"></head></html>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(
+      capturedQuestions?.preview_0_description_has_substantive_info,
+    ).toBeUndefined();
+    const reply = lastReply();
+    expect(reply).toBeDefined();
+  });
+
+  it("sends title and thumbnail image when YouTube description is filtered", async () => {
+    const { item, lastReply } = createMockMessage({
+      raw_message: "https://www.youtube.com/watch?v=AoNnbz237E0",
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        return new Response(
+          JSON.stringify({
+            answers: {
+              preview_0_title_is_meaningful: { type: "noul", noul: 0.85 },
+              preview_0_description_has_substantive_info: {
+                type: "noul",
+                noul: 0.25,
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (req.url.includes("maxresdefault.jpg")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<html><head><title>Bliss (Windows XP)</title><meta property="og:description" content="Enjoy the videos and music you love on YouTube."><meta property="og:image" content="https://i.ytimg.com/vi/AoNnbz237E0/maxresdefault.jpg"></head></html>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    const reply = lastReply();
+    expect(reply).toEqual([
+      {
+        type: "text",
+        data: {
+          text: "Bliss (Windows XP)\n",
+        },
+      },
+      {
+        type: "image",
+        data: {
+          file: "base64://AQID",
+        },
+      },
+    ]);
+  });
 });

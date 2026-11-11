@@ -15,9 +15,8 @@ import { isGenericIconUrl, isInvalidTitle } from "./DecisionHeuristics.ts";
 
 export const OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
-export { DEFAULT_DECISION_MODEL } from "../../Config.ts";
-export const DEFAULT_THRESHOLD = 0.7;
-export const DEFAULT_TITLE_THRESHOLD = 0.3;
+const DEFAULT_THRESHOLD = 0.7;
+const DEFAULT_TITLE_THRESHOLD = 0.3;
 const DEFAULT_TIMEOUT: Duration.Input = "10 seconds";
 
 interface DecisionsNoulCriteria {

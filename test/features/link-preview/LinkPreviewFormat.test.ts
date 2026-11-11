@@ -53,6 +53,24 @@ describe("formatPreview", () => {
     });
   });
 
+  it("formats single successful URL with title and image but no description", () => {
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: {
+          url: "https://example.com",
+          title: "My Title",
+          image: "https://example.com/pic.jpg",
+        },
+      },
+    ];
+    const formatted = formatPreview(results);
+    expect(formatted).toEqual({
+      text: "My Title",
+      image: "https://example.com/pic.jpg",
+    });
+  });
+
   it("preserves fallbackImage for single successful URL when provided", () => {
     const results: ScrapingResult[] = [
       {
