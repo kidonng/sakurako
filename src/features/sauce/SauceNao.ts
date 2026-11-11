@@ -87,14 +87,17 @@ const SauceNaoResponseSchema = Schema.Struct({
   results: Schema.optional(Schema.Array(SauceNaoItemSchema)),
 });
 
-const PRIMARY_ORIGIN_DBS = new Set([
-  5, // Pixiv
-  8, // Nico Nico Seiga
-  11, // Nijie
-  44, // Skeb
+const DANBOORU_DB = 9;
+
+const PREFERRED_BOORU_DBS = new Set([
+  9, // Danbooru
+  12, // Yande.re
+  25, // Gelbooru
+  26, // Konachan
+  28, // Anime-Pictures
 ]);
 
-const SIMILARITY_ORIGIN_TOLERANCE = 2.0;
+const SIMILARITY_BOORU_TOLERANCE = 2.0;
 
 function selectBestSauceResult(
   results: readonly (typeof SauceNaoItemSchema.Type)[] | undefined,
@@ -125,26 +128,35 @@ function selectBestSauceResult(
     }
   }
 
-  const cutoff = maxSimilarity - SIMILARITY_ORIGIN_TOLERANCE;
-  let bestOriginCandidate: typeof SauceNaoItemSchema.Type | undefined;
-  let bestOriginSimilarity = -1;
+  const cutoff = maxSimilarity - SIMILARITY_BOORU_TOLERANCE;
+  let bestDanbooruCandidate: typeof SauceNaoItemSchema.Type | undefined;
+  let bestDanbooruSimilarity = -1;
+  let bestOtherBooruCandidate: typeof SauceNaoItemSchema.Type | undefined;
+  let bestOtherBooruSimilarity = -1;
 
   for (const candidate of validCandidates) {
     const indexId = candidate.header?.index_id;
     const sim = candidate.header?.similarity ?? 0;
     if (
       indexId !== undefined &&
-      PRIMARY_ORIGIN_DBS.has(indexId) &&
+      PREFERRED_BOORU_DBS.has(indexId) &&
       sim >= cutoff
     ) {
-      if (sim > bestOriginSimilarity) {
-        bestOriginSimilarity = sim;
-        bestOriginCandidate = candidate;
+      if (indexId === DANBOORU_DB) {
+        if (sim > bestDanbooruSimilarity) {
+          bestDanbooruSimilarity = sim;
+          bestDanbooruCandidate = candidate;
+        }
+      } else {
+        if (sim > bestOtherBooruSimilarity) {
+          bestOtherBooruSimilarity = sim;
+          bestOtherBooruCandidate = candidate;
+        }
       }
     }
   }
 
-  return bestOriginCandidate ?? highestMatch;
+  return bestDanbooruCandidate ?? bestOtherBooruCandidate ?? highestMatch;
 }
 const SAUCENAO_API_URL = "https://saucenao.com/search.php";
 

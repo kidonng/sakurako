@@ -272,25 +272,25 @@ describe("searchSauce", () => {
     );
   });
 
-  it("prefers primary origin platform (Pixiv) over booru when within 2.0% similarity tolerance", async () => {
+  it("prefers booru archive platform (Danbooru) over origin (Pixiv) when within 2.0% similarity tolerance", async () => {
     const mockResponse = {
       header: { status: 0, minimum_similarity: 60.0 },
       results: [
         {
-          header: { similarity: "91.50", index_id: 9 }, // Danbooru
-          data: {
-            title: "Booru Reupload",
-            ext_urls: ["https://danbooru.donmai.us/posts/1"],
-          },
-        },
-        {
-          header: { similarity: "90.20", index_id: 5 }, // Pixiv
+          header: { similarity: "91.50", index_id: 5 }, // Pixiv
           data: {
             title: "Original Art",
             member_name: "OriginalArtist",
             ext_urls: ["https://www.pixiv.net/artworks/1"],
           },
         },
+        {
+          header: { similarity: "90.20", index_id: 9 }, // Danbooru
+          data: {
+            title: "Booru Archive",
+            ext_urls: ["https://danbooru.donmai.us/posts/1"],
+          },
+        },
       ],
     };
 
@@ -300,29 +300,29 @@ describe("searchSauce", () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result?.title).toBe("Original Art");
-    expect(result?.author).toBe("OriginalArtist");
-    expect(result?.url).toBe("https://www.pixiv.net/artworks/1");
+    expect(result?.title).toBe("Booru Archive");
+    expect(result?.url).toBe("https://danbooru.donmai.us/posts/1");
     expect(result?.similarity).toBe(90.2);
   });
 
-  it("prefers higher similarity match when difference exceeds 2.0% tolerance even if lower match is an origin platform", async () => {
+  it("prefers Danbooru over other boorus within 2.0% similarity tolerance", async () => {
     const mockResponse = {
       header: { status: 0, minimum_similarity: 60.0 },
       results: [
         {
-          header: { similarity: "95.00", index_id: 9 }, // Danbooru
+          header: { similarity: "91.00", index_id: 25 }, // Gelbooru
           data: {
-            title: "Clear Match",
-            ext_urls: ["https://danbooru.donmai.us/posts/2"],
+            title: "Gelbooru Post",
+            ext_urls: [
+              "https://gelbooru.com/index.php?page=post&s=view&id=100",
+            ],
           },
         },
         {
-          header: { similarity: "75.00", index_id: 5 }, // Pixiv
+          header: { similarity: "90.00", index_id: 9 }, // Danbooru
           data: {
-            title: "Low Confidence Pixiv",
-            member_name: "SomeArtist",
-            ext_urls: ["https://www.pixiv.net/artworks/2"],
+            title: "Danbooru Post",
+            ext_urls: ["https://danbooru.donmai.us/posts/100"],
           },
         },
       ],
@@ -334,7 +334,41 @@ describe("searchSauce", () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result?.title).toBe("Clear Match");
+    expect(result?.title).toBe("Danbooru Post");
+    expect(result?.url).toBe("https://danbooru.donmai.us/posts/100");
+    expect(result?.similarity).toBe(90.0);
+  });
+
+  it("prefers higher similarity match when difference exceeds 2.0% tolerance even if lower match is a booru platform", async () => {
+    const mockResponse = {
+      header: { status: 0, minimum_similarity: 60.0 },
+      results: [
+        {
+          header: { similarity: "95.00", index_id: 5 }, // Pixiv
+          data: {
+            title: "Clear Pixiv Match",
+            member_name: "SomeArtist",
+            ext_urls: ["https://www.pixiv.net/artworks/2"],
+          },
+        },
+        {
+          header: { similarity: "75.00", index_id: 9 }, // Danbooru
+          data: {
+            title: "Low Confidence Booru",
+            ext_urls: ["https://danbooru.donmai.us/posts/2"],
+          },
+        },
+      ],
+    };
+
+    const layer = makeTestHttpClient(() => Response.json(mockResponse));
+    const result = await Effect.runPromise(
+      searchSauce("https://example.com/test.png").pipe(Effect.provide(layer)),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe("Clear Pixiv Match");
+    expect(result?.author).toBe("SomeArtist");
     expect(result?.similarity).toBe(95.0);
   });
 

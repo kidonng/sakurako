@@ -11,7 +11,7 @@ Sakurako 的 `/sauce` 搜图模块（`src/features/sauce/SauceNao.ts`）当前�
 ### 核心目标
 1. **限定纯正日系二次元高时效来源**：通过白名单参数限制 SauceNao 仅检索 15 个核心二次元数据库，消除无关来源与僵尸库的噪声。
 2. **多结果候选拉取与择优（`numres=5`）**：将请求结果数提升至 5 条，在客户端进行二次择优。
-3. **原作优先（Original Source Priority）机制**：在相似度高于阈值的前提下，当原作画师平台（如 Pixiv、Skeb、Nico Seiga、Nijie）与转存图库（如 Danbooru、Gelbooru）相似度极近时（容差范围内），优先选用原作平台结果，提供更权威的作者信息和主站链接。
+3. **转存站优先（Booru-first Priority）防 404 机制**：在相似度高于阈值的前提下，由于日系画师删稿/销号频繁会导致主站（如 Pixiv）链接变成 404 死链，当转存图库（特别是 Danbooru、Yande.re、Gelbooru 等）与主站相似度极近时（2.0% 容差范围内），优先选用转存站结果，提供永久有效的图片存档、角色/作品标签以及画师资料反查链接。
 
 ---
 
@@ -79,25 +79,30 @@ if (apiKey) {
 
 ### 3. 结果候选择优逻辑 (`selectBestSauceResult`)
 
-定义画师原作直属平台集合：
+定义高质量 Booru 转存站集合：
 ```ts
-const PRIMARY_ORIGIN_DBS = new Set([
-  5,  // Pixiv
-  8,  // Nico Nico Seiga
-  11, // Nijie
-  44, // Skeb
+const DANBOORU_DB = 9;
+
+const PREFERRED_BOORU_DBS = new Set([
+  9,  // Danbooru
+  12, // Yande.re
+  25, // Gelbooru
+  26, // Konachan
+  28, // Anime-Pictures
 ]);
+
+const SIMILARITY_BOORU_TOLERANCE = 2.0;
 ```
 
 择优策略：
 1. **阈值过滤**：从 `results` 列表中过滤出所有 `similarity >= minSimilarity` 的有效候选。若无候选满足条件，返回 `null`。
 2. **最高相似度基准**：取得分最高的候选 `highestMatch` 及其相似度 `maxSimilarity`。
-3. **原作优先（近相似度容差）**：
-   - 容差窗口设为 `SIMILARITY_ORIGIN_TOLERANCE = 2.0`（百分比）；
-   - 在所有满足 `similarity >= maxSimilarity - 2.0` 的高分候选中，如果存在来自 `PRIMARY_ORIGIN_DBS` 的结果，优先选择其中相似度最高的原作平台项；
-   - 否则直接采纳 `highestMatch`。
+3. **转存站优先（近相似度容差，防 404）**：
+   - 容差窗口设为 `SIMILARITY_BOORU_TOLERANCE = 2.0`（百分比）；
+   - 在所有满足 `similarity >= maxSimilarity - 2.0` 的高分候选中，优先选择 `DANBOORU_DB`（标签最全、元数据最丰富）；
+   - 若无 Danbooru 但存在其他 Booru（Yande.re / Gelbooru 等），优先采纳其中相似度最高者；
+   - 若容差内不存在任何 Booru，则直接采纳 `highestMatch`（平滑兜底纯 Pixiv 原创、动画截图或 MangaDex 结果）。
 4. **格式化输出**：提取选定项的 `title`、`author`、`url` 并拼装 `formattedText`。
-
 ---
 
 ## 边界与兼容性考量 (Edge Cases & Invariants)
@@ -114,8 +119,8 @@ const PRIMARY_ORIGIN_DBS = new Set([
 ### 自动化单元测试 (`test/features/sauce/SauceNao.test.ts`)
 1. **请求 URL 验证**：断言发送给 HttpClient 的请求 URL 包含 `numres=5` 以及全部 15 个 `dbs[]` 参数，且不再包含 `db=999`。
 2. **多候选择优逻辑**：
-   - 测试场景 A（最高分胜出）：Danbooru 95% vs 无关项 60%，返回 Danbooru；
-   - 测试场景 B（原作优先）：Danbooru 91.5% vs Pixiv 90.5%（差距在 2% 以内），优先返回 Pixiv；
-   - 测试场景 C（差距过大不选劣质原作）：Danbooru 95% vs Pixiv 70%，返回 Danbooru；
+   - 测试场景 A（转存优先防 404）：Pixiv 91.5% vs Danbooru 90.2%（差距在 2% 以内），优先返回 Danbooru；
+   - 测试场景 B（Danbooru 优于其他 Booru）：Gelbooru 91.0% vs Danbooru 90.0%（差距在 2% 以内），优先返回 Danbooru；
+   - 测试场景 C（差距过大不选劣质转存）：Pixiv 95.0% vs Danbooru 75.0%（超出 2% 容差），返回 Pixiv；
    - 测试场景 D（全低于阈值）：所有结果低于 `minimum_similarity`，返回 `null`。
 3. **现有测试回归**：运行 `bun test test/features/sauce/`，确保原有全部测试用例保持通过。
