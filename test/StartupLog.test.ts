@@ -129,4 +129,24 @@ describe("logStartupInfo", () => {
       "Running in PROD MODE (ignoring dev group 999888)",
     );
   });
+
+  it("logs link preview fallback scraper status for keyless and API key modes", async () => {
+    const keylessLogs = await runWithLogger(
+      logStartupInfo(undefined, baseConfig),
+    );
+    expect(keylessLogs).toContain(
+      "Link preview fallback scraper enabled (Firecrawl keyless mode)",
+    );
+
+    const configWithKey: BotConfig = {
+      ...baseConfig,
+      firecrawlApiKey: Redacted.make("fc-key"),
+    };
+    const keyLogs = await runWithLogger(
+      logStartupInfo(undefined, configWithKey),
+    );
+    expect(keyLogs).toContain(
+      "Link preview fallback scraper enabled (Firecrawl API key configured)",
+    );
+  });
 });

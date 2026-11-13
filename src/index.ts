@@ -8,6 +8,7 @@ import { FetchHttpClient } from "effect/http";
 import { BotConfig } from "./Config.ts";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
+import { FallbackScraper } from "./features/link-preview/FallbackScraper.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
 import { handleDanbooruMessage } from "./features/danbooru/Danbooru.ts";
 import { DanbooruClient } from "./features/danbooru/DanbooruClient.ts";
@@ -67,6 +68,16 @@ export const logStartupInfo = Effect.fnUntraced(function* (
   if (config.openrouterApiKey) {
     yield* Effect.logInfo(
       `Decision filter enabled using model ${config.openrouterDecisionModel}`,
+    );
+  }
+
+  if (config.firecrawlApiKey) {
+    yield* Effect.logInfo(
+      "Link preview fallback scraper enabled (Firecrawl API key configured)",
+    );
+  } else {
+    yield* Effect.logInfo(
+      "Link preview fallback scraper enabled (Firecrawl keyless mode)",
     );
   }
 });
@@ -142,6 +153,10 @@ const DanbooruClientLive = DanbooruClient.layer.pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 
+const FallbackScraperLive = FallbackScraper.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+);
+
 export const MainLive = MainProgram.pipe(
   Effect.provide(
     Layer.mergeAll(
@@ -152,6 +167,7 @@ export const MainLive = MainProgram.pipe(
       StatsCooldown.layer,
       DanbooruTagMatcherLive,
       DanbooruClientLive,
+      FallbackScraperLive,
     ),
   ),
 );
