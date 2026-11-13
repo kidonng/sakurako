@@ -89,28 +89,30 @@ The project follows a reactive, push-to-pull decoupled architecture built on Eff
 
 All development tasks use Bun:
 
-| Task | Package Script | Exact Invocation | Description / Notes |
-|:---|:---|:---|:---|
-| **Run Bot** | `bun start` | `bun src/index.ts` | Runs the main bot entry point. |
-| **Run Tests** | `bun test` | `bun test` | Runs unit & integration test suites using native `bun:test`. Can target files: `bun test test/features/echo/EchoBot.test.ts`. |
-| **Type Check** | `bun run check` | `tsc` | Pure TypeScript type validation (`noEmit: true`, bundler module resolution, `verbatimModuleSyntax`). |
-| **Lint** | `bun run lint` | `oxlint` | Runs Oxlint with `@effect/tsgo` type-aware lint rules. |
-| **Format** | `bun run format` | `bun fmt` | Formats codebase using Bun's native formatter. |
-| **Auto-Fix** | `bun run fix` | `oxlint --fix; knip --fix; bun fmt` | Sequentially fixes lint errors, unused exports/dependencies, and formatting. |
-| **Unused Code** | `bun run knip` | `knip` | Verifies unused exports, files, and dependencies based on `knip.json`. |
-| **Download Font** | `bun run download-font` | `bun scripts/download-font.ts` | Fetches MiSans (`MiSans-Normal.ttf`) to `assets/fonts/` for Satori card rendering. |
-| **Download Tags** | `bun run download-tags` | `bun scripts/download-danbooru-tags.ts` | Fetches & indexes bilingual Danbooru tags database into `assets/danbooru-tags.sqlite` (~24 MB). |
-| **Inspect Msg** | `bun run inspect-msg` | `bun scripts/inspect-msg.ts <id>` | Helper CLI to inspect raw OneBot message payloads by ID. |
-| **Prepare** | `bun run prepare` | `effect-tsgo patch --typescript --oxlint` | Patches TypeScript compiler and Oxlint with `@effect/tsgo` plugins. |
+| Task              | Package Script          | Exact Invocation                          | Description / Notes                                                                                                           |
+| :---------------- | :---------------------- | :---------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| **Run Bot**       | `bun start`             | `bun src/index.ts`                        | Runs the main bot entry point.                                                                                                |
+| **Run Tests**     | `bun test`              | `bun test`                                | Runs unit & integration test suites using native `bun:test`. Can target files: `bun test test/features/echo/EchoBot.test.ts`. |
+| **Type Check**    | `bun run check`         | `tsc`                                     | Pure TypeScript type validation (`noEmit: true`, bundler module resolution, `verbatimModuleSyntax`).                          |
+| **Lint**          | `bun run lint`          | `oxlint`                                  | Runs Oxlint with `@effect/tsgo` type-aware lint rules.                                                                        |
+| **Format**        | `bun run format`        | `bun fmt`                                 | Formats codebase using Bun's native formatter.                                                                                |
+| **Auto-Fix**      | `bun run fix`           | `oxlint --fix; knip --fix; bun fmt`       | Sequentially fixes lint errors, unused exports/dependencies, and formatting.                                                  |
+| **Unused Code**   | `bun run knip`          | `knip`                                    | Verifies unused exports, files, and dependencies based on `knip.json`.                                                        |
+| **Download Font** | `bun run download-font` | `bun scripts/download-font.ts`            | Fetches MiSans (`MiSans-Normal.ttf`) to `assets/fonts/` for Satori card rendering.                                            |
+| **Download Tags** | `bun run download-tags` | `bun scripts/download-danbooru-tags.ts`   | Fetches & indexes bilingual Danbooru tags database into `assets/danbooru-tags.sqlite` (~24 MB).                               |
+| **Inspect Msg**   | `bun run inspect-msg`   | `bun scripts/inspect-msg.ts <id>`         | Helper CLI to inspect raw OneBot message payloads by ID.                                                                      |
+| **Prepare**       | `bun run prepare`       | `effect-tsgo patch --typescript --oxlint` | Patches TypeScript compiler and Oxlint with `@effect/tsgo` plugins.                                                           |
 
 ## Code Conventions & Common Patterns
 
 ### File & Code Naming
+
 - **Files**: PascalCase for services, domain modules, and components (`SnowLuma.ts`, `EchoBot.ts`, `Config.ts`, `StatsRenderer.tsx`), camelCase for entry points and scripts (`index.ts`, `inspect-msg.ts`).
 - **Extensions**: Always include explicit `.ts` or `.tsx` extensions in local relative imports (e.g. `import { BotConfig } from "./Config.ts"`), required by `"allowImportingTsExtensions": true`.
 - **Types vs Values**: Enforce `verbatimModuleSyntax: true` using `import type { ... }` or `import { type Foo, Bar } from "..."`.
 
 ### Effect 4 Repository Patterns
+
 General Effect 4 patterns follow `@node_modules/effect/AGENTS.md`. Note the repository-specific requirements:
 
 - **Branded Schema Tagged Errors**: Due to `effecttsgo/schema-class-missing-brand`, always provide `{ readonly brand: unique symbol; }` as the second type argument to `Schema.TaggedError`:
@@ -127,6 +129,7 @@ General Effect 4 patterns follow `@node_modules/effect/AGENTS.md`. Note the repo
 - **Dynamic Layer Branching**: Use `Layer.unwrap` when choosing an implementation dynamically at boot (e.g. `DanbooruTagMatcher.live()` selecting between SQLite and English-only fallback).
 
 ### Handler Guards & Event Isolation
+
 - **Loop Prevention (`isSelfMessage`)**: Every incoming message listener MUST call `if (isSelfMessage(item.event)) return;` from `src/utils/MessageGuard.ts` at entry. Never re-implement the `post_type === "message_sent" || user_id === self_id` check inline, and never treat missing `user_id` as self-sent.
 - **Group Message Filter (`isGroupMessage`)**: Handlers operating strictly on group messages use `isGroupMessage(event)` to ensure `message_type === "group"` and valid numeric `group_id` and `user_id`.
 - **Dev Isolation (`shouldProcessEvent`)**: Filters events at the stream level based on `DEV_MODE` and `DEV_GROUP_ID`.

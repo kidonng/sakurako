@@ -2,6 +2,7 @@
 import { segments } from "@snowluma/sdk/messages";
 import type { AnyMessageSegment } from "@snowluma/sdk/types";
 import { Effect } from "effect";
+import { DanbooruAuthConfig, getDanbooruTagLimit } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { parseCommand } from "../../utils/Command.ts";
 import {
@@ -46,14 +47,16 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
 
     const matcher = yield* DanbooruTagMatcher;
     const client = yield* DanbooruClient;
+    const authConfig = yield* DanbooruAuthConfig;
+    const maxTags = getDanbooruTagLimit(authConfig);
 
     let searchTags: readonly string[] = [];
 
     if (rawQuery.length > 0) {
       const matchResult = yield* matcher.matchQuery(rawQuery);
-      if (matchResult.tags.length > 2) {
+      if (matchResult.tags.length > maxTags) {
         yield* Effect.tryPromise(() =>
-          item.context.reply("[标签数量超出限制，最多支持 2 个]"),
+          item.context.reply(`[标签数量超出限制，最多支持 ${maxTags} 个]`),
         );
         return;
       }

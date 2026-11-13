@@ -149,4 +149,33 @@ describe("logStartupInfo", () => {
       "Link preview fallback scraper enabled (Firecrawl API key configured)",
     );
   });
+
+  it("logs Danbooru status for anonymous, incomplete, and authenticated modes", async () => {
+    const anonLogs = await runWithLogger(logStartupInfo(undefined, baseConfig));
+    expect(anonLogs).toContain(
+      "Danbooru feature enabled (anonymous mode, max 2 tags)",
+    );
+
+    const partialLogs = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        danbooruApiKey: Redacted.make("db-key-only"),
+      }),
+    );
+    expect(partialLogs).toContain(
+      "Danbooru API credentials incomplete (both DANBOORU_LOGIN and DANBOORU_API_KEY are required); running in anonymous mode (max 2 tags)",
+    );
+
+    const authLogs = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        danbooruLogin: "sakurako_bot",
+        danbooruApiKey: Redacted.make("db-secret"),
+      }),
+    );
+    expect(authLogs).toContain(
+      "Danbooru feature enabled (authenticated as sakurako_bot, max 3 tags)",
+    );
+    expect(authLogs.some((msg) => msg.includes("db-secret"))).toBe(false);
+  });
 });

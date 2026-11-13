@@ -1,6 +1,10 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Context, Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest, Url } from "effect/http";
+import {
+  DanbooruAuthConfig,
+  resolveDanbooruCredentials,
+} from "../../Config.ts";
 import { fetchImage, fetchJson } from "../../utils/HttpClient.ts";
 
 export const DanbooruPostSchema = Schema.Struct({
@@ -74,6 +78,8 @@ export class DanbooruClient extends Context.Service<
     DanbooruClient,
     Effect.gen(function* () {
       const httpClient = yield* HttpClient.HttpClient;
+      const authConfig = yield* DanbooruAuthConfig;
+      const credentials = resolveDanbooruCredentials(authConfig);
 
       const getRandomPost = Effect.fnUntraced(function* (
         tags?: readonly string[],
@@ -90,9 +96,14 @@ export class DanbooruClient extends Context.Service<
         const targetUrl = Url.setUrlParams(new URL(DANBOORU_API_RANDOM_POST), {
           tags: queryTags,
         }).toString();
-        const request = HttpClientRequest.get(targetUrl).pipe(
+        let request = HttpClientRequest.get(targetUrl).pipe(
           withDanbooruUserAgent,
         );
+        if (credentials) {
+          request = request.pipe(
+            HttpClientRequest.basicAuth(credentials.login, credentials.apiKey),
+          );
+        }
 
         return yield* fetchJson(request, DanbooruPostSchema).pipe(
           Effect.provideService(HttpClient.HttpClient, httpClient),

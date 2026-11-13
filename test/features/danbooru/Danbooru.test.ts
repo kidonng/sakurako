@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import { handleDanbooruMessage } from "../../../src/features/danbooru/Danbooru.ts";
 import {
   DanbooruApiError,
@@ -40,11 +40,132 @@ describe("handleDanbooruMessage", () => {
 
     await Effect.runPromise(
       handleDanbooruMessage(item).pipe(
-        Effect.provide(Layer.merge(MatcherMock, ClientMock)),
+        Effect.provide(
+          Layer.mergeAll(
+            MatcherMock,
+            ClientMock,
+            ConfigProvider.layer(ConfigProvider.fromEnvRecord({})),
+          ),
+        ),
       ),
     );
 
     expect(lastReply()).toBe("[标签数量超出限制，最多支持 2 个]");
+  });
+
+  it("keeps max 2 tags when only one Danbooru credential is configured", async () => {
+    const { item, lastReply } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr tag1 tag2 tag3" } }],
+    });
+
+    const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () =>
+        Effect.succeed({ tags: ["t1", "t2", "t3"], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
+    });
+    const ClientMock = Layer.succeed(DanbooruClient, {
+      getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(item).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            MatcherMock,
+            ClientMock,
+            ConfigProvider.layer(
+              ConfigProvider.fromEnvRecord({ DANBOORU_API_KEY: "only-key" }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(lastReply()).toBe("[标签数量超出限制，最多支持 2 个]");
+  });
+
+  it("allows 3 tags and rejects 4+ tags when both DANBOORU_LOGIN and DANBOORU_API_KEY are configured", async () => {
+    const authConfigLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        DANBOORU_LOGIN: "sakurako_bot",
+        DANBOORU_API_KEY: "secret_key",
+      }),
+    );
+
+    const { item: item3, lastReply: lastReply3 } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr 1girl solo long_hair" } }],
+    });
+    let capturedTags: readonly string[] | undefined;
+
+    const MatcherMock3 = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () =>
+        Effect.succeed({
+          tags: ["1girl", "solo", "long_hair"],
+          isModified: false,
+        }),
+      getTagTranslations: () =>
+        Effect.succeed(
+          new Map([
+            ["1girl", "1girl"],
+            ["solo", "单人"],
+            ["long_hair", "长发"],
+          ]),
+        ),
+    });
+    const ClientMock3 = Layer.succeed(DanbooruClient, {
+      getRandomPost: (tags) => {
+        capturedTags = tags;
+        return Effect.succeed({
+          id: 777,
+          large_file_url: "https://example.com/777.jpg",
+          tag_string_character: "",
+          tag_string_copyright: "",
+          tag_string_artist: "artist",
+          tag_string_general: "1girl solo long_hair",
+        });
+      },
+      downloadImage: () => Effect.succeed("base64://fakeimagedata"),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(item3).pipe(
+        Effect.provide(
+          Layer.mergeAll(MatcherMock3, ClientMock3, authConfigLayer),
+        ),
+      ),
+    );
+
+    expect(capturedTags).toEqual(["1girl", "solo", "long_hair"]);
+    expect(getTextSegment(lastReply3())).toContain(
+      "https://danbooru.donmai.us/posts/777",
+    );
+
+    const { item: item4, lastReply: lastReply4 } = createMockMessage({
+      message: [{ type: "text", data: { text: "/dbr t1 t2 t3 t4" } }],
+    });
+    const MatcherMock4 = Layer.succeed(DanbooruTagMatcher, {
+      matchTag: () => Effect.succeed(undefined as string | undefined),
+      matchQuery: () =>
+        Effect.succeed({ tags: ["t1", "t2", "t3", "t4"], isModified: false }),
+      getTagTranslations: () => Effect.succeed(new Map()),
+    });
+    const ClientMock4 = Layer.succeed(DanbooruClient, {
+      getRandomPost: () => Effect.die("should not be called"),
+      downloadImage: () => Effect.die("should not be called"),
+    });
+
+    await Effect.runPromise(
+      handleDanbooruMessage(item4).pipe(
+        Effect.provide(
+          Layer.mergeAll(MatcherMock4, ClientMock4, authConfigLayer),
+        ),
+      ),
+    );
+
+    expect(lastReply4()).toBe("[标签数量超出限制，最多支持 3 个]");
   });
 
   it("replies with formatted title, link, and image when search succeeds, prompting Chinese tag when user input differs", async () => {

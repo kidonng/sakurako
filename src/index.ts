@@ -5,7 +5,13 @@ import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { Effect, Layer, Stream } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { FetchHttpClient } from "effect/http";
-import { BotConfig } from "./Config.ts";
+import {
+  ANONYMOUS_DANBOORU_TAG_LIMIT,
+  BotConfig,
+  hasIncompleteDanbooruCredentials,
+  MEMBER_DANBOORU_TAG_LIMIT,
+  resolveDanbooruCredentials,
+} from "./Config.ts";
 import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { FallbackScraper } from "./features/link-preview/FallbackScraper.ts";
@@ -78,6 +84,21 @@ export const logStartupInfo = Effect.fnUntraced(function* (
   } else {
     yield* Effect.logInfo(
       "Link preview fallback scraper enabled (Firecrawl keyless mode)",
+    );
+  }
+
+  const danbooruCredentials = resolveDanbooruCredentials(config);
+  if (danbooruCredentials) {
+    yield* Effect.logInfo(
+      `Danbooru feature enabled (authenticated as ${danbooruCredentials.login}, max ${MEMBER_DANBOORU_TAG_LIMIT} tags)`,
+    );
+  } else if (hasIncompleteDanbooruCredentials(config)) {
+    yield* Effect.logWarning(
+      `Danbooru API credentials incomplete (both DANBOORU_LOGIN and DANBOORU_API_KEY are required); running in anonymous mode (max ${ANONYMOUS_DANBOORU_TAG_LIMIT} tags)`,
+    );
+  } else {
+    yield* Effect.logInfo(
+      `Danbooru feature enabled (anonymous mode, max ${ANONYMOUS_DANBOORU_TAG_LIMIT} tags)`,
     );
   }
 });

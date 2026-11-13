@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import { DanbooruClient } from "../../../src/features/danbooru/DanbooruClient.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 
@@ -156,5 +156,105 @@ describe("DanbooruClient", () => {
     );
 
     expect(result._tag).toBe("DanbooruApiError");
+  });
+
+  it("attaches HTTP Basic Auth header on getRandomPost when both DANBOORU_LOGIN and DANBOORU_API_KEY are configured, and omits it on downloadImage", async () => {
+    let capturedApiAuth: string | undefined;
+    let capturedImageAuth: string | undefined;
+    const fakeImageBuffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const mockPost = {
+      id: 999,
+      large_file_url: "https://cdn.donmai.us/sample/test.jpg",
+      tag_string_character: "",
+      tag_string_copyright: "",
+      tag_string_artist: "artist",
+      tag_string_general: "1girl",
+    };
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.startsWith("https://danbooru.donmai.us/posts/random.json")) {
+        capturedApiAuth = req.headers["authorization"];
+        return new Response(JSON.stringify(mockPost), { status: 200 });
+      }
+      if (req.url === "https://cdn.donmai.us/sample/test.jpg") {
+        capturedImageAuth = req.headers["authorization"];
+        return new Response(fakeImageBuffer, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response("Not Found", { status: 404 });
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        DANBOORU_LOGIN: "sakurako_bot",
+        DANBOORU_API_KEY: "secret_api_key",
+      }),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* DanbooruClient;
+        const post = yield* client.getRandomPost([
+          "1girl",
+          "solo",
+          "long_hair",
+        ]);
+        yield* client.downloadImage(post.large_file_url!);
+      }).pipe(
+        Effect.provide(
+          DanbooruClient.layer.pipe(
+            Layer.provide(httpLayer),
+            Layer.provide(configLayer),
+          ),
+        ),
+      ),
+    );
+
+    const expectedHeader = `Basic ${Buffer.from("sakurako_bot:secret_api_key").toString("base64")}`;
+    expect(capturedApiAuth).toBe(expectedHeader);
+    expect(capturedImageAuth).toBeUndefined();
+  });
+
+  it("omits Authorization header when credentials are absent or incomplete", async () => {
+    const capturedAuths: Array<string | undefined> = [];
+    const mockPost = {
+      id: 1000,
+      large_file_url: "https://cdn.donmai.us/sample/test.jpg",
+      tag_string_character: "",
+      tag_string_copyright: "",
+      tag_string_artist: "artist",
+      tag_string_general: "1girl",
+    };
+
+    const httpLayer = makeTestHttpClient((req) => {
+      capturedAuths.push(req.headers["authorization"]);
+      return new Response(JSON.stringify(mockPost), { status: 200 });
+    });
+
+    for (const env of [
+      {} as Record<string, string>,
+      { DANBOORU_LOGIN: "sakurako_bot" },
+      { DANBOORU_API_KEY: "secret_api_key" },
+    ]) {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const client = yield* DanbooruClient;
+          yield* client.getRandomPost(["1girl"]);
+        }).pipe(
+          Effect.provide(
+            DanbooruClient.layer.pipe(
+              Layer.provide(httpLayer),
+              Layer.provide(
+                ConfigProvider.layer(ConfigProvider.fromEnvRecord(env)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    expect(capturedAuths).toEqual([undefined, undefined, undefined]);
   });
 });
