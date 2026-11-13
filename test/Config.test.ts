@@ -21,6 +21,7 @@ describe("BotConfig", () => {
     expect(result.openrouterDecisionModel).toBe("~typesafe/jev-latest");
     expect(result.devMode).toBe(false);
     expect(result.devGroupId).toBeUndefined();
+    expect(result.firecrawlApiKey).toBeUndefined();
   });
 
   it("fails when SNOWLUMA_WS_URL is not provided", async () => {
@@ -49,6 +50,7 @@ describe("BotConfig", () => {
               OPENROUTER_DECISION_MODEL: "openai/gpt-6-luna-decisions",
               DEV_MODE: "true",
               DEV_GROUP_ID: "12345678",
+              FIRECRAWL_API_KEY: "fc_test_key",
             }),
           ),
         ),
@@ -63,5 +65,7 @@ describe("BotConfig", () => {
     expect(config.openrouterDecisionModel).toBe("openai/gpt-6-luna-decisions");
     expect(config.devMode).toBe(true);
     expect(config.devGroupId).toBe(12345678);
+    expect(config.firecrawlApiKey).toBeDefined();
+    expect(Redacted.value(config.firecrawlApiKey!)).toBe("fc_test_key");
   });
 });

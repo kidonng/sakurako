@@ -10,6 +10,7 @@ export interface BotConfig {
   readonly openrouterDecisionModel: string;
   readonly devMode: boolean;
   readonly devGroupId?: number;
+  readonly firecrawlApiKey?: Redacted.Redacted<string>;
 }
 
 export const BotConfig: Config.Config<BotConfig> = Config.all({
@@ -26,6 +27,9 @@ export const BotConfig: Config.Config<BotConfig> = Config.all({
   ),
   devMode: Config.Boolean("DEV_MODE").pipe(Config.withDefault(false)),
   devGroupId: Config.option(Config.Int("DEV_GROUP_ID")).pipe(
+    Config.map(Option.getOrUndefined),
+  ),
+  firecrawlApiKey: Config.option(Config.Redacted("FIRECRAWL_API_KEY")).pipe(
     Config.map(Option.getOrUndefined),
   ),
 });
