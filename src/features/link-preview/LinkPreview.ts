@@ -30,9 +30,9 @@ import metascraperDescription from "metascraper-description";
 import metascraperImage from "metascraper-image";
 import metascraperTitle from "metascraper-title";
 import {
-  findSiteCustomizer,
-  type MetascraperRuleContext,
-  siteMetascraperPlugin,
+  getSiteDisplayPolicy,
+  scrapeWithSiteOverride,
+  siteMetascraperRules,
 } from "./LinkPreviewSites.ts";
 import {
   FallbackScraper,
@@ -53,7 +53,7 @@ import { truncate } from "../../utils/TextWidth.ts";
 const NOISE_CONTAINERS = "header, footer, nav, aside, form, dialog";
 
 export function extractFirstParagraph(
-  $: MetascraperRuleContext["htmlDom"],
+  $: createMetascraper.RulesTestOptions["htmlDom"],
 ): string | undefined {
   const findIn = (selector: string): string | undefined => {
     for (const el of $(selector).toArray()) {
@@ -77,13 +77,14 @@ export function extractFirstParagraph(
 function firstParagraphPlugin(): createMetascraper.Rules {
   return {
     description: [
-      ({ htmlDom }: MetascraperRuleContext) => extractFirstParagraph(htmlDom),
+      ({ htmlDom }: createMetascraper.RulesTestOptions) =>
+        extractFirstParagraph(htmlDom),
     ],
   };
 }
 
 const scraper = createMetascraper([
-  siteMetascraperPlugin(),
+  ...siteMetascraperRules,
   metascraperTitle(),
   metascraperDescription(),
   firstParagraphPlugin(),
@@ -224,24 +225,16 @@ function prepareEffectiveScrapingResults(
       return result;
     }
     const item = result.data;
-    const customizer = findSiteCustomizer(item.url);
-    const options = customizer?.formatItem?.({
-      metadata: item,
-      isSingle,
-    });
+    const policy = getSiteDisplayPolicy(item.url, { isSingle });
 
-    const rawTitle = options?.hideTitle
-      ? undefined
-      : (options?.title ?? item.title);
-    const rawDescription = options?.hideDescription
-      ? undefined
-      : (options?.description ?? item.description);
-    const rawImage =
-      options?.hideImage || (item.image && isSvgUrl(item.image))
+    const title = policy?.hideTitle ? undefined : item.title;
+    const description = policy?.hideDescription ? undefined : item.description;
+    const image =
+      policy?.hideImage || (item.image && isSvgUrl(item.image))
         ? undefined
         : item.image;
-    const rawFallbackImage =
-      options?.hideImage || (item.fallbackImage && isSvgUrl(item.fallbackImage))
+    const fallbackImage =
+      policy?.hideImage || (item.fallbackImage && isSvgUrl(item.fallbackImage))
         ? undefined
         : item.fallbackImage;
 
@@ -249,10 +242,10 @@ function prepareEffectiveScrapingResults(
       ...result,
       data: {
         ...item,
-        title: rawTitle,
-        description: rawDescription,
-        image: rawImage,
-        fallbackImage: rawFallbackImage,
+        title,
+        description,
+        image,
+        fallbackImage,
       },
     };
   });
@@ -265,68 +258,42 @@ export function formatPreview(
     return null;
   }
   const isSuccess = isScrapingResult("Success");
+  const effectiveResults = prepareEffectiveScrapingResults(
+    results,
+    results.length === 1,
+  );
 
-  const hasValidPreview = results.some((r) => {
+  const hasValidPreview = effectiveResults.some((r) => {
     if (!isSuccess(r)) return false;
-    const customizer = findSiteCustomizer(r.data.url);
-    const options = customizer?.formatItem?.({
-      metadata: r.data,
-      isSingle: results.length === 1,
-    });
-    const title = !options?.hideTitle && (options?.title ?? r.data.title);
-    const image =
-      !options?.hideImage && r.data.image && !isSvgUrl(r.data.image);
-    return Boolean(title || image);
+    return Boolean(r.data.title || r.data.image);
   });
   if (!hasValidPreview) {
     return null;
   }
 
-  const firstResult = results[0];
-  if (results.length === 1 && firstResult && isSuccess(firstResult)) {
+  const firstResult = effectiveResults[0];
+  if (effectiveResults.length === 1 && firstResult && isSuccess(firstResult)) {
     const item = firstResult.data;
-    const customizer = findSiteCustomizer(item.url);
-    const options = customizer?.formatItem?.({
-      metadata: item,
-      isSingle: true,
-    });
-
     const lines: string[] = [];
-    if (!options?.hideTitle) {
-      const rawTitle = options?.title ?? item.title;
-      if (rawTitle) {
-        lines.push(truncate(rawTitle));
-      }
+    if (item.title) {
+      lines.push(truncate(item.title));
     }
-    if (!options?.hideDescription) {
-      const rawDescription = options?.description ?? item.description;
-      if (rawDescription) {
-        const descWidth = firstResult.expanded
-          ? EXPANDED_DESCRIPTION_MAX_WIDTH
-          : DEFAULT_DESCRIPTION_MAX_WIDTH;
-        lines.push(`> ${truncate(rawDescription, descWidth)}`);
-      }
+    if (item.description) {
+      const descWidth = firstResult.expanded
+        ? EXPANDED_DESCRIPTION_MAX_WIDTH
+        : DEFAULT_DESCRIPTION_MAX_WIDTH;
+      lines.push(`> ${truncate(item.description, descWidth)}`);
     }
-
-    const rawImage = options?.hideImage ? undefined : item.image;
-    const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
-    const rawFallbackImage = options?.hideImage
-      ? undefined
-      : item.fallbackImage;
-    const fallbackImage =
-      rawFallbackImage && !isSvgUrl(rawFallbackImage)
-        ? rawFallbackImage
-        : undefined;
 
     const text = lines.join("\n");
-    if (!text && !image) {
+    if (!text && !item.image) {
       return null;
     }
 
     return {
       text,
-      image,
-      ...(fallbackImage ? { fallbackImage } : {}),
+      image: item.image,
+      ...(item.fallbackImage ? { fallbackImage: item.fallbackImage } : {}),
     };
   }
 
@@ -334,45 +301,28 @@ export function formatPreview(
   let firstImage: string | undefined = undefined;
   let firstFallbackImage: string | undefined = undefined;
 
-  results.forEach((item, index) => {
+  effectiveResults.forEach((item, index) => {
     const num = index + 1;
     const block = Match.valueTags(item, {
       Filtered: () => `${num}. [已过滤]`,
       Failure: ({ error }) => `${num}. [提取失败：${error.message}]`,
       Success: ({ data, expanded }) => {
-        const customizer = findSiteCustomizer(data.url);
-        const options = customizer?.formatItem?.({
-          metadata: data,
-          isSingle: false,
-        });
-
-        const rawTitle = options?.title ?? data.title;
         let line: string;
-        if (rawTitle) {
-          line = `${num}. ${truncate(rawTitle)}`;
-          if (!options?.hideDescription) {
-            const rawDescription = options?.description ?? data.description;
-            if (rawDescription) {
-              const descWidth = expanded
-                ? EXPANDED_DESCRIPTION_MAX_WIDTH
-                : DEFAULT_DESCRIPTION_MAX_WIDTH;
-              line += `\n> ${truncate(rawDescription, descWidth)}`;
-            }
+        if (data.title) {
+          line = `${num}. ${truncate(data.title)}`;
+          if (data.description) {
+            const descWidth = expanded
+              ? EXPANDED_DESCRIPTION_MAX_WIDTH
+              : DEFAULT_DESCRIPTION_MAX_WIDTH;
+            line += `\n> ${truncate(data.description, descWidth)}`;
           }
         } else {
           line = `${num}. [提取失败：未获取到网页标题]`;
         }
 
-        if (
-          !firstImage &&
-          !options?.hideImage &&
-          data.image &&
-          !isSvgUrl(data.image)
-        ) {
+        if (!firstImage && data.image) {
           firstImage = data.image;
-          const rawFallback = data.fallbackImage;
-          firstFallbackImage =
-            rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
+          firstFallbackImage = data.fallbackImage;
         }
         return line;
       },
@@ -592,14 +542,9 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
       });
     }
 
-    const customizer = findSiteCustomizer(urlObj);
-    if (customizer?.scrape) {
-      const customMetadata = yield* customizer.scrape({
-        url: urlObj,
-      });
-      if (customMetadata) {
-        return customMetadata;
-      }
+    const customMetadata = yield* scrapeWithSiteOverride(urlObj);
+    if (customMetadata) {
+      return customMetadata;
     }
 
     const request = HttpClientRequest.get(url).pipe(

@@ -10,114 +10,49 @@ import {
 import type { PageMetadata } from "./LinkPreview.ts";
 import { fetchJson, type HttpFetchError } from "../../utils/HttpClient.ts";
 
-export type MetascraperRuleContext = createMetascraper.RulesTestOptions;
-
-interface SiteFormatOptions {
-  readonly hideTitle?: boolean;
-  readonly hideDescription?: boolean;
-  readonly hideImage?: boolean;
-  readonly title?: string;
-  readonly description?: string;
+function parseUrlSafe(rawUrl: string | URL): URL | undefined {
+  if (!Predicate.isString(rawUrl)) {
+    return rawUrl;
+  }
+  try {
+    return new URL(rawUrl);
+  } catch {
+    return undefined;
+  }
 }
 
-export interface SiteCustomizer {
+function isDonmaiHost(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return host === "donmai.us" || host.endsWith(".donmai.us");
+}
+
+function isPixivHost(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return host === "pixiv.net" || host.endsWith(".pixiv.net");
+}
+
+// ============================================================================
+// Stage 1: Pre-fetch site scrapers
+// ============================================================================
+
+interface SiteScraper {
   readonly id: string;
   readonly match: (url: URL) => boolean;
-  readonly metascraperRules?: {
-    readonly description?: (
-      context: MetascraperRuleContext,
-    ) => string | undefined;
-    readonly title?: (context: MetascraperRuleContext) => string | undefined;
-    readonly image?: (context: MetascraperRuleContext) => string | undefined;
-    readonly fallbackImage?: (
-      context: MetascraperRuleContext,
-    ) => string | undefined;
-  };
-  readonly formatItem?: (params: {
-    readonly metadata: PageMetadata;
-    readonly isSingle: boolean;
-  }) => SiteFormatOptions;
-  readonly scrape?: (context: {
-    readonly url: URL;
-  }) => Effect.Effect<
+  readonly scrape: (
+    url: URL,
+  ) => Effect.Effect<
     PageMetadata | undefined,
     HttpFetchError,
     HttpClient.HttpClient
   >;
 }
 
-export const githubCustomizer: SiteCustomizer = {
-  id: "github",
-  match: (url) => url.hostname.toLowerCase() === "github.com",
-  formatItem: ({ isSingle }) => ({
-    hideDescription: true,
-    hideTitle: isSingle,
-  }),
-};
-
-export const hackerNewsCustomizer: SiteCustomizer = {
-  id: "hacker-news",
-  match: (url) => url.hostname.toLowerCase() === "news.ycombinator.com",
-  formatItem: () => ({
-    hideImage: true,
-  }),
-  metascraperRules: {
-    description: ({ htmlDom, url }) => {
-      try {
-        const urlObj = new URL(url);
-        if (urlObj.hostname.toLowerCase() !== "news.ycombinator.com") {
-          return undefined;
-        }
-
-        if (urlObj.pathname !== "/item" || !urlObj.searchParams.has("id")) {
-          return undefined;
-        }
-
-        const titleline = htmlDom(".titleline");
-        if (titleline.length === 0) {
-          return undefined;
-        }
-
-        const titleAnchor = titleline.find("a").first();
-        const href = titleAnchor.attr("href");
-        if (!href) {
-          return undefined;
-        }
-
-        const targetUrl = new URL(href, url);
-        const targetHost = targetUrl.hostname.toLowerCase();
-        const isHnHost =
-          targetHost === "news.ycombinator.com" ||
-          targetHost === "ycombinator.com";
-
-        if (isHnHost && targetUrl.pathname === "/item") {
-          return undefined;
-        }
-
-        if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-          return undefined;
-        }
-
-        return targetUrl.href;
-      } catch {
-        return undefined;
-      }
-    },
-  },
-};
-
 const DANBOORU_POST_REGEX = /^\/posts\/(\d+)/;
 
-export const danbooruCustomizer: SiteCustomizer = {
-  id: "danbooru",
-  match: (url) => {
-    const host = url.hostname.toLowerCase();
-    return host === "donmai.us" || host.endsWith(".donmai.us");
-  },
-  formatItem: () => ({
-    hideDescription: true,
-  }),
-  scrape: ({ url }) =>
+export const danbooruPostScraper: SiteScraper = {
+  id: "danbooru-post",
+  match: (url) => isDonmaiHost(url) && DANBOORU_POST_REGEX.test(url.pathname),
+  scrape: (url) =>
     Effect.gen(function* () {
       const postMatch = url.pathname.match(DANBOORU_POST_REGEX);
       if (!postMatch || !postMatch[1]) {
@@ -155,87 +90,158 @@ export const danbooruCustomizer: SiteCustomizer = {
     ),
 };
 
+const siteScrapers: ReadonlyArray<SiteScraper> = [danbooruPostScraper];
+
+export function scrapeWithSiteOverride(
+  url: URL,
+): Effect.Effect<
+  PageMetadata | undefined,
+  HttpFetchError,
+  HttpClient.HttpClient
+> {
+  const scraper = siteScrapers.find((entry) => entry.match(url));
+  return scraper
+    ? scraper.scrape(url)
+    : Effect.succeed(undefined as PageMetadata | undefined);
+}
+// ============================================================================
+// Stage 2: Native metascraper HTML extraction rules
+// ============================================================================
+
+export const hackerNewsRules = {
+  pkgName: "site:hacker-news",
+  test: ({ url }: createMetascraper.RulesTestOptions) => {
+    const urlObj = parseUrlSafe(url);
+    return Boolean(
+      urlObj &&
+      urlObj.hostname.toLowerCase() === "news.ycombinator.com" &&
+      urlObj.pathname === "/item" &&
+      urlObj.searchParams.has("id"),
+    );
+  },
+  description: ({ htmlDom, url }: createMetascraper.RulesTestOptions) => {
+    try {
+      const titleline = htmlDom(".titleline");
+      if (titleline.length === 0) {
+        return undefined;
+      }
+
+      const titleAnchor = titleline.find("a").first();
+      const href = titleAnchor.attr("href");
+      if (!href) {
+        return undefined;
+      }
+
+      const targetUrl = new URL(href, url);
+      const targetHost = targetUrl.hostname.toLowerCase();
+      const isHnHost =
+        targetHost === "news.ycombinator.com" ||
+        targetHost === "ycombinator.com";
+
+      if (isHnHost && targetUrl.pathname === "/item") {
+        return undefined;
+      }
+
+      if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
+        return undefined;
+      }
+
+      return targetUrl.href;
+    } catch {
+      return undefined;
+    }
+  },
+} satisfies createMetascraper.Rules;
+
 const PIXIV_ARTWORKS_REGEX = /^(?:\/[a-zA-Z-]+)?\/artworks\/(\d+)(?:\/.*)?$/;
 
 function extractPixivArtworkId(rawUrl: string | URL): string | undefined {
-  try {
-    const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
-    return url.pathname.match(PIXIV_ARTWORKS_REGEX)?.[1];
-  } catch {
-    return undefined;
-  }
+  const url = parseUrlSafe(rawUrl);
+  return url?.pathname.match(PIXIV_ARTWORKS_REGEX)?.[1];
 }
 
-export const pixivCustomizer: SiteCustomizer = {
-  id: "pixiv",
-  match: (url) => {
-    const host = url.hostname.toLowerCase();
-    return host === "pixiv.net" || host.endsWith(".pixiv.net");
+export const pixivRules = {
+  pkgName: "site:pixiv",
+  test: ({ url }: createMetascraper.RulesTestOptions) => {
+    const urlObj = parseUrlSafe(url);
+    return Boolean(
+      urlObj && isPixivHost(urlObj) && extractPixivArtworkId(urlObj),
+    );
   },
-  metascraperRules: {
-    image: ({ url }) => {
-      const illustId = extractPixivArtworkId(url);
-      return illustId ? `https://pixiv.cat/${illustId}.jpg` : undefined;
-    },
-    fallbackImage: ({ htmlDom, url }) => {
-      const illustId = extractPixivArtworkId(url);
-      if (!illustId) {
-        return undefined;
-      }
-      return (
-        htmlDom('meta[property="og:image"]').attr("content") ||
-        htmlDom('meta[property="twitter:image"]').attr("content") ||
-        htmlDom('meta[name="twitter:image"]').attr("content")
-      );
-    },
+  image: ({ url }: createMetascraper.RulesTestOptions) => {
+    const illustId = extractPixivArtworkId(url);
+    return illustId ? `https://pixiv.cat/${illustId}.jpg` : undefined;
   },
-};
+  fallbackImage: ({ htmlDom }: createMetascraper.RulesTestOptions) => {
+    return (
+      htmlDom('meta[property="og:image"]').attr("content") ||
+      htmlDom('meta[property="twitter:image"]').attr("content") ||
+      htmlDom('meta[name="twitter:image"]').attr("content")
+    );
+  },
+} satisfies createMetascraper.Rules;
 
-const siteCustomizers: ReadonlyArray<SiteCustomizer> = [
-  githubCustomizer,
-  hackerNewsCustomizer,
-  danbooruCustomizer,
-  pixivCustomizer,
+export const siteMetascraperRules: ReadonlyArray<createMetascraper.Rules> = [
+  hackerNewsRules,
+  pixivRules,
 ];
 
-export function findSiteCustomizer(
+// ============================================================================
+// Stage 3: Post-scrape display policies
+// ============================================================================
+
+export interface SiteDisplayPolicy {
+  readonly hideTitle?: boolean;
+  readonly hideDescription?: boolean;
+  readonly hideImage?: boolean;
+}
+
+interface SiteDisplayRule {
+  readonly id: string;
+  readonly match: (url: URL) => boolean;
+  readonly getPolicy: (context: {
+    readonly isSingle: boolean;
+  }) => SiteDisplayPolicy;
+}
+
+const githubDisplayRule: SiteDisplayRule = {
+  id: "github",
+  match: (url) => url.hostname.toLowerCase() === "github.com",
+  getPolicy: ({ isSingle }) => ({
+    hideDescription: true,
+    hideTitle: isSingle,
+  }),
+};
+
+const hackerNewsDisplayRule: SiteDisplayRule = {
+  id: "hacker-news",
+  match: (url) => url.hostname.toLowerCase() === "news.ycombinator.com",
+  getPolicy: () => ({
+    hideImage: true,
+  }),
+};
+
+const danbooruDisplayRule: SiteDisplayRule = {
+  id: "danbooru",
+  match: isDonmaiHost,
+  getPolicy: () => ({
+    hideDescription: true,
+  }),
+};
+
+const siteDisplayRules: ReadonlyArray<SiteDisplayRule> = [
+  githubDisplayRule,
+  hackerNewsDisplayRule,
+  danbooruDisplayRule,
+];
+
+export function getSiteDisplayPolicy(
   rawUrl: string | URL,
-): SiteCustomizer | undefined {
-  try {
-    const url = Predicate.isString(rawUrl) ? new URL(rawUrl) : rawUrl;
-    return siteCustomizers.find((c) => c.match(url));
-  } catch {
+  context: { readonly isSingle: boolean },
+): SiteDisplayPolicy | undefined {
+  const url = parseUrlSafe(rawUrl);
+  if (!url) {
     return undefined;
   }
+  return siteDisplayRules.find((rule) => rule.match(url))?.getPolicy(context);
 }
-
-function createSiteMetascraperPlugin(): () => createMetascraper.Rules {
-  return () => ({
-    description: [
-      ({ htmlDom, url }: MetascraperRuleContext) => {
-        const customizer = findSiteCustomizer(url);
-        return customizer?.metascraperRules?.description?.({ htmlDom, url });
-      },
-    ],
-    title: [
-      ({ htmlDom, url }: MetascraperRuleContext) => {
-        const customizer = findSiteCustomizer(url);
-        return customizer?.metascraperRules?.title?.({ htmlDom, url });
-      },
-    ],
-    image: [
-      ({ htmlDom, url }: MetascraperRuleContext) => {
-        const customizer = findSiteCustomizer(url);
-        return customizer?.metascraperRules?.image?.({ htmlDom, url });
-      },
-    ],
-    fallbackImage: [
-      ({ htmlDom, url }: MetascraperRuleContext) => {
-        const customizer = findSiteCustomizer(url);
-        return customizer?.metascraperRules?.fallbackImage?.({ htmlDom, url });
-      },
-    ],
-  });
-}
-
-export const siteMetascraperPlugin = createSiteMetascraperPlugin();

@@ -1,186 +1,61 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import * as cheerio from "cheerio";
+import createMetascraper from "metascraper";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { DanbooruTagMatcher } from "../../../src/features/danbooru/DanbooruTagMatcher.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import {
-  danbooruCustomizer,
-  findSiteCustomizer,
-  githubCustomizer,
-  hackerNewsCustomizer,
-  pixivCustomizer,
+  danbooruPostScraper,
+  getSiteDisplayPolicy,
+  hackerNewsRules,
+  pixivRules,
+  scrapeWithSiteOverride,
+  siteMetascraperRules,
 } from "../../../src/features/link-preview/LinkPreviewSites.ts";
 
 describe("LinkPreviewSites", () => {
-  describe("findSiteCustomizer", () => {
-    it("matches github.com URLs case-insensitively", () => {
+  describe("danbooruPostScraper & scrapeWithSiteOverride", () => {
+    it("matches donmai.us post URLs across subdomains", () => {
       expect(
-        findSiteCustomizer("https://github.com/kidonng/sakurako")?.id,
-      ).toBe("github");
-      expect(findSiteCustomizer("https://GITHUB.COM/owner/repo")?.id).toBe(
-        "github",
+        danbooruPostScraper.match(
+          new URL("https://danbooru.donmai.us/posts/12459835"),
+        ),
+      ).toBe(true);
+      expect(
+        danbooruPostScraper.match(
+          new URL("https://testbooru.donmai.us/posts/1"),
+        ),
+      ).toBe(true);
+      expect(
+        danbooruPostScraper.match(
+          new URL("https://safebooru.donmai.us/posts/1"),
+        ),
+      ).toBe(true);
+    });
+
+    it("does not match non-post or non-donmai URLs and skips HTTP calls", async () => {
+      const nonPostUrl = new URL(
+        "https://danbooru.donmai.us/posts?tags=cat_ears",
       );
-    });
+      const otherUrl = new URL("https://example.com/posts/123");
 
-    it("matches news.ycombinator.com URLs", () => {
-      expect(
-        findSiteCustomizer("https://news.ycombinator.com/item?id=12345")?.id,
-      ).toBe("hacker-news");
-    });
-    it("matches danbooru.donmai.us and related donmai.us URLs", () => {
-      expect(
-        findSiteCustomizer("https://danbooru.donmai.us/posts/12459835")?.id,
-      ).toBe("danbooru");
-      expect(
-        findSiteCustomizer("https://testbooru.donmai.us/posts/1")?.id,
-      ).toBe("danbooru");
-      expect(
-        findSiteCustomizer("https://safebooru.donmai.us/posts/1")?.id,
-      ).toBe("danbooru");
-    });
+      expect(danbooruPostScraper.match(nonPostUrl)).toBe(false);
+      expect(danbooruPostScraper.match(otherUrl)).toBe(false);
 
-    it("returns undefined for unrecognized or invalid URLs", () => {
-      expect(findSiteCustomizer("https://example.com")).toBeUndefined();
-      expect(findSiteCustomizer("not-a-valid-url")).toBeUndefined();
-    });
-  });
-
-  describe("githubCustomizer", () => {
-    it("hides title and description when isSingle is true", () => {
-      const options = githubCustomizer.formatItem?.({
-        metadata: {
-          url: "https://github.com/kidonng/sakurako",
-          title: "kidonng/sakurako",
-          description: "A QQ bot",
-          image: "https://example.com/cover.png",
-        },
-        isSingle: true,
+      const httpLayer = makeTestHttpClient(() => {
+        throw new Error("Should not be called");
       });
 
-      expect(options).toEqual({
-        hideDescription: true,
-        hideTitle: true,
-      });
-    });
+      const nonPostMetadata = await Effect.runPromise(
+        scrapeWithSiteOverride(nonPostUrl).pipe(Effect.provide(httpLayer)),
+      );
+      const otherMetadata = await Effect.runPromise(
+        scrapeWithSiteOverride(otherUrl).pipe(Effect.provide(httpLayer)),
+      );
 
-    it("hides description but preserves title when isSingle is false", () => {
-      const options = githubCustomizer.formatItem?.({
-        metadata: {
-          url: "https://github.com/kidonng/sakurako",
-          title: "kidonng/sakurako",
-          description: "A QQ bot",
-          image: "https://example.com/cover.png",
-        },
-        isSingle: false,
-      });
-
-      expect(options).toEqual({
-        hideDescription: true,
-        hideTitle: false,
-      });
-    });
-  });
-
-  describe("hackerNewsCustomizer", () => {
-    const getHnDescription = hackerNewsCustomizer.metascraperRules?.description;
-
-    it("extracts external link on top-level submission", () => {
-      const html = `<span class="titleline"><a href="https://lexifina.com/blog/git-for-the-us-code">Git for the US Code</a></span>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/item?id=50268380",
-      });
-
-      expect(desc).toBe("https://lexifina.com/blog/git-for-the-us-code");
-    });
-
-    it("decodes HTML entities in external links", () => {
-      const html = `<span class="titleline"><a href="https://example.com/article?ref=hn&amp;id=42">Article</a></span>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/item?id=50268380",
-      });
-
-      expect(desc).toBe("https://example.com/article?ref=hn&id=42");
-    });
-
-    it("excludes Ask HN self posts with relative item links", () => {
-      const html = `<span class="titleline"><a href="item?id=50260146">DietPi v10.8 has been released</a></span>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/item?id=50260146",
-      });
-
-      expect(desc).toBeUndefined();
-    });
-
-    it("excludes Ask HN self posts with absolute item links", () => {
-      const html = `<span class="titleline"><a href="https://news.ycombinator.com/item?id=50260146">Ask HN: What are you working on?</a></span>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/item?id=50260146",
-      });
-
-      expect(desc).toBeUndefined();
-    });
-
-    it("excludes comment pages lacking titleline", () => {
-      const html = `<div class="comment"><div class="commtext">A comment with a link <a href="https://example.com">example</a></div></div>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/item?id=43180000",
-      });
-
-      expect(desc).toBeUndefined();
-    });
-
-    it("excludes non-item pages such as the frontpage", () => {
-      const html = `<span class="titleline"><a href="https://example.com">Story</a></span>`;
-      const htmlDom = cheerio.load(html);
-
-      const desc = getHnDescription?.({
-        htmlDom,
-        url: "https://news.ycombinator.com/",
-      });
-
-      expect(desc).toBeUndefined();
-    });
-
-    it("hides image via formatItem", () => {
-      const options = hackerNewsCustomizer.formatItem?.({
-        metadata: {
-          url: "https://news.ycombinator.com/item?id=50268380",
-          title: "Git for the US Code | Hacker News",
-        },
-        isSingle: true,
-      });
-
-      expect(options?.hideImage).toBe(true);
-    });
-  });
-
-  describe("danbooruCustomizer", () => {
-    it("hides description via formatItem", () => {
-      const options = danbooruCustomizer.formatItem?.({
-        metadata: {
-          url: "https://danbooru.donmai.us/posts/12459835",
-          title: "Title",
-          description: "View this image",
-        },
-        isSingle: true,
-      });
-      expect(options?.hideDescription).toBe(true);
+      expect(nonPostMetadata).toBeUndefined();
+      expect(otherMetadata).toBeUndefined();
     });
 
     it("fetches post JSON directly and formats preview with Chinese translations", async () => {
@@ -213,9 +88,9 @@ describe("LinkPreviewSites", () => {
       });
 
       const metadata = await Effect.runPromise(
-        danbooruCustomizer.scrape!({
-          url: new URL("https://danbooru.donmai.us/posts/12459835"),
-        }).pipe(Effect.provide(Layer.merge(httpLayer, MatcherMock))),
+        scrapeWithSiteOverride(
+          new URL("https://danbooru.donmai.us/posts/12459835"),
+        ).pipe(Effect.provide(Layer.merge(httpLayer, MatcherMock))),
       );
 
       expect(metadata).toEqual({
@@ -226,29 +101,15 @@ describe("LinkPreviewSites", () => {
       });
     });
 
-    it("returns undefined for non-post URLs to let standard scraper handle them", async () => {
-      const httpLayer = makeTestHttpClient(() => {
-        throw new Error("Should not be called");
-      });
-
-      const metadata = await Effect.runPromise(
-        danbooruCustomizer.scrape!({
-          url: new URL("https://danbooru.donmai.us/posts?tags=cat_ears"),
-        }).pipe(Effect.provide(httpLayer)),
-      );
-
-      expect(metadata).toBeUndefined();
-    });
-
     it("fails with 404 when post JSON returns 404", async () => {
       const httpLayer = makeTestHttpClient(() => {
         return new Response("Not Found", { status: 404 });
       });
 
       const error = await Effect.runPromise(
-        danbooruCustomizer.scrape!({
-          url: new URL("https://danbooru.donmai.us/posts/9999999"),
-        }).pipe(Effect.provide(httpLayer), Effect.flip),
+        scrapeWithSiteOverride(
+          new URL("https://danbooru.donmai.us/posts/9999999"),
+        ).pipe(Effect.provide(httpLayer), Effect.flip),
       );
       expect(error._tag).toBe("HttpNotFoundError");
       if (error._tag === "HttpNotFoundError") {
@@ -262,72 +123,262 @@ describe("LinkPreviewSites", () => {
       });
 
       const metadata = await Effect.runPromise(
-        danbooruCustomizer.scrape!({
-          url: new URL("https://danbooru.donmai.us/posts/9999999"),
-        }).pipe(Effect.provide(httpLayer)),
+        scrapeWithSiteOverride(
+          new URL("https://danbooru.donmai.us/posts/9999999"),
+        ).pipe(Effect.provide(httpLayer)),
       );
       expect(metadata).toBeUndefined();
     });
   });
 
-  describe("pixivCustomizer", () => {
-    it("matches pixiv.net and www.pixiv.net", () => {
+  describe("hackerNewsRules", () => {
+    it("gates rules via test() for HN item URLs only", () => {
+      const emptyDom = cheerio.load("<html></html>");
       expect(
-        findSiteCustomizer("https://www.pixiv.net/artworks/82775556")?.id,
-      ).toBe("pixiv");
+        hackerNewsRules.test({
+          htmlDom: emptyDom,
+          url: "https://news.ycombinator.com/item?id=50268380",
+        }),
+      ).toBe(true);
       expect(
-        findSiteCustomizer("https://pixiv.net/artworks/82775556")?.id,
-      ).toBe("pixiv");
+        hackerNewsRules.test({
+          htmlDom: emptyDom,
+          url: "https://news.ycombinator.com/",
+        }),
+      ).toBe(false);
       expect(
-        findSiteCustomizer("https://other.com/artworks/82775556"),
-      ).toBeUndefined();
+        hackerNewsRules.test({
+          htmlDom: emptyDom,
+          url: "https://example.com/item?id=50268380",
+        }),
+      ).toBe(false);
+      expect(
+        hackerNewsRules.test({
+          htmlDom: emptyDom,
+          url: "not-a-valid-url",
+        }),
+      ).toBe(false);
+    });
+
+    it("extracts external link on top-level submission", () => {
+      const html = `<span class="titleline"><a href="https://lexifina.com/blog/git-for-the-us-code">Git for the US Code</a></span>`;
+      const htmlDom = cheerio.load(html);
+
+      const desc = hackerNewsRules.description({
+        htmlDom,
+        url: "https://news.ycombinator.com/item?id=50268380",
+      });
+
+      expect(desc).toBe("https://lexifina.com/blog/git-for-the-us-code");
+    });
+
+    it("decodes HTML entities in external links", () => {
+      const html = `<span class="titleline"><a href="https://example.com/article?ref=hn&amp;id=42">Article</a></span>`;
+      const htmlDom = cheerio.load(html);
+
+      const desc = hackerNewsRules.description({
+        htmlDom,
+        url: "https://news.ycombinator.com/item?id=50268380",
+      });
+
+      expect(desc).toBe("https://example.com/article?ref=hn&id=42");
+    });
+
+    it("excludes Ask HN self posts with relative item links", () => {
+      const html = `<span class="titleline"><a href="item?id=50260146">DietPi v10.8 has been released</a></span>`;
+      const htmlDom = cheerio.load(html);
+
+      const desc = hackerNewsRules.description({
+        htmlDom,
+        url: "https://news.ycombinator.com/item?id=50260146",
+      });
+
+      expect(desc).toBeUndefined();
+    });
+
+    it("excludes Ask HN self posts with absolute item links", () => {
+      const html = `<span class="titleline"><a href="https://news.ycombinator.com/item?id=50260146">Ask HN: What are you working on?</a></span>`;
+      const htmlDom = cheerio.load(html);
+
+      const desc = hackerNewsRules.description({
+        htmlDom,
+        url: "https://news.ycombinator.com/item?id=50260146",
+      });
+
+      expect(desc).toBeUndefined();
+    });
+
+    it("excludes comment pages lacking titleline", () => {
+      const html = `<div class="comment"><div class="commtext">A comment with a link <a href="https://example.com">example</a></div></div>`;
+      const htmlDom = cheerio.load(html);
+
+      const desc = hackerNewsRules.description({
+        htmlDom,
+        url: "https://news.ycombinator.com/item?id=43180000",
+      });
+
+      expect(desc).toBeUndefined();
+    });
+
+    it("gates out frontpage through createMetascraper(siteMetascraperRules)", async () => {
+      const scraper = createMetascraper([...siteMetascraperRules]);
+      const html = `<span class="titleline"><a href="https://example.com">Story</a></span>`;
+
+      const metadata = await scraper({
+        html,
+        url: "https://news.ycombinator.com/",
+      });
+
+      expect(metadata.description).toBeNull();
+    });
+  });
+
+  describe("pixivRules", () => {
+    it("gates rules via test() for pixiv artwork URLs only", () => {
+      const emptyDom = cheerio.load("<html></html>");
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "https://www.pixiv.net/artworks/82775556",
+        }),
+      ).toBe(true);
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "https://pixiv.net/en/artworks/82775556",
+        }),
+      ).toBe(true);
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "https://www.pixiv.net/users/12345",
+        }),
+      ).toBe(false);
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "https://www.pixiv.net/ranking.php",
+        }),
+      ).toBe(false);
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "https://other.com/artworks/82775556",
+        }),
+      ).toBe(false);
+      expect(
+        pixivRules.test({
+          htmlDom: emptyDom,
+          url: "not-a-valid-url",
+        }),
+      ).toBe(false);
     });
 
     it("extracts pixiv.cat image URL from standard artwork path", () => {
-      const url = new URL("https://www.pixiv.net/artworks/82775556");
-      const image = pixivCustomizer.metascraperRules?.image?.({
-        url: url.href,
+      const image = pixivRules.image({
+        url: "https://www.pixiv.net/artworks/82775556",
         htmlDom: cheerio.load("<html></html>"),
       });
       expect(image).toBe("https://pixiv.cat/82775556.jpg");
     });
 
     it("extracts pixiv.cat image URL with language prefix", () => {
-      const url = new URL("https://www.pixiv.net/en/artworks/82775556");
-      const image = pixivCustomizer.metascraperRules?.image?.({
-        url: url.href,
+      const image = pixivRules.image({
+        url: "https://www.pixiv.net/en/artworks/82775556",
         htmlDom: cheerio.load("<html></html>"),
       });
       expect(image).toBe("https://pixiv.cat/82775556.jpg");
     });
 
-    it("returns undefined for non-artwork URLs", () => {
-      const userUrl = new URL("https://www.pixiv.net/users/12345");
-      expect(
-        pixivCustomizer.metascraperRules?.image?.({
-          url: userUrl.href,
-          htmlDom: cheerio.load("<html></html>"),
-        }),
-      ).toBeUndefined();
-
-      const rankingUrl = new URL("https://www.pixiv.net/ranking.php");
-      expect(
-        pixivCustomizer.metascraperRules?.image?.({
-          url: rankingUrl.href,
-          htmlDom: cheerio.load("<html></html>"),
-        }),
-      ).toBeUndefined();
-    });
-
     it("extracts fallbackImage from og:image or twitter:image", () => {
       const html = `<html><head><meta property="og:image" content="https://embed.pixiv.net/decorate.php?illust_id=82775556"></head></html>`;
-      const fallback = pixivCustomizer.metascraperRules?.fallbackImage?.({
+      const fallback = pixivRules.fallbackImage({
         url: "https://www.pixiv.net/artworks/82775556",
         htmlDom: cheerio.load(html),
       });
       expect(fallback).toBe(
         "https://embed.pixiv.net/decorate.php?illust_id=82775556",
       );
+    });
+
+    it("gates out non-artwork pixiv URLs through createMetascraper(siteMetascraperRules)", async () => {
+      const scraper = createMetascraper([...siteMetascraperRules]);
+      const html = `<html><head><meta property="og:image" content="https://example.com/avatar.jpg"></head></html>`;
+
+      const metadata = await scraper({
+        html,
+        url: "https://www.pixiv.net/users/12345",
+      });
+
+      expect(metadata.image).toBeNull();
+    });
+  });
+
+  describe("getSiteDisplayPolicy", () => {
+    it("hides title and description for github.com when isSingle is true", () => {
+      expect(
+        getSiteDisplayPolicy("https://github.com/kidonng/sakurako", {
+          isSingle: true,
+        }),
+      ).toEqual({
+        hideDescription: true,
+        hideTitle: true,
+      });
+      expect(
+        getSiteDisplayPolicy("https://GITHUB.COM/owner/repo", {
+          isSingle: true,
+        }),
+      ).toEqual({
+        hideDescription: true,
+        hideTitle: true,
+      });
+    });
+
+    it("hides description but preserves title for github.com when isSingle is false", () => {
+      expect(
+        getSiteDisplayPolicy("https://github.com/kidonng/sakurako", {
+          isSingle: false,
+        }),
+      ).toEqual({
+        hideDescription: true,
+        hideTitle: false,
+      });
+    });
+
+    it("hides image for news.ycombinator.com", () => {
+      expect(
+        getSiteDisplayPolicy("https://news.ycombinator.com/item?id=12345", {
+          isSingle: true,
+        }),
+      ).toEqual({
+        hideImage: true,
+      });
+    });
+
+    it("hides description for donmai.us post and non-post URLs", () => {
+      expect(
+        getSiteDisplayPolicy("https://danbooru.donmai.us/posts/12459835", {
+          isSingle: true,
+        }),
+      ).toEqual({
+        hideDescription: true,
+      });
+      expect(
+        getSiteDisplayPolicy("https://danbooru.donmai.us/posts?tags=cat_ears", {
+          isSingle: true,
+        }),
+      ).toEqual({
+        hideDescription: true,
+      });
+    });
+
+    it("returns undefined for unrecognized or invalid URLs", () => {
+      expect(
+        getSiteDisplayPolicy("https://example.com", { isSingle: true }),
+      ).toBeUndefined();
+      expect(
+        getSiteDisplayPolicy("not-a-valid-url", { isSingle: true }),
+      ).toBeUndefined();
     });
   });
 });
