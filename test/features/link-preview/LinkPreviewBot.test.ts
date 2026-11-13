@@ -1,4 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import {
+  SnowLumaApiError,
+  SnowLumaConnectionError,
+  SnowLumaTimeoutError,
+} from "@snowluma/sdk";
 import sharp from "sharp";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { HttpBody } from "effect/http";
@@ -110,6 +115,42 @@ describe("handleLinkPreviewMessage", () => {
     ]);
   });
 
+  it("remains silent when single github.com link image download fails with 429", async () => {
+    const { item, getReplies } = createMockMessage({
+      raw_message: "https://github.com/aurora0x27/simp-vmgen/",
+    });
+
+    const githubHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>GitHub - aurora0x27/simp-vmgen</title>
+          <meta name="description" content="simple and rebuildable qemu vm workflow generator">
+          <meta property="og:image" content="https://opengraph.githubassets.com/abc/aurora0x27/simp-vmgen">
+        </head>
+        <body>GitHub</body>
+      </html>
+    `;
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("opengraph.githubassets.com")) {
+        return new Response("Too Many Requests", {
+          status: 429,
+          statusText: "Too Many Requests",
+        });
+      }
+      return new Response(githubHtml, {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
+    );
+
+    expect(getReplies().length).toBe(0);
+  });
+
   it("logs the failed URL and error details when sending link preview reply fails", async () => {
     const loggedMessages: string[] = [];
     const testLogger = Logger.make((options) => {
@@ -188,7 +229,12 @@ describe("handleLinkPreviewMessage", () => {
       onReply: () => {
         attempt++;
         if (attempt === 1) {
-          throw new Error("HTTP download failed: 403");
+          throw new SnowLumaApiError({
+            status: "failed",
+            retcode: 100,
+            data: null,
+            wording: "HTTP download failed: 403",
+          });
         }
         return { message_id: 12345 };
       },
@@ -227,6 +273,82 @@ describe("handleLinkPreviewMessage", () => {
         text: "Title",
       },
     });
+  });
+
+  it("does not fall back to text-only reply when reply times out with SnowLumaTimeoutError", async () => {
+    const loggedErrors: string[] = [];
+    const testLogger = Logger.make((options) => {
+      if (options.logLevel === "Error") {
+        const msg = Array.isArray(options.message)
+          ? options.message.map(String).join(" ")
+          : String(options.message);
+        loggedErrors.push(msg);
+      }
+    });
+
+    const { item, getReplies } = createMockMessage({
+      raw_message: "https://entire.com/",
+      replyError: new SnowLumaTimeoutError(
+        "SnowLuma WebSocket request timed out after 30000ms",
+        30_000,
+      ),
+    });
+
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("home.png")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response(
+        '<html><head><title>Entire · The Git forge for agents</title><meta property="og:image" content="https://entire.com/images/og/home.png?v=13"></head></html>',
+        { status: 200, headers: { "Content-Type": "text/html" } },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(layer, Logger.layer([testLogger]))),
+      ),
+    );
+
+    const repliesAttempted = getReplies();
+    expect(repliesAttempted.length).toBe(1);
+    expect(Array.isArray(repliesAttempted[0])).toBe(true);
+    expect(
+      (repliesAttempted[0] as Array<{ type: string }>).some(
+        (s) => s.type === "image",
+      ),
+    ).toBe(true);
+    expect(loggedErrors.length).toBe(1);
+    expect(loggedErrors[0]).toContain("timed out after 30000ms");
+  });
+
+  it("does not fall back to text-only reply when connection closes with SnowLumaConnectionError", async () => {
+    const { item, getReplies } = createMockMessage({
+      raw_message: "https://example.com/with-image",
+      replyError: new SnowLumaConnectionError("SnowLuma WebSocket closed"),
+    });
+
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("cover.png")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response(
+        '<html><head><title>Title</title><meta property="og:image" content="https://example.com/cover.png"></head></html>',
+        { status: 200, headers: { "Content-Type": "text/html" } },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
+    );
+
+    expect(getReplies().length).toBe(1);
   });
 
   it("silences reply when single link preview is filtered by decision model", async () => {

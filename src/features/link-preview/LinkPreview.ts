@@ -1,7 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
 import type { OutgoingMessage } from "@snowluma/sdk/types";
-import type { SnowLumaApiClient } from "@snowluma/sdk";
+import {
+  type SnowLumaApiClient,
+  SnowLumaApiError,
+  SnowLumaMediaSendError,
+} from "@snowluma/sdk";
 import sharp from "sharp";
 import {
   Data,
@@ -712,6 +716,13 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
         })
       : undefined;
 
+    if (!formatted.text && !resolvedImage) {
+      yield* Effect.logInfo(
+        `${prefix} Link preview image failed to download and no text remains, remaining silent.`,
+      );
+      return;
+    }
+
     const buildOutgoing = (image?: string): OutgoingMessage =>
       image
         ? formatted.text
@@ -726,7 +737,11 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
       catch: (cause) => new SendLinkPreviewReplyError({ cause }),
     }).pipe(
       Effect.catch((error) => {
-        if (resolvedImage && formatted.text) {
+        const isDefinitiveFailure =
+          error.cause instanceof SnowLumaApiError ||
+          (error.cause instanceof SnowLumaMediaSendError &&
+            error.cause.stage === "upload");
+        if (resolvedImage && formatted.text && isDefinitiveFailure) {
           return Effect.logWarning(
             `Failed to send reply with image, falling back to text-only: ${formatErrorDetail(error.cause)}`,
           ).pipe(
