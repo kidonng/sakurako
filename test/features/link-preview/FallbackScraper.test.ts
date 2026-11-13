@@ -1,6 +1,14 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import { ConfigProvider, Deferred, Effect, Fiber, Layer, Logger, Redacted } from "effect";
+import {
+  ConfigProvider,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Logger,
+  Redacted,
+} from "effect";
 import { HttpBody, HttpClient } from "effect/http";
 import {
   createFirecrawlEngine,
@@ -398,7 +406,9 @@ describe("FallbackScraper", () => {
           expect(currentInFlight).toBe(2);
           yield* Deferred.succeed(releaseGate, undefined);
           return yield* Fiber.join(batchFiber);
-        }).pipe(Effect.provide(FallbackScraper.layerFromEngines([gatedEngine], 2))),
+        }).pipe(
+          Effect.provide(FallbackScraper.layerFromEngines([gatedEngine], 2)),
+        ),
       );
 
       expect(maxInFlight).toBe(2);

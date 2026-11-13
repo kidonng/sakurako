@@ -17,7 +17,7 @@ const FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
 const FIRECRAWL_BODY_TIMEOUT_MS = 25_000;
 const FIRECRAWL_HTTP_TIMEOUT = "30 seconds";
 
-export interface FallbackMetadata {
+interface FallbackMetadata {
   readonly title?: string;
   readonly description?: string;
   readonly image?: string;
@@ -259,9 +259,7 @@ export class FallbackScraper extends Context.Service<
 
             let lastError: FallbackScrapeError | undefined;
             for (const engine of engines) {
-              const attempt = yield* engine
-                .scrape(url)
-                .pipe(Effect.result);
+              const attempt = yield* engine.scrape(url).pipe(Effect.result);
               if (attempt._tag === "Success") {
                 return attempt.success;
               }

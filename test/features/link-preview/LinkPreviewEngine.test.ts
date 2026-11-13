@@ -896,9 +896,9 @@ describe("LinkPreviewEngine", () => {
 
       const resTimeout = await Effect.runPromise(
         Effect.gen(function* () {
-          const fiber = yield* scrapeMetadata(
-            "https://example.com/slow",
-          ).pipe(Effect.forkChild);
+          const fiber = yield* scrapeMetadata("https://example.com/slow").pipe(
+            Effect.forkChild,
+          );
           yield* TestClock.adjust("10 seconds");
           return yield* Fiber.join(fiber);
         }).pipe(
@@ -1027,9 +1027,7 @@ describe("LinkPreviewEngine", () => {
 
       const error = await Effect.runPromise(
         scrapeMetadata("https://example.com/403").pipe(
-          Effect.provide(
-            Layer.provideMerge(FallbackScraper.layer, httpLayer),
-          ),
+          Effect.provide(Layer.provideMerge(FallbackScraper.layer, httpLayer)),
           Effect.flip,
         ),
       );
