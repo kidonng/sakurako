@@ -34,6 +34,10 @@ import {
   type MetascraperRuleContext,
   siteMetascraperPlugin,
 } from "./LinkPreviewSites.ts";
+import {
+  FallbackScraper,
+  type FallbackScrapeResult,
+} from "./FallbackScraper.ts";
 import { filterPreviewResults } from "./DecisionFilter.ts";
 import { BotConfig, DEFAULT_DECISION_MODEL } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
@@ -491,6 +495,83 @@ function isPrivateHost(hostname: string): boolean {
 
 const DEFAULT_ACCEPT_HEADER = "text/html";
 
+export function shouldTriggerFallback(error: ScrapeMetadataError): boolean {
+  switch (error._tag) {
+    case "HttpRateLimitError":
+    case "HttpTimeoutError":
+    case "HttpNetworkError":
+      return true;
+    case "InvalidUrlError":
+    case "BlockedHostError":
+    case "HttpNotFoundError":
+    case "HttpNoContentError":
+    case "ParseMetadataError":
+      return false;
+  }
+}
+
+const parseHtmlMetadata = Effect.fnUntraced(function* (
+  originalUrl: string,
+  html: string,
+  targetUrl: string,
+): Effect.fn.Return<PageMetadata, ParseMetadataError> {
+  const metadata = yield* Effect.tryPromise({
+    try: () => scraper({ html, url: targetUrl }),
+    catch: (cause) => new ParseMetadataError({ url: originalUrl, cause }),
+  });
+
+  const title = metadata.title?.trim() || undefined;
+  const description = metadata.description?.trim() || undefined;
+  const rawImage = metadata.image?.trim() || undefined;
+  const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
+  const rawFallback =
+    (
+      metadata as unknown as Record<string, string | undefined>
+    ).fallbackImage?.trim() || undefined;
+  const fallbackImage =
+    rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
+
+  return {
+    url: originalUrl,
+    title,
+    description,
+    image,
+    fallbackImage,
+  };
+});
+
+const buildMetadataFromFallback = Effect.fnUntraced(function* (
+  originalUrl: string,
+  fallback: FallbackScrapeResult,
+): Effect.fn.Return<PageMetadata, ParseMetadataError> {
+  const fallbackImage =
+    fallback.metadata?.image && !isSvgUrl(fallback.metadata.image)
+      ? fallback.metadata.image
+      : undefined;
+
+  if (fallback.html) {
+    const parsed = yield* parseHtmlMetadata(
+      originalUrl,
+      fallback.html,
+      fallback.url,
+    );
+    return {
+      url: originalUrl,
+      title: parsed.title ?? fallback.metadata?.title,
+      description: parsed.description ?? fallback.metadata?.description,
+      image: parsed.image ?? fallbackImage,
+      ...(parsed.fallbackImage ? { fallbackImage: parsed.fallbackImage } : {}),
+    };
+  }
+
+  return {
+    url: originalUrl,
+    title: fallback.metadata?.title,
+    description: fallback.metadata?.description,
+    image: fallbackImage,
+  };
+});
+
 export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
   function* (
     url: string,
@@ -524,30 +605,49 @@ export const scrapeMetadata = Effect.fn("LinkPreview.scrapeMetadata")(
     const request = HttpClientRequest.get(url).pipe(
       HttpClientRequest.accept(DEFAULT_ACCEPT_HEADER),
     );
-    const { text: html, url: targetUrl } = yield* fetchText(request);
-    const metadata = yield* Effect.tryPromise({
-      try: () => scraper({ html, url: targetUrl }),
-      catch: (cause) => new ParseMetadataError({ url, cause }),
-    });
+    const localResult = yield* fetchText(request).pipe(
+      Effect.flatMap(({ text: html, url: targetUrl }) =>
+        parseHtmlMetadata(url, html, targetUrl),
+      ),
+      Effect.result,
+    );
 
-    const title = metadata.title?.trim() || undefined;
-    const description = metadata.description?.trim() || undefined;
-    const rawImage = metadata.image?.trim() || undefined;
-    const image = rawImage && !isSvgUrl(rawImage) ? rawImage : undefined;
-    const rawFallback =
-      (
-        metadata as unknown as Record<string, string | undefined>
-      ).fallbackImage?.trim() || undefined;
-    const fallbackImage =
-      rawFallback && !isSvgUrl(rawFallback) ? rawFallback : undefined;
+    if (localResult._tag === "Success") {
+      return localResult.success;
+    }
 
-    return {
-      url,
-      title,
-      description,
-      image,
-      fallbackImage,
-    };
+    const localError = localResult.failure;
+    if (!shouldTriggerFallback(localError)) {
+      return yield* localError;
+    }
+
+    const fallbackOpt = yield* Effect.serviceOption(FallbackScraper);
+    if (Option.isNone(fallbackOpt)) {
+      return yield* localError;
+    }
+
+    yield* Effect.logInfo(
+      `Local fetch failed for ${url} (${localError.message}), trying fallback scraper...`,
+    );
+
+    const fallbackResult = yield* fallbackOpt.value
+      .scrape(url)
+      .pipe(Effect.result);
+
+    if (fallbackResult._tag === "Failure") {
+      yield* Effect.logWarning(
+        `Fallback scraper failed for ${url}: ${fallbackResult.failure.message}`,
+      );
+      return yield* localError;
+    }
+
+    return yield* buildMetadataFromFallback(url, fallbackResult.success).pipe(
+      Effect.catch((parseError) =>
+        Effect.logWarning(
+          `Failed to parse fallback metadata for ${url}: ${parseError.message}`,
+        ).pipe(Effect.andThen(Effect.fail(localError))),
+      ),
+    );
   },
 );
 

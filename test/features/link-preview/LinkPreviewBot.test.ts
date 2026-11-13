@@ -7,6 +7,7 @@ import {
 import sharp from "sharp";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { HttpBody } from "effect/http";
+import { FallbackScraper } from "../../../src/features/link-preview/FallbackScraper.ts";
 import { handleLinkPreviewMessage } from "../../../src/features/link-preview/LinkPreview.ts";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import { createMockMessage } from "../../TestMessage.ts";
@@ -785,5 +786,45 @@ describe("handleLinkPreviewMessage", () => {
         },
       },
     ]);
+  });
+
+  it("replies with link preview when local fetch returns 403 and fallback succeeds", async () => {
+    const { item, lastReply } = createMockMessage({
+      raw_message:
+        "https://www.androidauthority.com/grapheneos-pixel-10-linux-6-18-pixel-11-support-3731993/",
+    });
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url === "https://api.firecrawl.dev/v2/scrape") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              rawHtml:
+                '<html><head><title>GrapheneOS rolls out Linux 6.18</title><meta name="description" content="The latest GrapheneOS stable update upgrades four Pixel models."></head></html>',
+              metadata: { statusCode: 200 },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("Forbidden", {
+        status: 403,
+        statusText: "Forbidden",
+      });
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.provideMerge(FallbackScraper.layer, httpLayer)),
+      ),
+    );
+
+    expect(lastReply()).toEqual({
+      type: "text",
+      data: {
+        text: "GrapheneOS rolls out Linux 6.18\n> The latest GrapheneOS stable update upgrades four Pixel models.",
+      },
+    });
   });
 });

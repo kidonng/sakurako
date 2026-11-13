@@ -11,12 +11,16 @@ import {
   prepareOutgoingImage,
   scrapeAll,
   scrapeMetadata,
+  shouldTriggerFallback,
 } from "../../../src/features/link-preview/LinkPreview.ts";
+import { FallbackScraper } from "../../../src/features/link-preview/FallbackScraper.ts";
 import {
   HttpNetworkError,
+  HttpNoContentError,
   HttpNotFoundError,
+  HttpRateLimitError,
+  HttpTimeoutError,
 } from "../../../src/utils/HttpClient.ts";
-
 describe("LinkPreviewEngine", () => {
   it("extracts and normalizes URLs from text", () => {
     const text = "Check out https://github.com and http://example.com/test?a=1";
@@ -745,6 +749,326 @@ describe("LinkPreviewEngine", () => {
         </body>
       `);
       expect(extractFirstParagraph($)).toBeUndefined();
+    });
+  });
+
+  describe("fallback scraping", () => {
+    it("shouldTriggerFallback matches 401/403/5xx/429/timeout and excludes 404/204/SSRF", () => {
+      expect(
+        shouldTriggerFallback(
+          new HttpNetworkError({ url: "https://a.com", status: 403 }),
+        ),
+      ).toBe(true);
+      expect(
+        shouldTriggerFallback(
+          new HttpNetworkError({ url: "https://a.com", status: 401 }),
+        ),
+      ).toBe(true);
+      expect(
+        shouldTriggerFallback(
+          new HttpNetworkError({ url: "https://a.com", status: 502 }),
+        ),
+      ).toBe(true);
+      expect(
+        shouldTriggerFallback(
+          new HttpRateLimitError({ url: "https://a.com", status: 429 }),
+        ),
+      ).toBe(true);
+      expect(
+        shouldTriggerFallback(
+          new HttpTimeoutError({
+            url: "https://a.com",
+            detail: "Request timed out after 10 seconds",
+          }),
+        ),
+      ).toBe(true);
+      expect(
+        shouldTriggerFallback(
+          new HttpNotFoundError({ url: "https://a.com", status: 404 }),
+        ),
+      ).toBe(false);
+      expect(
+        shouldTriggerFallback(
+          new HttpNoContentError({ url: "https://a.com", status: 204 }),
+        ),
+      ).toBe(false);
+      expect(
+        shouldTriggerFallback(
+          new BlockedHostError({
+            url: "http://127.0.0.1",
+            hostname: "127.0.0.1",
+          }),
+        ),
+      ).toBe(false);
+    });
+
+    it("falls back on local 403 and parses rawHtml through metascraper and site rules", async () => {
+      let fallbackCalledWith: string | undefined;
+      const httpLayer = makeTestHttpClient(
+        () =>
+          new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+      );
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "mock-engine",
+          scrape: (url) => {
+            fallbackCalledWith = url;
+            return Effect.succeed({
+              engineId: "mock-engine",
+              url,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                  <head><title>Recovered Article</title></head>
+                  <body>
+                    <article><p>Recovered first paragraph from rawHtml.</p></article>
+                  </body>
+                </html>
+              `,
+              metadata: {
+                title: "Metadata Title Should Not Override",
+                image: "https://example.com/fallback-cover.png",
+              },
+            });
+          },
+        },
+      ]);
+
+      const result = await Effect.runPromise(
+        scrapeMetadata("https://example.com/403-article").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+        ),
+      );
+
+      expect(fallbackCalledWith).toBe("https://example.com/403-article");
+      expect(result.url).toBe("https://example.com/403-article");
+      expect(result.title).toBe("Recovered Article");
+      expect(result.description).toBe(
+        "Recovered first paragraph from rawHtml.",
+      );
+      expect(result.image).toBe("https://example.com/fallback-cover.png");
+    });
+
+    it("falls back on local 401, 429, and timeout", async () => {
+      const http401 = makeTestHttpClient(
+        () => new Response("Unauthorized", { status: 401 }),
+      );
+      const http429 = makeTestHttpClient(
+        () => new Response("Too Many Requests", { status: 429 }),
+      );
+      const httpTimeout = makeTestHttpClient(
+        () =>
+          new Response(
+            new ReadableStream({
+              start() {
+                // hang until timeout
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "text/html" } },
+          ),
+      );
+
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "mock-engine",
+          scrape: (url) =>
+            Effect.succeed({
+              engineId: "mock-engine",
+              url,
+              html: "<html><head><title>Recovered</title></head></html>",
+            }),
+        },
+      ]);
+
+      const res401 = await Effect.runPromise(
+        scrapeMetadata("https://example.com/401").pipe(
+          Effect.provide(Layer.merge(http401, fallbackLayer)),
+        ),
+      );
+      expect(res401.title).toBe("Recovered");
+
+      const res429 = await Effect.runPromise(
+        scrapeMetadata("https://example.com/429").pipe(
+          Effect.provide(Layer.merge(http429, fallbackLayer)),
+        ),
+      );
+      expect(res429.title).toBe("Recovered");
+
+      const resTimeout = await Effect.runPromise(
+        Effect.gen(function* () {
+          const fiber = yield* scrapeMetadata(
+            "https://example.com/slow",
+          ).pipe(Effect.forkChild);
+          yield* TestClock.adjust("10 seconds");
+          return yield* Fiber.join(fiber);
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(httpTimeout, fallbackLayer, TestClock.layer()),
+          ),
+        ),
+      );
+      expect(resTimeout.title).toBe("Recovered");
+    });
+
+    it("applies site customizer metascraper rules on fallback rawHtml", async () => {
+      const httpLayer = makeTestHttpClient(
+        () => new Response("Forbidden", { status: 403 }),
+      );
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "mock-engine",
+          scrape: (url) =>
+            Effect.succeed({
+              engineId: "mock-engine",
+              url,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                  <head><title>HN Post | Hacker News</title></head>
+                  <body>
+                    <span class="titleline">
+                      <a href="https://example.com/linked">Linked</a>
+                    </span>
+                  </body>
+                </html>
+              `,
+            }),
+        },
+      ]);
+
+      const result = await Effect.runPromise(
+        scrapeMetadata("https://news.ycombinator.com/item?id=999").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+        ),
+      );
+
+      expect(result.title).toBe("HN Post | Hacker News");
+      expect(result.description).toBe("https://example.com/linked");
+    });
+
+    it("uses structured metadata when fallback returns no html and filters SVG images", async () => {
+      const httpLayer = makeTestHttpClient(
+        () => new Response("Forbidden", { status: 403 }),
+      );
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "meta-only",
+          scrape: (url) =>
+            Effect.succeed({
+              engineId: "meta-only",
+              url,
+              metadata: {
+                title: "Meta Only Title",
+                description: "Meta Only Desc",
+                image: "https://example.com/icon.svg",
+              },
+            }),
+        },
+      ]);
+
+      const result = await Effect.runPromise(
+        scrapeMetadata("https://example.com/meta-only").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+        ),
+      );
+
+      expect(result.title).toBe("Meta Only Title");
+      expect(result.description).toBe("Meta Only Desc");
+      expect(result.image).toBeUndefined();
+    });
+
+    it("never invokes fallback on 404 or SSRF blocked hosts", async () => {
+      let fallbackCalled = false;
+      const httpLayer = makeTestHttpClient(
+        () => new Response("Not Found", { status: 404 }),
+      );
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "spy",
+          scrape: (url) => {
+            fallbackCalled = true;
+            return Effect.succeed({
+              engineId: "spy",
+              url,
+              html: "<html><head><title>Should Not Run</title></head></html>",
+            });
+          },
+        },
+      ]);
+
+      const err404 = await Effect.runPromise(
+        scrapeMetadata("https://example.com/missing").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+          Effect.flip,
+        ),
+      );
+      expect(err404).toBeInstanceOf(HttpNotFoundError);
+
+      const errSsrf = await Effect.runPromise(
+        scrapeMetadata("http://127.0.0.1:8080/internal").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+          Effect.flip,
+        ),
+      );
+      expect(errSsrf).toBeInstanceOf(BlockedHostError);
+      expect(fallbackCalled).toBe(false);
+    });
+
+    it("preserves original local 403 error when fallback fails (including Firecrawl 429)", async () => {
+      const httpLayer = makeTestHttpClient((req) => {
+        if (req.url === "https://api.firecrawl.dev/v2/scrape") {
+          return new Response("Too Many Requests", { status: 429 });
+        }
+        return new Response("Forbidden", {
+          status: 403,
+          statusText: "Forbidden",
+        });
+      });
+
+      const error = await Effect.runPromise(
+        scrapeMetadata("https://example.com/403").pipe(
+          Effect.provide(
+            Layer.provideMerge(FallbackScraper.layer, httpLayer),
+          ),
+          Effect.flip,
+        ),
+      );
+
+      expect(error).toBeInstanceOf(HttpNetworkError);
+      if (error instanceof HttpNetworkError) {
+        expect(error.status).toBe(403);
+      }
+      expect(error.message).toBe("HTTP 403 Forbidden");
+    });
+
+    it("triggers fallback once when danbooru customizer falls through on 403", async () => {
+      let fallbackCount = 0;
+      const httpLayer = makeTestHttpClient(
+        () =>
+          new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+      );
+      const fallbackLayer = FallbackScraper.layerFromEngines([
+        {
+          id: "mock-engine",
+          scrape: (url) => {
+            fallbackCount++;
+            return Effect.succeed({
+              engineId: "mock-engine",
+              url,
+              html: "<html><head><title>Danbooru Post</title></head></html>",
+            });
+          },
+        },
+      ]);
+
+      const result = await Effect.runPromise(
+        scrapeMetadata("https://danbooru.donmai.us/posts/12345").pipe(
+          Effect.provide(Layer.merge(httpLayer, fallbackLayer)),
+        ),
+      );
+
+      expect(fallbackCount).toBe(1);
+      expect(result.title).toBe("Danbooru Post");
     });
   });
 });
