@@ -197,6 +197,69 @@ describe("HttpClient utils", () => {
       expect(error.message).toContain("HTTP 429 Too Many Requests");
     });
 
+    it("populates retryAfterMs from Retry-After seconds header on 429", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("Too many requests", {
+            status: 429,
+            statusText: "Too Many Requests",
+            headers: { "Retry-After": "2" },
+          }),
+      );
+      const error = await Effect.runPromise(
+        fetchText(HttpClientRequest.get("https://example.com/api")).pipe(
+          Effect.provide(layer),
+          Effect.flip,
+        ),
+      );
+      expect(error).toBeInstanceOf(HttpRateLimitError);
+      if (error instanceof HttpRateLimitError) {
+        expect(error.retryAfterMs).toBe(2000);
+      }
+    });
+
+    it("populates retryAfterMs from Retry-After HTTP-date header on 429", async () => {
+      const futureDate = new Date(Date.now() + 5000).toUTCString();
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("Too many requests", {
+            status: 429,
+            headers: { "Retry-After": futureDate },
+          }),
+      );
+      const error = await Effect.runPromise(
+        fetchText(HttpClientRequest.get("https://example.com/api")).pipe(
+          Effect.provide(layer),
+          Effect.flip,
+        ),
+      );
+      expect(error).toBeInstanceOf(HttpRateLimitError);
+      if (error instanceof HttpRateLimitError) {
+        expect(error.retryAfterMs).toBeGreaterThan(2000);
+        expect(error.retryAfterMs).toBeLessThanOrEqual(6000);
+      }
+    });
+
+    it("treats Retry-After: 0 as 0ms instead of missing", async () => {
+      const layer = makeTestHttpClient(
+        () =>
+          new Response("Too many requests", {
+            status: 429,
+            headers: { "Retry-After": "0" },
+          }),
+      );
+      const error = await Effect.runPromise(
+        fetchText(HttpClientRequest.get("https://example.com/api")).pipe(
+          Effect.provide(layer),
+          Effect.flip,
+        ),
+      );
+      expect(error).toBeInstanceOf(HttpRateLimitError);
+      if (error instanceof HttpRateLimitError) {
+        expect(error.retryAfterMs).toBe(0);
+      }
+    });
+
     it("fails with HttpNetworkError on other non-2xx status", async () => {
       const layer403 = makeTestHttpClient(
         () =>

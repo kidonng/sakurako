@@ -136,6 +136,7 @@ describe("handleLinkPreviewMessage", () => {
         return new Response("Too Many Requests", {
           status: 429,
           statusText: "Too Many Requests",
+          headers: { "Retry-After": "0" },
         });
       }
       return new Response(githubHtml, {
@@ -147,8 +148,59 @@ describe("handleLinkPreviewMessage", () => {
     await Effect.runPromise(
       handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
     );
-
     expect(getReplies().length).toBe(0);
+  });
+
+  it("retries single github.com link image on 429 and replies once image succeeds", async () => {
+    const { item, lastReply } = createMockMessage({
+      raw_message: "https://github.com/kidonng/sakurako",
+    });
+
+    const githubHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>kidonng/sakurako</title>
+          <meta name="description" content="A QQ bot">
+          <meta property="og:image" content="https://opengraph.githubassets.com/repo/kidonng/sakurako">
+        </head>
+        <body>GitHub</body>
+      </html>
+    `;
+    const mockImageBytes = new Uint8Array([1, 2, 3]);
+    let imageAttempts = 0;
+    const layer = makeTestHttpClient((req) => {
+      if (req.url.includes("opengraph.githubassets.com")) {
+        imageAttempts++;
+        if (imageAttempts === 1) {
+          return new Response("Too Many Requests", {
+            status: 429,
+            headers: { "Retry-After": "0" },
+          });
+        }
+        return new Response(mockImageBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+      return new Response(githubHtml, {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(Effect.provide(layer)),
+    );
+    expect(imageAttempts).toBe(2);
+    expect(lastReply()).toEqual([
+      {
+        type: "image",
+        data: {
+          file: "base64://" + Buffer.from(mockImageBytes).toString("base64"),
+        },
+      },
+    ]);
   });
 
   it("logs the failed URL and error details when sending link preview reply fails", async () => {

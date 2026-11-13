@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer, Logger } from "effect";
+import { Effect, Fiber, Layer, Logger } from "effect";
+import { TestClock } from "effect/testing";
 import { makeTestHttpClient } from "../../TestHttpClient.ts";
 import * as cheerio from "cheerio";
 import {
@@ -549,6 +550,131 @@ describe("LinkPreviewEngine", () => {
         }).pipe(Effect.provide(layer)),
       );
 
+      expect(result).toBeUndefined();
+    });
+
+    it("retries on 429 honoring Retry-After and returns image on success", async () => {
+      const mockBytes = new Uint8Array([9, 8, 7]);
+      let attempts = 0;
+      const layer = makeTestHttpClient(() => {
+        attempts++;
+        if (attempts === 1) {
+          return new Response("Too many requests", {
+            status: 429,
+            headers: { "Retry-After": "2" },
+          });
+        }
+        return new Response(mockBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      });
+
+      const program = Effect.gen(function* () {
+        const fiber = yield* prepareOutgoingImage(
+          "https://opengraph.githubassets.com/hash/owner/repo",
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust("1900 millis");
+        expect(attempts).toBe(1);
+        yield* TestClock.adjust("100 millis");
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(Layer.merge(layer, TestClock.layer())));
+
+      const result = await Effect.runPromise(program);
+      expect(attempts).toBe(2);
+      expect(result).toBe(
+        "base64://" + Buffer.from(mockBytes).toString("base64"),
+      );
+    });
+
+    it("retries on 429 with exponential backoff when Retry-After is absent", async () => {
+      const mockBytes = new Uint8Array([4, 5, 6]);
+      let attempts = 0;
+      const layer = makeTestHttpClient(() => {
+        attempts++;
+        if (attempts <= 2) {
+          return new Response("Too many requests", { status: 429 });
+        }
+        return new Response(mockBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      });
+
+      const program = Effect.gen(function* () {
+        const fiber = yield* prepareOutgoingImage(
+          "https://opengraph.githubassets.com/hash/owner/repo",
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust("1 second");
+        expect(attempts).toBe(2);
+        yield* TestClock.adjust("2 seconds");
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(Layer.merge(layer, TestClock.layer())));
+
+      const result = await Effect.runPromise(program);
+      expect(attempts).toBe(3);
+      expect(result).toBe(
+        "base64://" + Buffer.from(mockBytes).toString("base64"),
+      );
+    });
+
+    it("does not retry when Retry-After exceeds max retry delay", async () => {
+      let attempts = 0;
+      const layer = makeTestHttpClient(() => {
+        attempts++;
+        return new Response("Too many requests", {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        });
+      });
+
+      const result = await Effect.runPromise(
+        prepareOutgoingImage(
+          "https://opengraph.githubassets.com/hash/owner/repo",
+        ).pipe(Effect.provide(layer)),
+      );
+
+      expect(attempts).toBe(1);
+      expect(result).toBeUndefined();
+    });
+
+    it("stops retrying after max attempts on persistent 429", async () => {
+      let attempts = 0;
+      const layer = makeTestHttpClient(() => {
+        attempts++;
+        return new Response("Too many requests", {
+          status: 429,
+          headers: { "Retry-After": "1" },
+        });
+      });
+
+      const program = Effect.gen(function* () {
+        const fiber = yield* prepareOutgoingImage(
+          "https://opengraph.githubassets.com/hash/owner/repo",
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust("5 seconds");
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(Layer.merge(layer, TestClock.layer())));
+
+      const result = await Effect.runPromise(program);
+      expect(attempts).toBe(3);
+      expect(result).toBeUndefined();
+    });
+
+    it("does not retry on non-429 errors like 404", async () => {
+      let attempts = 0;
+      const layer = makeTestHttpClient(() => {
+        attempts++;
+        return new Response("Not Found", { status: 404 });
+      });
+
+      const result = await Effect.runPromise(
+        prepareOutgoingImage(
+          "https://opengraph.githubassets.com/hash/owner/repo",
+        ).pipe(Effect.provide(layer)),
+      );
+
+      expect(attempts).toBe(1);
       expect(result).toBeUndefined();
     });
   });

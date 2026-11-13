@@ -51,6 +51,7 @@ export class HttpRateLimitError extends Schema.TaggedError<
   status: Schema.Literal(429),
   statusText: Schema.optional(Schema.String),
   detail: Schema.optional(Schema.String),
+  retryAfterMs: Schema.optional(Schema.Finite),
 }) {
   override get message(): string {
     return `HTTP 429${this.statusText ? ` ${this.statusText}` : ""}`.trim();
@@ -97,6 +98,29 @@ export type HttpFetchError =
   | HttpTimeoutError
   | HttpNetworkError;
 
+function parseRetryAfterMs(
+  header: string | undefined,
+  nowMs: number = Date.now(),
+): number | undefined {
+  if (!header) {
+    return undefined;
+  }
+  const trimmed = header.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    if (Number.isFinite(seconds)) {
+      return Math.max(0, Math.ceil(seconds * 1000));
+    }
+  }
+  const parsedDate = Date.parse(trimmed);
+  if (Number.isFinite(parsedDate)) {
+    return Math.max(0, parsedDate - nowMs);
+  }
+  return undefined;
+}
 export function cancelResponse(
   response: HttpClientResponse.HttpClientResponse,
 ): void {
@@ -160,6 +184,7 @@ export function executeWithResponse<A, E, R>(
             status: 429,
             statusText,
             detail,
+            retryAfterMs: parseRetryAfterMs(response.headers["retry-after"]),
           });
         }
         return yield* new HttpNetworkError({

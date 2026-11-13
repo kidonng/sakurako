@@ -14,6 +14,7 @@ import {
   Match,
   Option,
   Predicate,
+  Schedule,
   Schema,
 } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
@@ -555,6 +556,42 @@ export interface PrepareImageOptions {
   readonly timeoutDuration?: Duration.Input;
 }
 
+const DEFAULT_RATE_LIMIT_MAX_RETRIES = 2;
+const DEFAULT_RATE_LIMIT_BASE_DELAY: Duration.Input = "1 second";
+const DEFAULT_RATE_LIMIT_MAX_DELAY_MS = 10_000;
+
+const imageRateLimitSchedule = Schedule.exponential(
+  DEFAULT_RATE_LIMIT_BASE_DELAY,
+).pipe(
+  Schedule.upTo({ times: DEFAULT_RATE_LIMIT_MAX_RETRIES }),
+  Schedule.setInputType<HttpFetchError>(),
+  Schedule.while(({ input }) => {
+    if (input._tag !== "HttpRateLimitError") {
+      return false;
+    }
+    return (
+      input.retryAfterMs === undefined ||
+      input.retryAfterMs <= DEFAULT_RATE_LIMIT_MAX_DELAY_MS
+    );
+  }),
+  Schedule.modifyDelay(({ duration, input }) => {
+    const fallbackMs = Duration.toMillis(duration);
+    const delayMs =
+      input._tag === "HttpRateLimitError" && input.retryAfterMs !== undefined
+        ? Math.min(
+            Math.max(0, input.retryAfterMs),
+            DEFAULT_RATE_LIMIT_MAX_DELAY_MS,
+          )
+        : Math.min(fallbackMs, DEFAULT_RATE_LIMIT_MAX_DELAY_MS);
+    return Effect.succeed(Duration.millis(delayMs));
+  }),
+  Schedule.tap((meta) =>
+    Effect.logInfo(
+      `Rate limited fetching image (${meta.input.url}), retrying in ${Duration.toMillis(meta.duration)}ms...`,
+    ),
+  ),
+);
+
 const downloadSingleImage = Effect.fnUntraced(function* (
   targetUrl: string,
   timeoutDuration: Duration.Input,
@@ -582,6 +619,7 @@ const downloadSingleImage = Effect.fnUntraced(function* (
   const request = HttpClientRequest.get(targetUrl);
 
   return yield* fetchImage(request, { timeoutDuration }).pipe(
+    Effect.retry(imageRateLimitSchedule),
     Effect.catch((error) =>
       Effect.logWarning(
         `Failed to fetch image locally for ${targetUrl}: ${formatErrorDetail(error)}`,
