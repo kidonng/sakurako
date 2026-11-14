@@ -8,7 +8,6 @@ describe("logStartupInfo", () => {
   const baseConfig: BotConfig = {
     wsUrl: "ws://127.0.0.1:3001/",
     accessToken: Redacted.make("token"),
-    openrouterDecisionModel: "~typesafe/jev-latest",
     devMode: false,
   };
 
@@ -84,26 +83,72 @@ describe("logStartupInfo", () => {
     ).toBe(false);
   });
 
-  it("logs decision filter status and model when openrouterApiKey is configured", async () => {
-    const configWithOpenRouter: BotConfig = {
+  it("logs decision filter status only when both openrouterApiKey and openrouterDecisionModel are configured", async () => {
+    const configWithBoth: BotConfig = {
       ...baseConfig,
       openrouterApiKey: Redacted.make("openrouter-key"),
       openrouterDecisionModel: "custom/model-v1",
     };
 
-    const logsWithKey = await runWithLogger(
-      logStartupInfo(undefined, configWithOpenRouter),
+    const logsWithBoth = await runWithLogger(
+      logStartupInfo(undefined, configWithBoth),
     );
-    expect(logsWithKey).toContain(
+    expect(logsWithBoth).toContain(
       "Decision filter enabled using model custom/model-v1",
     );
 
-    const logsWithoutKey = await runWithLogger(
-      logStartupInfo(undefined, baseConfig),
+    const logsWithKeyOnly = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        openrouterApiKey: Redacted.make("openrouter-key"),
+      }),
     );
     expect(
-      logsWithoutKey.some((msg) => msg.includes("Decision filter enabled")),
+      logsWithKeyOnly.some((msg) => msg.includes("Decision filter enabled")),
     ).toBe(false);
+
+    const logsWithModelOnly = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        openrouterDecisionModel: "custom/model-v1",
+      }),
+    );
+    expect(logsWithModelOnly).toContain(
+      "OPENROUTER_DECISION_MODEL is set without OPENROUTER_API_KEY; decision filter disabled",
+    );
+  });
+
+  it("logs image generation status only when both openrouterApiKey and openrouterImageModel are configured", async () => {
+    const logsWithBoth = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        openrouterApiKey: Redacted.make("openrouter-key"),
+        openrouterImageModel: "recraft/recraft-v4.1-flash-v2:free",
+      }),
+    );
+    expect(logsWithBoth).toContain(
+      "Image generation enabled using model recraft/recraft-v4.1-flash-v2:free",
+    );
+
+    const logsWithKeyOnly = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        openrouterApiKey: Redacted.make("openrouter-key"),
+      }),
+    );
+    expect(
+      logsWithKeyOnly.some((msg) => msg.includes("Image generation enabled")),
+    ).toBe(false);
+
+    const logsWithModelOnly = await runWithLogger(
+      logStartupInfo(undefined, {
+        ...baseConfig,
+        openrouterImageModel: "recraft/recraft-v4.1-flash-v2:free",
+      }),
+    );
+    expect(logsWithModelOnly).toContain(
+      "OPENROUTER_IMAGE_MODEL is set without OPENROUTER_API_KEY; /gen command disabled",
+    );
   });
 
   it("logs dev mode and prod mode status", async () => {

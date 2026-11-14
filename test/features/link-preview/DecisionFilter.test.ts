@@ -80,7 +80,6 @@ describe("filterPreviewResults", () => {
     expect(filteredBlankModel).toEqual(results);
   });
 
-
   it("skips filtering when no successful scrape results exist", async () => {
     let called = false;
     const dummyLayer = makeTestHttpClient(() => {

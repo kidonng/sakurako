@@ -17,6 +17,8 @@ import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts
 import { FallbackScraper } from "./features/link-preview/FallbackScraper.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
 import { handleDanbooruMessage } from "./features/danbooru/Danbooru.ts";
+import { handleImageGenMessage } from "./features/image-gen/ImageGen.ts";
+import { ImageGenClient } from "./features/image-gen/ImageGenClient.ts";
 import { DanbooruClient } from "./features/danbooru/DanbooruClient.ts";
 import { DanbooruTagMatcher } from "./features/danbooru/DanbooruTagMatcher.ts";
 import {
@@ -71,9 +73,23 @@ export const logStartupInfo = Effect.fnUntraced(function* (
     );
   }
 
-  if (config.openrouterApiKey) {
+  if (config.openrouterApiKey && config.openrouterDecisionModel) {
     yield* Effect.logInfo(
       `Decision filter enabled using model ${config.openrouterDecisionModel}`,
+    );
+  } else if (config.openrouterDecisionModel) {
+    yield* Effect.logWarning(
+      "OPENROUTER_DECISION_MODEL is set without OPENROUTER_API_KEY; decision filter disabled",
+    );
+  }
+
+  if (config.openrouterApiKey && config.openrouterImageModel) {
+    yield* Effect.logInfo(
+      `Image generation enabled using model ${config.openrouterImageModel}`,
+    );
+  } else if (config.openrouterImageModel) {
+    yield* Effect.logWarning(
+      "OPENROUTER_IMAGE_MODEL is set without OPENROUTER_API_KEY; /gen command disabled",
     );
   }
 
@@ -119,6 +135,7 @@ export const MainProgram = Effect.gen(function* () {
           handleLinkPreviewMessage(item),
           handleSauceMessage(item),
           handleDanbooruMessage(item),
+          handleImageGenMessage(item),
           handleStatsMessage(item),
           handleStatsCommand(item),
         ],
@@ -178,6 +195,10 @@ const FallbackScraperLive = FallbackScraper.layer.pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 
+const ImageGenClientLive = ImageGenClient.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+);
+
 export const MainLive = MainProgram.pipe(
   Effect.provide(
     Layer.mergeAll(
@@ -189,6 +210,7 @@ export const MainLive = MainProgram.pipe(
       DanbooruTagMatcherLive,
       DanbooruClientLive,
       FallbackScraperLive,
+      ImageGenClientLive,
     ),
   ),
 );

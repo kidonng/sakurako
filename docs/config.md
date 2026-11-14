@@ -19,14 +19,15 @@ Sakurako 的运行依赖环境变量配置（基于 `.env` 文件）以及部分
 
 部分功能支持接入第三方服务以解锁更高的请求配额或智能决策能力：
 
-| 环境变量                    | 必填 | 默认值                 | 说明                                                                                                                                                 |
-| :-------------------------- | :--- | :--------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FIRECRAWL_API_KEY`         | 否   | 无                     | Firecrawl API Key。用于链接预览本地抓取被拦截（如 401/403）或超时时的远程抓取回落；未配置时默认使用免 Key 接口，配置后可提升并发与每日请求额度。     |
-| `SAUCENAO_API_KEY`          | 否   | 无                     | SauceNao 以图搜图 API Key。未配置时可使用免费基础配额；配置后可享有更高的请求频次上限与每日查询额度。                                                |
-| `OPENROUTER_API_KEY`        | 否   | 无                     | OpenRouter API Key。配置后将启用基于大语言模型的决策过滤器，用于链接预览的语义去重评估与动态截断。若未配置，链接预览仍正常工作，仅跳过智能过滤判定。 |
-| `OPENROUTER_DECISION_MODEL` | 否   | `~typesafe/jev-latest` | 用于链接预览决策评估的模型标识。仅在配置了 `OPENROUTER_API_KEY` 时生效。                                                                             |
-| `DANBOORU_LOGIN`            | 否   | 无                     | Danbooru 账号用户名（`login`）。需与 `DANBOORU_API_KEY` 同时配置，启用后 `/dbr` 标签检索上限从 2 个提升至 3 个。                                     |
-| `DANBOORU_API_KEY`          | 否   | 无                     | Danbooru API Key。需与 `DANBOORU_LOGIN` 同时配置（通过 HTTP Basic Auth 鉴权）；仅配置其中一项时自动回退匿名模式（上限 2 个）。                       |
+| 环境变量                    | 必填 | 默认值 | 说明                                                                                                                                             |
+| :-------------------------- | :--- | :----- | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FIRECRAWL_API_KEY`         | 否   | 无     | Firecrawl API Key。用于链接预览本地抓取被拦截（如 401/403）或超时时的远程抓取回落；未配置时默认使用免 Key 接口，配置后可提升并发与每日请求额度。 |
+| `SAUCENAO_API_KEY`          | 否   | 无     | SauceNao 以图搜图 API Key。未配置时可使用免费基础配额；配置后可享有更高的请求频次上限与每日查询额度。                                            |
+| `OPENROUTER_API_KEY`        | 否   | 无     | OpenRouter API Key。需分别配合 `OPENROUTER_DECISION_MODEL` 或 `OPENROUTER_IMAGE_MODEL` 使用，以启用链接预览决策过滤与 `/gen` 文生图功能。        |
+| `OPENROUTER_DECISION_MODEL` | 否   | 无     | 用于链接预览决策评估的模型标识。无默认值，必须与 `OPENROUTER_API_KEY` 同时配置才启用智能过滤；未启用时链接预览仅使用本地启发式规则正常发送。     |
+| `OPENROUTER_IMAGE_MODEL`    | 否   | 无     | 用于 `/gen` 文生图命令的模型标识（如 `recraft/recraft-v4.1-flash-v2:free`）。无默认值，必须与 `OPENROUTER_API_KEY` 同时配置才启用 `/gen` 命令。  |
+| `DANBOORU_LOGIN`            | 否   | 无     | Danbooru 账号用户名（`login`）。需与 `DANBOORU_API_KEY` 同时配置，启用后 `/dbr` 标签检索上限从 2 个提升至 3 个。                                 |
+| `DANBOORU_API_KEY`          | 否   | 无     | Danbooru API Key。需与 `DANBOORU_LOGIN` 同时配置（通过 HTTP Basic Auth 鉴权）；仅配置其中一项时自动回退匿名模式（上限 2 个）。                   |
 
 ### 3. 开发与测试隔离配置
 

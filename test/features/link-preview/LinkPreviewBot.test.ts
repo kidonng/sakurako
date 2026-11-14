@@ -595,7 +595,10 @@ describe("handleLinkPreviewMessage", () => {
       raw_message:
         "Please see https://example.com/test [CQ:image,file=shot.png]",
       message: [
-        { type: "text", data: { text: "Please see https://example.com/test " } },
+        {
+          type: "text",
+          data: { text: "Please see https://example.com/test " },
+        },
         { type: "image", data: { file: "shot.png" } },
       ],
       client: {

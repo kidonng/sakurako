@@ -31,7 +31,9 @@ describe("parseImageGenInput", () => {
       });
 
       const fullWidth = ratio.replace(":", "：");
-      expect(parseImageGenInput(`/gen   ${fullWidth}\n  赛博朋克猫娘  `)).toEqual({
+      expect(
+        parseImageGenInput(`/gen   ${fullWidth}\n  赛博朋克猫娘  `),
+      ).toEqual({
         aspectRatio: ratio,
         prompt: "赛博朋克猫娘",
       });
@@ -48,7 +50,9 @@ describe("parseImageGenInput", () => {
     expect(parseImageGenInput("/gen auto mobile")).toEqual({
       prompt: "auto mobile",
     });
-    expect(parseImageGenInput("/gen   orange cat sitting on windowsill")).toEqual({
+    expect(
+      parseImageGenInput("/gen   orange cat sitting on windowsill"),
+    ).toEqual({
       prompt: "orange cat sitting on windowsill",
     });
   });

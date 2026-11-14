@@ -11,6 +11,7 @@ Core features include:
 - **Image Sauce**: Matches incoming messages strictly equaling `"/sauce"` replying to an image, queries the SauceNao API across 15 curated ACG databases with similarity tolerance and origin prioritization, and replies with work title, author, and source link.
 - **Message Statistics**: Silently aggregates group member messages by type (total, media, links, interactions) into SQLite daily buckets using `@effect/sql-sqlite-bun` and `SqliteMigrator`. Generates high-density leaderboard image cards via Satori + Sharp (`/stat`, `/stat all`), replies with personal stats breakdowns (`/me`), and enforces a 5-second per-group cooldown.
 - **Danbooru**: Matches incoming messages starting with `"/dbr"`, processes tags using an offline bilingual SQLite dictionary (`assets/danbooru-tags.sqlite`) with Levenshtein fuzzy matching, queries Danbooru random SFW posts, and replies with official format title and image.
+- **Image Generation**: Matches incoming messages starting with `"/gen"`, parses optional leading aspect ratios (`1:1`, `4:3`, `3:4`, `16:9`, `9:16`, normalizing full-width `：`), calls OpenRouter's Image API (`POST /api/v1/images`) when both `OPENROUTER_API_KEY` and `OPENROUTER_IMAGE_MODEL` are configured, and replies with `base64://` image segments.
 
 ## Architecture & Data Flow
 
@@ -43,8 +44,8 @@ The project follows a reactive, push-to-pull decoupled architecture built on Eff
 [Entrypoint] (src/index.ts: BunRuntime.runMain)
 ```
 
-- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), `OPENROUTER_API_KEY` (`Redacted`), `OPENROUTER_DECISION_MODEL`, `DEV_MODE`, and `DEV_GROUP_ID` using Effect's `Config` schema.
-- **Service Layer**: Services encapsulate domain boundaries via `Context.Service` and companion static `.layer` factories (`SnowLumaClient`, `DanbooruClient`, `DanbooruTagMatcher`, `StatsRepository`, `StatsCooldown`, `StatsRenderer`).
+- **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), `OPENROUTER_API_KEY` (`Redacted`), `OPENROUTER_DECISION_MODEL`, `OPENROUTER_IMAGE_MODEL`, `DEV_MODE`, and `DEV_GROUP_ID` using Effect's `Config` schema.
+- **Service Layer**: Services encapsulate domain boundaries via `Context.Service` and companion static `.layer` factories (`SnowLumaClient`, `DanbooruClient`, `DanbooruTagMatcher`, `ImageGenClient`, `StatsRepository`, `StatsCooldown`, `StatsRenderer`).
 - **Event Pipeline**: WebSocket callbacks offer messages and notices to unbounded Queues synchronously via `Queue.offerUnsafe`, exposed downstream as typed `messages` and `notices` streams.
 - **Dispatch & Isolation**: `src/index.ts` pre-filters streams with `shouldProcessEvent` and fans out each event to handlers concurrently via `Effect.all(..., { concurrency: "unbounded", discard: true })`. Every handler traps errors with `Effect.catch`/`Effect.catchDefect`, ensuring an error in one feature never tears down the event stream.
 
@@ -58,6 +59,7 @@ The project follows a reactive, push-to-pull decoupled architecture built on Eff
 │   │   ├── link-preview/          # URL scraping, site rules, and LLM decision filter
 │   │   ├── sauce/                 # SauceNao reverse image search handler & client
 │   │   ├── danbooru/              # /dbr search, bilingual tag matcher, post formatter
+│   │   ├── image-gen/             # /gen command parser, OpenRouter image client, handler
 │   │   └── stats/                 # Message statistics, SQLite repository, Satori card renderer
 │   ├── utils/                     # Shared utilities (MessageGuard, HttpClient, TextWidth, Command)
 │   ├── Config.ts                  # Bot configuration schema
@@ -154,6 +156,9 @@ General Effect 4 patterns follow `@node_modules/effect/AGENTS.md`. Note the repo
 - `src/features/danbooru/DanbooruClient.ts`: Danbooru API client for random SFW post queries and image downloads.
 - `src/features/danbooru/DanbooruTagMatcher.ts`: Offline SQLite tag dictionary search with exact, prefix, and Levenshtein fuzzy matching.
 - `src/features/danbooru/DanbooruFormatter.ts`: Danbooru post title formatting separating characters, series, and artists.
+- `src/features/image-gen/ImageGen.ts`: `/gen` command handler, config/empty-prompt guards, and error reply mapping.
+- `src/features/image-gen/ImageGenClient.ts`: OpenRouter Image API (`POST /api/v1/images`) `Context.Service` client.
+- `src/features/image-gen/ImageGenParser.ts`: `/gen` prefix matcher and aspect-ratio/prompt parser.
 - `src/features/stats/StatsRepository.ts`: SQLite persistence, schema migrations (`SqliteMigrator`), daily upserts, and leaderboard queries.
 - `src/features/stats/StatsClassifier.ts`: Pure event classification (media, links, pokes, reactions) and Shanghai date bucketing.
 - `src/features/stats/StatsCollector.ts`: Silent background message and notice consumer logging stats to SQLite.
