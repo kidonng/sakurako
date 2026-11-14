@@ -414,6 +414,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test_key",
+        OPENROUTER_DECISION_MODEL: "~typesafe/jev-latest",
       }),
     );
 
@@ -453,6 +454,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test_key",
+        OPENROUTER_DECISION_MODEL: "~typesafe/jev-latest",
       }),
     );
 
@@ -585,6 +587,56 @@ describe("handleLinkPreviewMessage", () => {
     expect(textSegment.data.text).toBe("Unfiltered Title");
   });
 
+  it("skips OpenRouter and user image download when OPENROUTER_DECISION_MODEL is omitted", async () => {
+    let openrouterContacted = false;
+    let userImageDownloaded = false;
+
+    const { item, lastReply } = createMockMessage({
+      raw_message:
+        "Please see https://example.com/test [CQ:image,file=shot.png]",
+      message: [
+        { type: "text", data: { text: "Please see https://example.com/test " } },
+        { type: "image", data: { file: "shot.png" } },
+      ],
+      client: {
+        downloadFileStream: async function* () {
+          userImageDownloaded = true;
+          yield new Uint8Array([1, 2, 3]);
+        },
+      },
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SNOWLUMA_WS_URL: "ws://localhost:3001",
+        SNOWLUMA_ACCESS_TOKEN: "token",
+        OPENROUTER_API_KEY: "test_key",
+      }),
+    );
+
+    const httpLayer = makeTestHttpClient((req) => {
+      if (req.url.includes("openrouter.ai")) {
+        openrouterContacted = true;
+        return new Response("", { status: 500 });
+      }
+      return new Response(
+        "<html><head><title>Unfiltered Title</title></head></html>",
+        { status: 200 },
+      );
+    });
+
+    await Effect.runPromise(
+      handleLinkPreviewMessage(item).pipe(
+        Effect.provide(Layer.merge(httpLayer, configLayer)),
+      ),
+    );
+
+    expect(openrouterContacted).toBe(false);
+    expect(userImageDownloaded).toBe(false);
+    const reply = lastReply() as { type: string; data: { text: string } };
+    expect(reply?.data.text).toBe("Unfiltered Title");
+  });
+
   it("extracts user images, sanitizes CQ codes, and sends multimodal state to OpenRouter Decisions", async () => {
     const capturedBody: { value?: { state?: unknown } } = {};
     const rawPng = await sharp({
@@ -603,6 +655,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test-openrouter-key",
+        OPENROUTER_DECISION_MODEL: "~typesafe/jev-latest",
       }),
     );
 
@@ -673,6 +726,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test_key",
+        OPENROUTER_DECISION_MODEL: "~typesafe/jev-latest",
       }),
     );
 
@@ -735,6 +789,7 @@ describe("handleLinkPreviewMessage", () => {
         SNOWLUMA_WS_URL: "ws://localhost:3001",
         SNOWLUMA_ACCESS_TOKEN: "token",
         OPENROUTER_API_KEY: "test_key",
+        OPENROUTER_DECISION_MODEL: "~typesafe/jev-latest",
       }),
     );
 

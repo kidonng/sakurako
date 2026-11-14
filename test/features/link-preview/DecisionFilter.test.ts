@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Logger, Redacted } from "effect";
 import { HttpBody } from "effect/http";
-import { DEFAULT_DECISION_MODEL } from "../../../src/Config.ts";
 import {
   filterPreviewResults,
   OPENROUTER_DECISIONS_URL,
@@ -46,6 +45,41 @@ describe("filterPreviewResults", () => {
     expect(called).toBe(false);
     expect(filtered).toEqual(results);
   });
+  it("skips filtering when model is not provided or blank", async () => {
+    let called = false;
+    const dummyLayer = makeTestHttpClient(() => {
+      called = true;
+      return new Response("", { status: 500 });
+    });
+
+    const results: ScrapingResult[] = [
+      {
+        _tag: "Success",
+        data: { url: "https://example.com", title: "Test Title" },
+      },
+    ];
+
+    const filteredNoModel = await Effect.runPromise(
+      filterPreviewResults(
+        "some message",
+        results,
+        Redacted.make("sk-test"),
+      ).pipe(Effect.provide(dummyLayer)),
+    );
+    const filteredBlankModel = await Effect.runPromise(
+      filterPreviewResults(
+        "some message",
+        results,
+        Redacted.make("sk-test"),
+        "   ",
+      ).pipe(Effect.provide(dummyLayer)),
+    );
+
+    expect(called).toBe(false);
+    expect(filteredNoModel).toEqual(results);
+    expect(filteredBlankModel).toEqual(results);
+  });
+
 
   it("skips filtering when no successful scrape results exist", async () => {
     let called = false;
@@ -71,6 +105,7 @@ describe("filterPreviewResults", () => {
         "some message",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(dummyLayer)),
     );
 
@@ -138,13 +173,14 @@ describe("filterPreviewResults", () => {
         "谷歌开放第三方安卓应用商店注册",
         results,
         Redacted.make("sk-or-test-key"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
     expect(captured.url).toBe(OPENROUTER_DECISIONS_URL);
     expect(captured.method).toBe("POST");
     expect(captured.authHeader).toBe("Bearer sk-or-test-key");
-    expect(captured.requestBody?.model).toBe(DEFAULT_DECISION_MODEL);
+    expect(captured.requestBody?.model).toBe("~typesafe/jev-latest");
     expect(captured.requestBody?.state?.user_message).toBe(
       "谷歌开放第三方安卓应用商店注册",
     );
@@ -267,6 +303,7 @@ describe("filterPreviewResults", () => {
         "some user message",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(Layer.merge(layer, Logger.layer([testLogger])))),
     );
 
@@ -318,9 +355,12 @@ describe("filterPreviewResults", () => {
     });
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(layer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(layer)),
     );
 
     expect(filtered[0] && isScrapingResult("Failure")(filtered[0])).toBe(true);
@@ -340,9 +380,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(failLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(failLayer)),
     );
 
     expect(filtered).toEqual(results);
@@ -373,9 +416,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(failLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(failLayer)),
     );
 
     expect(filtered[0]).toEqual({
@@ -418,9 +464,12 @@ describe("filterPreviewResults", () => {
     });
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(layer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(layer)),
     );
 
     expect(
@@ -450,9 +499,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(partialLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(partialLayer)),
     );
 
     expect(filtered[0] && isScrapingResult("Filtered")(filtered[0])).toBe(true);
@@ -475,9 +527,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(rateLimitLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(rateLimitLayer)),
     );
 
     expect(filtered).toEqual(results);
@@ -500,9 +555,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filteredNull = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(nullLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(nullLayer)),
     );
     expect(filteredNull).toEqual(results);
 
@@ -515,9 +573,12 @@ describe("filterPreviewResults", () => {
     );
 
     const filteredNoAnswers = await Effect.runPromise(
-      filterPreviewResults("message", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(noAnswersLayer),
-      ),
+      filterPreviewResults(
+        "message",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(noAnswersLayer)),
     );
     expect(filteredNoAnswers).toEqual(results);
   });
@@ -564,6 +625,7 @@ describe("filterPreviewResults", () => {
         "Bobby Lee认为币安被盗比特币大概率无法追回",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -613,6 +675,7 @@ describe("filterPreviewResults", () => {
         "用户仅发送了链接",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -654,9 +717,12 @@ describe("filterPreviewResults", () => {
     });
 
     const filtered = await Effect.runPromise(
-      filterPreviewResults("用户消息", results, Redacted.make("sk-test")).pipe(
-        Effect.provide(layer),
-      ),
+      filterPreviewResults(
+        "用户消息",
+        results,
+        Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
+      ).pipe(Effect.provide(layer)),
     );
 
     expect(
@@ -769,6 +835,7 @@ describe("filterPreviewResults", () => {
         "clean message",
         [previewItem],
         Redacted.make("fake-key"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -822,6 +889,7 @@ describe("filterPreviewResults", () => {
         "check this link",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -866,6 +934,7 @@ describe("filterPreviewResults", () => {
         "https://www.youtube.com/watch?v=AoNnbz237E0",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -915,6 +984,7 @@ describe("filterPreviewResults", () => {
         "some message",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -967,6 +1037,7 @@ describe("filterPreviewResults", () => {
         "check article",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 
@@ -1013,6 +1084,7 @@ describe("filterPreviewResults", () => {
         "check orphan",
         results,
         Redacted.make("sk-test"),
+        "~typesafe/jev-latest",
       ).pipe(Effect.provide(layer)),
     );
 

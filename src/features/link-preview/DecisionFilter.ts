@@ -3,7 +3,6 @@ import { Effect, Predicate, Redacted, Schema } from "effect";
 import stringWidth from "string-width";
 import { HttpClientRequest } from "effect/http";
 import { fetchJson } from "../../utils/HttpClient.ts";
-import { DEFAULT_DECISION_MODEL } from "../../Config.ts";
 import {
   DEFAULT_DESCRIPTION_MAX_WIDTH,
   isScrapingResult,
@@ -174,13 +173,14 @@ export const filterPreviewResults = Effect.fn(
   rawMessage: string,
   results: ReadonlyArray<ScrapingResult>,
   apiKey?: Redacted.Redacted<string>,
-  model: string = DEFAULT_DECISION_MODEL,
+  model?: string,
   threshold: number = DEFAULT_THRESHOLD,
   userImages?: ReadonlyArray<string>,
 ) {
   const localResults = applyLocalHeuristics(results);
+  const resolvedModel = model?.trim();
 
-  if (!apiKey || localResults.length === 0) {
+  if (!apiKey || !resolvedModel || localResults.length === 0) {
     return localResults;
   }
 
@@ -264,7 +264,7 @@ export const filterPreviewResults = Effect.fn(
           : stateContext;
 
       const payload: DecisionsRequest = {
-        model,
+        model: resolvedModel,
         state,
         questions,
       };

@@ -39,7 +39,7 @@ import {
   type FallbackScrapeResult,
 } from "./FallbackScraper.ts";
 import { filterPreviewResults } from "./DecisionFilter.ts";
-import { BotConfig, DEFAULT_DECISION_MODEL } from "../../Config.ts";
+import { BotConfig } from "../../Config.ts";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import {
   formatErrorDetail,
@@ -753,10 +753,9 @@ export const handleLinkPreviewMessage = Effect.fnUntraced(function* (
     const config = yield* Effect.option(BotConfig);
     const openrouterApiKey = Option.getOrUndefined(config)?.openrouterApiKey;
     const openrouterDecisionModel =
-      Option.getOrUndefined(config)?.openrouterDecisionModel ??
-      DEFAULT_DECISION_MODEL;
+      Option.getOrUndefined(config)?.openrouterDecisionModel;
     let userImages: string[] | undefined;
-    if (openrouterApiKey) {
+    if (openrouterApiKey && openrouterDecisionModel?.trim()) {
       const imageFiles = extractUserImageFiles(
         event.message,
         event.raw_message,

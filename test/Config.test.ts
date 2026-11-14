@@ -18,7 +18,8 @@ describe("BotConfig", () => {
     expect(Redacted.value(result.accessToken)).toBe("test-token");
     expect(result.sauceNaoApiKey).toBeUndefined();
     expect(result.openrouterApiKey).toBeUndefined();
-    expect(result.openrouterDecisionModel).toBe("~typesafe/jev-latest");
+    expect(result.openrouterDecisionModel).toBeUndefined();
+    expect(result.openrouterImageModel).toBeUndefined();
     expect(result.devMode).toBe(false);
     expect(result.devGroupId).toBeUndefined();
     expect(result.firecrawlApiKey).toBeUndefined();
@@ -50,6 +51,7 @@ describe("BotConfig", () => {
               SAUCENAO_API_KEY: "my_api_key",
               OPENROUTER_API_KEY: "test_openrouter_key",
               OPENROUTER_DECISION_MODEL: "openai/gpt-6-luna-decisions",
+              OPENROUTER_IMAGE_MODEL: "recraft/recraft-v4.1-flash-v2:free",
               DEV_MODE: "true",
               DEV_GROUP_ID: "12345678",
               FIRECRAWL_API_KEY: "fc_test_key",
@@ -67,6 +69,9 @@ describe("BotConfig", () => {
       "test_openrouter_key",
     );
     expect(config.openrouterDecisionModel).toBe("openai/gpt-6-luna-decisions");
+    expect(config.openrouterImageModel).toBe(
+      "recraft/recraft-v4.1-flash-v2:free",
+    );
     expect(config.devMode).toBe(true);
     expect(config.devGroupId).toBe(12345678);
     expect(config.firecrawlApiKey).toBeDefined();
@@ -93,5 +98,26 @@ describe("BotConfig", () => {
     );
     expect(config.danbooruLogin).toBeUndefined();
     expect(config.danbooruApiKey).toBeUndefined();
+  });
+
+  it("normalizes empty or whitespace OpenRouter credentials and models to undefined", async () => {
+    const config = await Effect.runPromise(
+      BotConfig.pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnvRecord({
+              SNOWLUMA_WS_URL: "ws://localhost:3001",
+              SNOWLUMA_ACCESS_TOKEN: "token",
+              OPENROUTER_API_KEY: "   ",
+              OPENROUTER_DECISION_MODEL: "  ",
+              OPENROUTER_IMAGE_MODEL: "\t ",
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(config.openrouterApiKey).toBeUndefined();
+    expect(config.openrouterDecisionModel).toBeUndefined();
+    expect(config.openrouterImageModel).toBeUndefined();
   });
 });
