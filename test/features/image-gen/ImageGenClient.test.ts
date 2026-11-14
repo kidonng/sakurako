@@ -219,6 +219,7 @@ describe("ImageGenClient", () => {
       { data: [{ b64_json: "   ", media_type: "image/png" }] },
       { data: [{ media_type: "image/png" }] },
       { data: [{ b64_json: "PHN2Zz4=", media_type: "image/svg+xml" }] },
+      { data: [{ b64_json: "data:image/svg+xml;base64,PHN2Zz4=" }] },
     ]) {
       const httpLayer = makeTestHttpClient(
         () =>

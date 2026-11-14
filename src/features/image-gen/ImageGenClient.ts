@@ -89,13 +89,17 @@ export class ImageGenClient extends Context.Service<
         ).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
 
         const first = response.data?.[0];
-        if (first?.media_type?.toLowerCase().includes("svg")) {
+        const rawBase64 = first?.b64_json?.trim() ?? "";
+        const dataUriMediaType = /^data:([^;,]+);base64,/i.exec(rawBase64)?.[1];
+        const mediaType = (
+          first?.media_type ?? dataUriMediaType
+        )?.toLowerCase();
+        if (mediaType?.includes("svg")) {
           return yield* new ImageGenApiError({
             detail: "SVG image output is not supported",
           });
         }
 
-        const rawBase64 = first?.b64_json?.trim() ?? "";
         const base64 = rawBase64.replace(/^data:[^;]+;base64,/i, "");
         if (base64.length === 0) {
           return yield* new ImageGenApiError({
