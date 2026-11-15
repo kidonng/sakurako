@@ -5,9 +5,13 @@ import {
   DanbooruAuthConfig,
   resolveDanbooruCredentials,
 } from "../../Config.ts";
-import { fetchImage, fetchJson } from "../../utils/HttpClient.ts";
+import {
+  fetchImage,
+  fetchJson,
+  type HttpFetchError,
+} from "../../utils/HttpClient.ts";
 
-export const DanbooruPostSchema = Schema.Struct({
+const DanbooruPostSchema = Schema.Struct({
   id: Schema.Finite,
   file_url: Schema.optional(Schema.String),
   large_file_url: Schema.optional(Schema.String),
@@ -53,10 +57,23 @@ const toDanbooruApiError = (err: {
   });
 
 const DANBOORU_USER_AGENT = "Sakurako/1.0 (user #898759)";
-export const withDanbooruUserAgent = HttpClientRequest.setHeader(
+const withDanbooruUserAgent = HttpClientRequest.setHeader(
   "User-Agent",
   DANBOORU_USER_AGENT,
 );
+
+export const fetchDanbooruPost = Effect.fnUntraced(function* (
+  postUrl: URL,
+  postId: string,
+): Effect.fn.Return<DanbooruPost, HttpFetchError, HttpClient.HttpClient> {
+  const jsonUrl = `${postUrl.origin}/posts/${postId}.json`;
+  const request = HttpClientRequest.get(jsonUrl).pipe(
+    withDanbooruUserAgent,
+    HttpClientRequest.acceptJson,
+  );
+
+  return yield* fetchJson(request, DanbooruPostSchema);
+});
 
 const DANBOORU_API_RANDOM_POST = "https://danbooru.donmai.us/posts/random.json";
 

@@ -1,14 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import type createMetascraper from "metascraper";
 import { Effect, Predicate } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpClient } from "effect/http";
 import { resolveDanbooruTitle } from "../danbooru/DanbooruFormatter.ts";
-import {
-  DanbooruPostSchema,
-  withDanbooruUserAgent,
-} from "../danbooru/DanbooruClient.ts";
+import { fetchDanbooruPost } from "../danbooru/DanbooruClient.ts";
 import type { PageMetadata } from "./LinkPreview.ts";
-import { fetchJson, type HttpFetchError } from "../../utils/HttpClient.ts";
+import type { HttpFetchError } from "../../utils/HttpClient.ts";
 
 function parseUrlSafe(rawUrl: string | URL): URL | undefined {
   if (!Predicate.isString(rawUrl)) {
@@ -59,13 +56,7 @@ export const danbooruPostScraper: SiteScraper = {
         return undefined;
       }
 
-      const jsonUrl = `${url.origin}/posts/${postMatch[1]}.json`;
-      const request = HttpClientRequest.get(jsonUrl).pipe(
-        withDanbooruUserAgent,
-        HttpClientRequest.acceptJson,
-      );
-
-      const post = yield* fetchJson(request, DanbooruPostSchema);
+      const post = yield* fetchDanbooruPost(url, postMatch[1]);
 
       const title = yield* resolveDanbooruTitle(post);
       const image = post.large_file_url ?? post.file_url;
