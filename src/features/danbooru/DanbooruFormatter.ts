@@ -1,6 +1,10 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { Effect, Option } from "effect";
-import { DanbooruTagMatcher } from "./DanbooruTagMatcher.ts";
+import {
+  cleanArtistName,
+  DanbooruTagMatcher,
+  splitRawTags,
+} from "./DanbooruTagMatcher.ts";
 
 export interface DanbooruPostTitleMeta {
   readonly id: number;
@@ -9,14 +13,7 @@ export interface DanbooruPostTitleMeta {
   readonly tag_string_artist: string;
 }
 
-function splitRawTags(raw: string): string[] {
-  if (!raw || !raw.trim()) {
-    return [];
-  }
-  return raw.trim().split(/\s+/).filter(Boolean);
-}
-
-export function parseCharacterSeries(name: string): {
+function parseCharacterSeries(name: string): {
   base: string;
   series?: string;
 } {
@@ -27,20 +24,18 @@ export function parseCharacterSeries(name: string): {
   return { base: name };
 }
 
-export function cleanArtistName(name: string): string {
-  const cleaned = name.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim();
-  return cleaned || name;
+export function formatSearchTagDisplay(name: string): string {
+  const withoutArtist = cleanArtistName(name);
+  const { base } = parseCharacterSeries(withoutArtist);
+  return base || withoutArtist;
 }
+
 export function extractDanbooruPostTags(post: DanbooruPostTitleMeta): string[] {
   return [
     post.tag_string_character,
     post.tag_string_copyright,
     post.tag_string_artist,
-  ]
-    .join(" ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  ].flatMap(splitRawTags);
 }
 
 export const resolveDanbooruTitle = Effect.fnUntraced(function* (

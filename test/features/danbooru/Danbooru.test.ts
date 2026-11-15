@@ -29,8 +29,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["t1", "t2", "t3"], isModified: false }),
+      matchQuery: () => Effect.succeed(["t1", "t2", "t3"]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
@@ -60,8 +59,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["t1", "t2", "t3"], isModified: false }),
+      matchQuery: () => Effect.succeed(["t1", "t2", "t3"]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
@@ -101,11 +99,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock3 = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({
-          tags: ["1girl", "solo", "long_hair"],
-          isModified: false,
-        }),
+      matchQuery: () => Effect.succeed(["1girl", "solo", "long_hair"]),
       getTagTranslations: () =>
         Effect.succeed(
           new Map([
@@ -148,8 +142,7 @@ describe("handleDanbooruMessage", () => {
     });
     const MatcherMock4 = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["t1", "t2", "t3", "t4"], isModified: false }),
+      matchQuery: () => Effect.succeed(["t1", "t2", "t3", "t4"]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock4 = Layer.succeed(DanbooruClient, {
@@ -175,8 +168,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["white_hair"], isModified: false }),
+      matchQuery: () => Effect.succeed(["white_hair"]),
       getTagTranslations: () =>
         Effect.succeed(new Map([["white_hair", "白发"]])),
     });
@@ -226,8 +218,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["white_hair"], isModified: true }),
+      matchQuery: () => Effect.succeed(["white_hair"]),
       getTagTranslations: () =>
         Effect.succeed(new Map([["white_hair", "白发"]])),
     });
@@ -263,8 +254,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["hatsune_miku"], isModified: true }),
+      matchQuery: () => Effect.succeed(["hatsune_miku"]),
       getTagTranslations: () =>
         Effect.succeed(new Map([["hatsune_miku", "初音未来（VOCALOID）"]])),
     });
@@ -299,8 +289,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () =>
-        Effect.succeed({ tags: ["misaka_mikoto"], isModified: false }),
+      matchQuery: () => Effect.succeed(["misaka_mikoto"]),
       getTagTranslations: () =>
         Effect.succeed(
           new Map([["misaka_mikoto", "御坂美琴（魔法禁书目录）"]]),
@@ -336,7 +325,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () => Effect.succeed({ tags: ["test"], isModified: false }),
+      matchQuery: () => Effect.succeed(["test"]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
@@ -361,7 +350,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      matchQuery: () => Effect.succeed([]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
@@ -385,7 +374,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      matchQuery: () => Effect.succeed([]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {
@@ -423,7 +412,7 @@ describe("handleDanbooruMessage", () => {
 
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      matchQuery: () => Effect.succeed([]),
       getTagTranslations: () => Effect.succeed(new Map()),
     });
     const ClientMock = Layer.succeed(DanbooruClient, {

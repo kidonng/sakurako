@@ -77,7 +77,7 @@ describe("LinkPreviewSites", () => {
 
       const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
         matchTag: () => Effect.succeed(undefined as string | undefined),
-        matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+        matchQuery: () => Effect.succeed([]),
         getTagTranslations: () =>
           Effect.succeed(
             new Map([

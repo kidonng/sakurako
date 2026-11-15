@@ -211,7 +211,7 @@ describe("resolveDanbooruTitle", () => {
   it("resolves title with translations when DanbooruTagMatcher is provided", async () => {
     const MatcherMock = Layer.succeed(DanbooruTagMatcher, {
       matchTag: () => Effect.succeed(undefined as string | undefined),
-      matchQuery: () => Effect.succeed({ tags: [], isModified: false }),
+      matchQuery: () => Effect.succeed([]),
       getTagTranslations: () =>
         Effect.succeed(
           new Map([

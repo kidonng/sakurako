@@ -12,11 +12,10 @@ import {
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { DanbooruClient } from "./DanbooruClient.ts";
 import {
-  cleanArtistName,
-  parseCharacterSeries,
+  formatSearchTagDisplay,
   resolveDanbooruTitle,
 } from "./DanbooruFormatter.ts";
-import { DanbooruTagMatcher } from "./DanbooruTagMatcher.ts";
+import { DanbooruTagMatcher, splitRawTags } from "./DanbooruTagMatcher.ts";
 
 export const handleDanbooruMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
@@ -53,20 +52,20 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
     let searchTags: readonly string[] = [];
 
     if (rawQuery.length > 0) {
-      const matchResult = yield* matcher.matchQuery(rawQuery);
-      if (matchResult.tags.length > maxTags) {
+      const matchedTags = yield* matcher.matchQuery(rawQuery);
+      if (matchedTags.length > maxTags) {
         yield* Effect.tryPromise(() =>
           item.context.reply(`[标签数量超出限制，最多支持 ${maxTags} 个]`),
         );
         return;
       }
-      if (matchResult.tags.length === 0) {
+      if (matchedTags.length === 0) {
         yield* Effect.tryPromise(() =>
           item.context.reply("[未找到匹配的标签]"),
         );
         return;
       }
-      searchTags = matchResult.tags;
+      searchTags = matchedTags;
     }
 
     const post = yield* client.getRandomPost(searchTags).pipe(
@@ -139,13 +138,10 @@ export const handleDanbooruMessage = Effect.fnUntraced(function* (
     let textContent = "";
     if (searchTags.length > 0) {
       const searchTranslations = yield* matcher.getTagTranslations(searchTags);
-      const searchTagsCn = searchTags.map((t) => {
-        const raw = searchTranslations.get(t) ?? t;
-        const withoutArtist = cleanArtistName(raw);
-        const { base } = parseCharacterSeries(withoutArtist);
-        return base || withoutArtist;
-      });
-      const userNorm = rawQuery.trim().split(/\s+/).join(" ").toLowerCase();
+      const searchTagsCn = searchTags.map((t) =>
+        formatSearchTagDisplay(searchTranslations.get(t) ?? t),
+      );
+      const userNorm = splitRawTags(rawQuery).join(" ").toLowerCase();
       const cnNorm = searchTagsCn.join(" ").toLowerCase();
       if (userNorm !== cnNorm) {
         textContent += `🔍 ${searchTagsCn.join(" ")}\n`;

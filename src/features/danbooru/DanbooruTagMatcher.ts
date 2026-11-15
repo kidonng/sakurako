@@ -1,11 +1,38 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { SqliteClient } from "@effect/sql-sqlite-bun";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
-import { SqlClient } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 
 export const DANBOORU_TAGS_DB_PATH = "assets/danbooru-tags.sqlite";
 
+const VALID_FALLBACK_TAG_REGEX = /^[a-z0-9_:-]+$/i;
+const VALID_ENGLISH_WORD_REGEX = /^[a-z0-9_]+$/i;
+
+const TagNameRow = Schema.Struct({
+  name: Schema.String,
+});
+
+const TagCandidateRow = Schema.Struct({
+  name: Schema.String,
+  post_count: Schema.Finite,
+});
+type TagCandidateRow = typeof TagCandidateRow.Type;
+
+const TagTranslationRow = Schema.Struct({
+  name: Schema.String,
+  cn_name: Schema.NullOr(Schema.String),
+  category: Schema.Finite,
+});
+
+export function splitRawTags(raw: string): string[] {
+  return raw.trim().split(/\s+/).filter(Boolean);
+}
+
+export function cleanArtistName(name: string): string {
+  const cleaned = name.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim();
+  return cleaned || name;
+}
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -29,33 +56,70 @@ function levenshtein(a: string, b: string): number {
   return dp[n]!;
 }
 
-function makeFallbackTagMatcher() {
-  const matchTag = (word: string) => {
-    const normalized = word.trim().toLowerCase();
-    if (/^[a-z0-9_:-]+$/i.test(normalized)) {
-      return Effect.succeed(normalized);
+function pickBestFuzzyCandidate(
+  normalized: string,
+  candidateRows: readonly TagCandidateRow[],
+): string | undefined {
+  if (candidateRows.length === 0) {
+    return undefined;
+  }
+
+  const normSorted = normalized.split("_").filter(Boolean).sort().join("_");
+  const threshold = Math.max(1, Math.floor(normalized.length / 3));
+
+  let bestTag: string | undefined;
+  let minDistance = Number.POSITIVE_INFINITY;
+  let maxPostCount = -1;
+
+  for (const row of candidateRows) {
+    const candLower = row.name.toLowerCase();
+    const directDist = levenshtein(normalized, candLower);
+    const candSorted = candLower.split("_").filter(Boolean).sort().join("_");
+    const dist = Math.min(directDist, levenshtein(normSorted, candSorted));
+
+    if (
+      dist <= threshold &&
+      (dist < minDistance ||
+        (dist === minDistance && row.post_count > maxPostCount))
+    ) {
+      minDistance = dist;
+      maxPostCount = row.post_count;
+      bestTag = row.name;
     }
-    return Effect.succeed(undefined as string | undefined);
-  };
-  const matchQuery = Effect.fnUntraced(function* (rawQuery: string) {
-    const tokens = rawQuery.trim().split(/\s+/).filter(Boolean);
+  }
+
+  return bestTag;
+}
+
+function makeMatchQuery(
+  matchTag: (word: string) => Effect.Effect<string | undefined>,
+) {
+  return Effect.fnUntraced(function* (rawQuery: string) {
+    const tokens = splitRawTags(rawQuery);
     if (tokens.length === 0) {
-      return { tags: [], isModified: false };
+      return [] as readonly string[];
     }
 
-    const matchedList: string[] = [];
+    const matched = new Set<string>();
     for (const token of tokens) {
       const tag = yield* matchTag(token);
       if (tag) {
-        matchedList.push(tag);
+        matched.add(tag);
       }
     }
 
-    const deduplicated = Array.from(new Set(matchedList));
-    const isModified =
-      deduplicated.join(" ") !== tokens.map((t) => t.toLowerCase()).join(" ");
-    return { tags: deduplicated, isModified };
+    return Array.from(matched);
   });
+}
+
+function makeFallbackTagMatcher() {
+  const matchTag = (word: string) => {
+    const normalized = word.trim().toLowerCase();
+    return Effect.succeed(
+      VALID_FALLBACK_TAG_REGEX.test(normalized) ? normalized : undefined,
+    );
+  };
+  const matchQuery = makeMatchQuery(matchTag);
   const getTagTranslations = () =>
     Effect.succeed(new Map<string, string>() as ReadonlyMap<string, string>);
 
@@ -70,10 +134,7 @@ export class DanbooruTagMatcher extends Context.Service<
   DanbooruTagMatcher,
   {
     readonly matchTag: (word: string) => Effect.Effect<string | undefined>;
-    readonly matchQuery: (rawQuery: string) => Effect.Effect<{
-      readonly tags: readonly string[];
-      readonly isModified: boolean;
-    }>;
+    readonly matchQuery: (rawQuery: string) => Effect.Effect<readonly string[]>;
     readonly getTagTranslations: (
       tags: readonly string[],
     ) => Effect.Effect<ReadonlyMap<string, string>>;
@@ -82,184 +143,135 @@ export class DanbooruTagMatcher extends Context.Service<
   static readonly layer = Layer.effect(
     DanbooruTagMatcher,
     Effect.gen(function* () {
-      const fs = yield* FileSystem;
       const sql = yield* SqlClient.SqlClient;
-      const dbPath = DANBOORU_TAGS_DB_PATH;
-      const dbExists = yield* fs
-        .exists(dbPath)
-        .pipe(Effect.orElseSucceed(() => false));
+
+      const findExactNameTag = SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: TagNameRow,
+        execute: (name) => sql`
+          SELECT name FROM tags
+          WHERE name = ${name} COLLATE NOCASE
+          ORDER BY post_count DESC
+          LIMIT 1
+        `,
+      });
+
+      const findExactCnTag = SqlSchema.findOneOption({
+        Request: Schema.Struct({
+          cnName: Schema.String,
+          isArtist: Schema.Boolean,
+        }),
+        Result: TagNameRow,
+        execute: ({ cnName, isArtist }) => sql`
+          SELECT name FROM tags
+          WHERE cn_name = ${cnName}
+            AND ${isArtist ? sql`category = 1` : sql`category != 1`}
+          ORDER BY post_count DESC
+          LIMIT 1
+        `,
+      });
+
+      const findPrefixTag = SqlSchema.findOneOption({
+        Request: Schema.Struct({
+          pattern: Schema.String,
+          isArtist: Schema.Boolean,
+        }),
+        Result: TagNameRow,
+        execute: ({ pattern, isArtist }) => sql`
+          SELECT name FROM tags
+          WHERE (name LIKE ${pattern} OR cn_name LIKE ${pattern})
+            AND ${isArtist ? sql`category = 1` : sql`category != 1`}
+          ORDER BY post_count DESC
+          LIMIT 1
+        `,
+      });
+
+      const findFuzzyCandidates = SqlSchema.findAll({
+        Request: Schema.Struct({
+          normalized: Schema.String,
+          part0: Schema.NullOr(Schema.String),
+          part1: Schema.NullOr(Schema.String),
+        }),
+        Result: TagCandidateRow,
+        execute: ({ normalized, part0, part1 }) => {
+          const containsPattern = `%${normalized}%`;
+          return part0 !== null && part1 !== null
+            ? sql`
+                SELECT name, post_count FROM tags
+                WHERE (name LIKE ${`%${part0}%`} AND name LIKE ${`%${part1}%`})
+                   OR name LIKE ${containsPattern}
+                ORDER BY post_count DESC
+                LIMIT 50
+              `
+            : sql`
+                SELECT name, post_count FROM tags
+                WHERE name LIKE ${containsPattern}
+                ORDER BY post_count DESC
+                LIMIT 50
+              `;
+        },
+      });
+
+      const findTagTranslations = SqlSchema.findAll({
+        Request: Schema.Array(Schema.String),
+        Result: TagTranslationRow,
+        execute: (tags) => sql`
+          SELECT name, cn_name, category FROM tags
+          WHERE name IN ${sql.in(tags)}
+        `,
+      });
 
       const matchTag = Effect.fnUntraced(function* (word: string) {
         const normalized = word.trim().toLowerCase();
         if (!normalized) return undefined;
 
-        if (!dbExists) {
-          if (/^[a-z0-9_:-]+$/i.test(normalized)) {
-            return normalized;
-          }
-          return undefined;
+        // 1. Exact match on canonical English tag name
+        const exactName = yield* findExactNameTag(normalized).pipe(
+          Effect.orElseSucceed(() => Option.none()),
+        );
+        if (Option.isSome(exactName)) {
+          return exactName.value.name;
         }
 
-        // 1. Exact match on tag name (canonical English tag name)
-        const exactNameRows = yield* sql<{ name: string; post_count: number }>`
-          SELECT name, post_count FROM tags
-          WHERE name = ${normalized} COLLATE NOCASE
-          ORDER BY post_count DESC
-          LIMIT 1
-        `.pipe(Effect.orElseSucceed(() => []));
-
-        if (exactNameRows.length > 0 && exactNameRows[0]) {
-          return exactNameRows[0].name;
-        }
-
-        // 2. Exact match on Chinese name for non-artist (category != 1)
-        const exactCnRows = yield* sql<{ name: string; post_count: number }>`
-          SELECT name, post_count FROM tags
-          WHERE cn_name = ${normalized} AND category != 1
-          ORDER BY post_count DESC
-          LIMIT 1
-        `.pipe(Effect.orElseSucceed(() => []));
-
-        if (exactCnRows.length > 0 && exactCnRows[0]) {
-          return exactCnRows[0].name;
-        }
-
-        // 3. Prefix match on non-artist tags (category != 1)
+        // 2-5. Exact Chinese name & prefix match: non-artist (category != 1) first, then artist (category = 1)
         const prefixPattern = `${normalized}%`;
-        const prefixRows = yield* sql<{ name: string; post_count: number }>`
-          SELECT name, post_count FROM tags
-          WHERE (name LIKE ${prefixPattern} OR cn_name LIKE ${prefixPattern})
-            AND category != 1
-          ORDER BY post_count DESC
-          LIMIT 20
-        `.pipe(Effect.orElseSucceed(() => []));
+        for (const isArtist of [false, true]) {
+          const exactCn = yield* findExactCnTag({
+            cnName: normalized,
+            isArtist,
+          }).pipe(Effect.orElseSucceed(() => Option.none()));
+          if (Option.isSome(exactCn)) {
+            return exactCn.value.name;
+          }
 
-        if (prefixRows.length > 0 && prefixRows[0]) {
-          return prefixRows[0].name;
+          const prefixMatch = yield* findPrefixTag({
+            pattern: prefixPattern,
+            isArtist,
+          }).pipe(Effect.orElseSucceed(() => Option.none()));
+          if (Option.isSome(prefixMatch)) {
+            return prefixMatch.value.name;
+          }
         }
 
-        // 4. Exact match on artist Chinese name (category = 1)
-        const exactArtistRows = yield* sql<{
-          name: string;
-          post_count: number;
-        }>`
-          SELECT name, post_count FROM tags
-          WHERE cn_name = ${normalized} AND category = 1
-          ORDER BY post_count DESC
-          LIMIT 1
-        `.pipe(Effect.orElseSucceed(() => []));
-
-        if (exactArtistRows.length > 0 && exactArtistRows[0]) {
-          return exactArtistRows[0].name;
-        }
-
-        // 5. Prefix match on artist tags (category = 1)
-        const prefixArtistRows = yield* sql<{
-          name: string;
-          post_count: number;
-        }>`
-          SELECT name, post_count FROM tags
-          WHERE (name LIKE ${prefixPattern} OR cn_name LIKE ${prefixPattern})
-            AND category = 1
-          ORDER BY post_count DESC
-          LIMIT 20
-        `.pipe(Effect.orElseSucceed(() => []));
-
-        if (prefixArtistRows.length > 0 && prefixArtistRows[0]) {
-          return prefixArtistRows[0].name;
-        }
-        // 3. Typo / compound / substring match for English words
-        if (/^[a-z0-9_]+$/i.test(normalized)) {
+        // 6. Typo / compound / substring match for English words
+        if (VALID_ENGLISH_WORD_REGEX.test(normalized)) {
           const parts = normalized.split("_").filter(Boolean);
-          const normSorted = parts.slice().sort().join("_");
+          const candidateRows = yield* findFuzzyCandidates({
+            normalized,
+            part0: parts.length > 1 ? (parts[0] ?? null) : null,
+            part1: parts.length > 1 ? (parts[1] ?? null) : null,
+          }).pipe(Effect.orElseSucceed(() => []));
 
-          let candidateRows: readonly {
-            readonly name: string;
-            readonly post_count: number;
-          }[];
-
-          if (parts.length > 1 && parts[0] && parts[1]) {
-            const p0 = `%${parts[0]}%`;
-            const p1 = `%${parts[1]}%`;
-            candidateRows = yield* sql<{
-              name: string;
-              post_count: number;
-            }>`
-              SELECT name, post_count FROM tags
-              WHERE (name LIKE ${p0} AND name LIKE ${p1})
-                 OR name LIKE ${"%" + normalized + "%"}
-              ORDER BY post_count DESC
-              LIMIT 50
-            `.pipe(Effect.orElseSucceed(() => []));
-          } else {
-            const containsPattern = `%${normalized}%`;
-            candidateRows = yield* sql<{
-              name: string;
-              post_count: number;
-            }>`
-              SELECT name, post_count FROM tags
-              WHERE name LIKE ${containsPattern}
-              ORDER BY post_count DESC
-              LIMIT 50
-            `.pipe(Effect.orElseSucceed(() => []));
-          }
-
-          if (candidateRows.length > 0) {
-            let bestTag: string | undefined = undefined;
-            let minDistance = Number.POSITIVE_INFINITY;
-            let maxPostCount = -1;
-
-            for (const row of candidateRows) {
-              const candLower = row.name.toLowerCase();
-              const directDist = levenshtein(normalized, candLower);
-              const candParts = candLower.split("_").filter(Boolean);
-              const candSorted = candParts.sort().join("_");
-              const sortedDist = levenshtein(normSorted, candSorted);
-              const dist = Math.min(directDist, sortedDist);
-
-              const threshold = Math.max(1, Math.floor(normalized.length / 3));
-              if (dist <= threshold) {
-                if (
-                  dist < minDistance ||
-                  (dist === minDistance && row.post_count > maxPostCount)
-                ) {
-                  minDistance = dist;
-                  maxPostCount = row.post_count;
-                  bestTag = row.name;
-                }
-              }
-            }
-            if (bestTag) {
-              return bestTag;
-            }
-          }
-
-          return normalized;
+          return (
+            pickBestFuzzyCandidate(normalized, candidateRows) ?? normalized
+          );
         }
 
         return undefined;
       });
 
-      const matchQuery = Effect.fnUntraced(function* (rawQuery: string) {
-        const tokens = rawQuery.trim().split(/\s+/).filter(Boolean);
-        if (tokens.length === 0) {
-          return { tags: [], isModified: false };
-        }
+      const matchQuery = makeMatchQuery(matchTag);
 
-        const matchedList: string[] = [];
-        for (const token of tokens) {
-          const tag = yield* matchTag(token);
-          if (tag) {
-            matchedList.push(tag);
-          }
-        }
-
-        const deduplicated = Array.from(new Set(matchedList));
-        const isModified =
-          deduplicated.join(" ") !==
-          tokens.map((t) => t.toLowerCase()).join(" ");
-        return { tags: deduplicated, isModified };
-      });
       const getTagTranslations = Effect.fnUntraced(function* (
         tags: readonly string[],
       ) {
@@ -267,26 +279,21 @@ export class DanbooruTagMatcher extends Context.Service<
           .map((t) => t.trim().toLowerCase())
           .filter(Boolean);
         const translationMap = new Map<string, string>();
-        if (validTags.length === 0 || !dbExists) {
+        if (validTags.length === 0) {
           return translationMap as ReadonlyMap<string, string>;
         }
 
-        const rows = yield* sql<{
-          name: string;
-          cn_name: string | null;
-          category: number;
-        }>`
-          SELECT name, cn_name, category FROM tags
-          WHERE name IN ${sql.in(validTags)}
-        `.pipe(Effect.orElseSucceed(() => []));
+        const rows = yield* findTagTranslations(validTags).pipe(
+          Effect.orElseSucceed(() => []),
+        );
 
         for (const row of rows) {
-          if (row.cn_name && row.cn_name.trim().length > 0) {
-            let cn = row.cn_name.trim();
-            if (row.category === 1) {
-              cn = cn.replace(/\s*[（(]\s*画师\s*[）)]$/u, "").trim() || cn;
-            }
-            translationMap.set(row.name, cn);
+          const rawCn = row.cn_name?.trim();
+          if (rawCn) {
+            translationMap.set(
+              row.name,
+              row.category === 1 ? cleanArtistName(rawCn) : rawCn,
+            );
           }
         }
         return translationMap as ReadonlyMap<string, string>;
