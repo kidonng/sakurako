@@ -1,32 +1,26 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { handleSauceMessage } from "../../../src/features/sauce/Sauce.ts";
-import { makeTestHttpClient } from "../../TestHttpClient.ts";
+import {
+  SauceNaoClient,
+  SauceNaoError,
+  type SauceResult,
+} from "../../../src/features/sauce/SauceNao.ts";
 import { createMockMessage } from "../../TestMessage.ts";
 
-const mockSauceNaoSuccess = {
-  header: {
-    status: 0,
-    minimum_similarity: 60.0,
-  },
-  results: [
-    {
-      header: {
-        similarity: "88.00",
-      },
-      data: {
-        title: "Test Art",
-        member_name: "TestPainter",
-        ext_urls: ["https://www.pixiv.net/artworks/99999"],
-      },
-    },
-  ],
+const mockSauceResult: SauceResult = {
+  title: "Test Art",
+  author: "TestPainter",
+  url: "https://www.pixiv.net/artworks/99999",
+  formattedText:
+    "Test Art by TestPainter\nhttps://www.pixiv.net/artworks/99999",
+  similarity: 88.0,
 };
 
-const dummyHttpLayer = makeTestHttpClient(() =>
-  Response.json(mockSauceNaoSuccess),
-);
+const dummyClientLayer = Layer.succeed(SauceNaoClient, {
+  search: () => Effect.succeed(mockSauceResult),
+});
 
 describe("handleSauceMessage", () => {
   it("replies with formatted text when quoting a message with an image", async () => {
@@ -45,7 +39,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
     );
 
     const replies = getReplies();
@@ -60,11 +54,12 @@ describe("handleSauceMessage", () => {
 
   it("extracts and searches the first image when quoted message has multiple images", async () => {
     let searchedUrl = "";
-    const httpLayer = makeTestHttpClient((req) => {
-      searchedUrl = req.url;
-      return Response.json(mockSauceNaoSuccess);
+    const clientLayer = Layer.succeed(SauceNaoClient, {
+      search: (imageUrl) => {
+        searchedUrl = imageUrl;
+        return Effect.succeed(mockSauceResult);
+      },
     });
-
     const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
@@ -86,12 +81,10 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(httpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(clientLayer)),
     );
 
-    expect(searchedUrl).toContain(
-      "url=" + encodeURIComponent("https://example.com/first.jpg"),
-    );
+    expect(searchedUrl).toBe("https://example.com/first.jpg");
     expect(getReplies().length).toBe(1);
   });
 
@@ -101,7 +94,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
     );
 
     const replies = getReplies();
@@ -125,7 +118,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
     );
 
     const replies = getReplies();
@@ -134,25 +127,9 @@ describe("handleSauceMessage", () => {
   });
 
   it("replies with notice when SauceNao returns null (low similarity / no match)", async () => {
-    const lowSimilarityLayer = makeTestHttpClient(() =>
-      Response.json({
-        header: {
-          status: 0,
-          minimum_similarity: 70.0,
-        },
-        results: [
-          {
-            header: {
-              similarity: "45.00",
-            },
-            data: {
-              title: "Low similarity",
-            },
-          },
-        ],
-      }),
-    );
-
+    const nullResultLayer = Layer.succeed(SauceNaoClient, {
+      search: () => Effect.succeed(null),
+    });
     const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
@@ -168,7 +145,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(lowSimilarityLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(nullResultLayer)),
     );
 
     const replies = getReplies();
@@ -177,10 +154,12 @@ describe("handleSauceMessage", () => {
   });
 
   it("replies with notice when SauceNao fails with an error", async () => {
-    const errorLayer = makeTestHttpClient(
-      () => new Response("Server error", { status: 500 }),
-    );
-
+    const errorLayer = Layer.succeed(SauceNaoClient, {
+      search: () =>
+        Effect.fail(
+          new SauceNaoError({ cause: "SauceNao HTTP returned status 500" }),
+        ),
+    });
     const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
@@ -211,7 +190,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
     );
 
     const replies = getReplies();
@@ -234,7 +213,7 @@ describe("handleSauceMessage", () => {
       });
 
       await Effect.runPromise(
-        handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+        handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
       );
 
       expect(getReplies().length).toBe(0);
@@ -249,33 +228,23 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(dummyHttpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(dummyClientLayer)),
     );
 
     expect(getReplies().length).toBe(0);
   });
 
   it("replies as a text segment preventing raw CQ code injection", async () => {
-    const cpHackResponse = {
-      header: {
-        status: 0,
-        minimum_similarity: 60.0,
-      },
-      results: [
-        {
-          header: {
-            similarity: "99.00",
-          },
-          data: {
-            title: "[CQ:at,qq=all] Dangerous Title",
-            ext_urls: ["https://example.com/pic"],
-          },
-        },
-      ],
-    };
-
-    const httpLayer = makeTestHttpClient(() => Response.json(cpHackResponse));
-
+    const cqInjectionLayer = Layer.succeed(SauceNaoClient, {
+      search: () =>
+        Effect.succeed({
+          title: "[CQ:at,qq=all] Dangerous Title",
+          url: "https://example.com/pic",
+          formattedText:
+            "[CQ:at,qq=all] Dangerous Title\nhttps://example.com/pic",
+          similarity: 99.0,
+        }),
+    });
     const { item, getReplies } = createMockMessage({
       raw_message: "[CQ:reply,id=12345] /sauce",
       getMessageResponse: {
@@ -291,7 +260,7 @@ describe("handleSauceMessage", () => {
     });
 
     await Effect.runPromise(
-      handleSauceMessage(item).pipe(Effect.provide(httpLayer)),
+      handleSauceMessage(item).pipe(Effect.provide(cqInjectionLayer)),
     );
 
     const replies = getReplies();

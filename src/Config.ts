@@ -13,10 +13,14 @@ export interface ImageGenConfig {
   readonly openrouterImageModel?: string;
 }
 
-export interface BotConfig extends DanbooruAuthConfig, ImageGenConfig {
+export interface SauceNaoConfig {
+  readonly sauceNaoApiKey?: Redacted.Redacted<string>;
+}
+
+export interface BotConfig
+  extends DanbooruAuthConfig, ImageGenConfig, SauceNaoConfig {
   readonly wsUrl: string;
   readonly accessToken: Redacted.Redacted<string>;
-  readonly sauceNaoApiKey?: Redacted.Redacted<string>;
   readonly openrouterDecisionModel?: string;
   readonly devMode: boolean;
   readonly devGroupId?: number;
@@ -43,6 +47,7 @@ const trimmedOptionalRedacted = (name: string) =>
 const danbooruLoginConfig = trimmedOptionalString("DANBOORU_LOGIN");
 const danbooruApiKeyConfig = trimmedOptionalRedacted("DANBOORU_API_KEY");
 const openrouterApiKeyConfig = trimmedOptionalRedacted("OPENROUTER_API_KEY");
+const sauceNaoApiKeyConfig = trimmedOptionalRedacted("SAUCENAO_API_KEY");
 const openrouterDecisionModelConfig = trimmedOptionalString(
   "OPENROUTER_DECISION_MODEL",
 );
@@ -61,6 +66,10 @@ export const DanbooruAuthConfig: Config.Config<DanbooruAuthConfig> = Config.all(
     danbooruApiKey: danbooruApiKeyConfig,
   },
 );
+
+export const SauceNaoConfig: Config.Config<SauceNaoConfig> = Config.all({
+  sauceNaoApiKey: sauceNaoApiKeyConfig,
+});
 
 export function resolveDanbooruCredentials(config?: DanbooruAuthConfig):
   | {
@@ -99,9 +108,7 @@ export function getDanbooruTagLimit(config?: DanbooruAuthConfig): number {
 export const BotConfig: Config.Config<BotConfig> = Config.all({
   wsUrl: Config.String("SNOWLUMA_WS_URL"),
   accessToken: Config.Redacted("SNOWLUMA_ACCESS_TOKEN"),
-  sauceNaoApiKey: Config.option(Config.Redacted("SAUCENAO_API_KEY")).pipe(
-    Config.map(Option.getOrUndefined),
-  ),
+  sauceNaoApiKey: sauceNaoApiKeyConfig,
   openrouterApiKey: openrouterApiKeyConfig,
   openrouterDecisionModel: openrouterDecisionModelConfig,
   openrouterImageModel: openrouterImageModelConfig,

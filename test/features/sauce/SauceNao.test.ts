@@ -1,7 +1,8 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { describe, expect, it } from "bun:test";
-import { Effect, Redacted } from "effect";
+import { ConfigProvider, Effect, Layer, Redacted } from "effect";
 import {
+  SauceNaoClient,
   SauceNaoError,
   searchSauce,
   TARGET_SAUCENAO_DBS,
@@ -480,5 +481,87 @@ describe("searchSauce", () => {
     expect(result).not.toBeNull();
     expect(result?.title).toBe("Valid Non-Origin");
     expect(result?.similarity).toBe(78.0);
+  });
+});
+
+describe("SauceNaoClient", () => {
+  it("passes configured SAUCENAO_API_KEY from SauceNaoConfig to searchSauce", async () => {
+    let capturedUrl = "";
+    const httpLayer = makeTestHttpClient((req) => {
+      capturedUrl = req.url;
+      return Response.json({
+        header: { status: 0, minimum_similarity: 60.0 },
+        results: [
+          {
+            header: { similarity: "91.50", index_id: 5 },
+            data: {
+              title: "Configured Key Art",
+              member_name: "KeyArtist",
+              ext_urls: ["https://www.pixiv.net/artworks/11111"],
+            },
+          },
+        ],
+      });
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SAUCENAO_API_KEY: "  secret_sauce_key  ",
+      }),
+    );
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* SauceNaoClient;
+        return yield* client.search("https://example.com/art.png");
+      }).pipe(
+        Effect.provide(
+          SauceNaoClient.layer.pipe(
+            Layer.provide(Layer.merge(httpLayer, configLayer)),
+          ),
+        ),
+      ),
+    );
+
+    const parsedUrl = new URL(capturedUrl);
+    expect(parsedUrl.searchParams.get("api_key")).toBe("secret_sauce_key");
+    expect(parsedUrl.searchParams.get("url")).toBe(
+      "https://example.com/art.png",
+    );
+    expect(result?.title).toBe("Configured Key Art");
+  });
+
+  it("omits api_key when SAUCENAO_API_KEY is unset or blank", async () => {
+    let capturedUrl = "";
+    const httpLayer = makeTestHttpClient((req) => {
+      capturedUrl = req.url;
+      return Response.json({
+        header: { status: 0, minimum_similarity: 60.0 },
+        results: [],
+      });
+    });
+
+    const configLayer = ConfigProvider.layer(
+      ConfigProvider.fromEnvRecord({
+        SAUCENAO_API_KEY: "   ",
+      }),
+    );
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* SauceNaoClient;
+        return yield* client.search("https://example.com/art.png");
+      }).pipe(
+        Effect.provide(
+          SauceNaoClient.layer.pipe(
+            Layer.provide(Layer.merge(httpLayer, configLayer)),
+          ),
+        ),
+      ),
+    );
+
+    const parsedUrl = new URL(capturedUrl);
+    expect(parsedUrl.searchParams.has("api_key")).toBe(false);
+    expect(result).toBeNull();
   });
 });

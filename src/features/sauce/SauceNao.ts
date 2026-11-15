@@ -1,6 +1,7 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
-import { Effect, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
+import { SauceNaoConfig } from "../../Config.ts";
 import { fetchJson } from "../../utils/HttpClient.ts";
 
 export interface SauceResult {
@@ -317,3 +318,32 @@ export const searchSauce = Effect.fn("SauceNao.searchSauce")(function* (
     similarity,
   };
 });
+
+export class SauceNaoClient extends Context.Service<
+  SauceNaoClient,
+  {
+    readonly search: (
+      imageUrl: string,
+    ) => Effect.Effect<SauceResult | null, SauceNaoError>;
+  }
+>()("sakurako/sauce/SauceNaoClient") {
+  static readonly layer = Layer.effect(
+    SauceNaoClient,
+    Effect.gen(function* () {
+      const httpClient = yield* HttpClient.HttpClient;
+      const config = yield* SauceNaoConfig;
+
+      const search = Effect.fnUntraced(function* (
+        imageUrl: string,
+      ): Effect.fn.Return<SauceResult | null, SauceNaoError> {
+        return yield* searchSauce(imageUrl, config.sauceNaoApiKey).pipe(
+          Effect.provideService(HttpClient.HttpClient, httpClient),
+        );
+      });
+
+      return SauceNaoClient.of({
+        search,
+      });
+    }),
+  );
+}

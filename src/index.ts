@@ -16,6 +16,7 @@ import { handleIncomingMessage } from "./features/echo/EchoBot.ts";
 import { handleLinkPreviewMessage } from "./features/link-preview/LinkPreview.ts";
 import { FallbackScraper } from "./features/link-preview/FallbackScraper.ts";
 import { handleSauceMessage } from "./features/sauce/Sauce.ts";
+import { SauceNaoClient } from "./features/sauce/SauceNao.ts";
 import { handleDanbooruMessage } from "./features/danbooru/Danbooru.ts";
 import { handleImageGenMessage } from "./features/image-gen/ImageGen.ts";
 import { ImageGenClient } from "./features/image-gen/ImageGenClient.ts";
@@ -199,6 +200,10 @@ const ImageGenClientLive = ImageGenClient.layer.pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 
+const SauceNaoClientLive = SauceNaoClient.layer.pipe(
+  Layer.provide(FetchHttpClient.layer),
+);
+
 export const MainLive = MainProgram.pipe(
   Effect.provide(
     Layer.mergeAll(
@@ -211,6 +216,7 @@ export const MainLive = MainProgram.pipe(
       DanbooruClientLive,
       FallbackScraperLive,
       ImageGenClientLive,
+      SauceNaoClientLive,
     ),
   ),
 );

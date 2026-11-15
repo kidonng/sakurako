@@ -45,7 +45,7 @@ The project follows a reactive, push-to-pull decoupled architecture built on Eff
 ```
 
 - **Configuration Layer**: `src/Config.ts` reads `SNOWLUMA_WS_URL`, `SNOWLUMA_ACCESS_TOKEN` (`Redacted`), optional `SAUCENAO_API_KEY` (`Redacted`), `OPENROUTER_API_KEY` (`Redacted`), `OPENROUTER_DECISION_MODEL`, `OPENROUTER_IMAGE_MODEL`, `DEV_MODE`, and `DEV_GROUP_ID` using Effect's `Config` schema.
-- **Service Layer**: Services encapsulate domain boundaries via `Context.Service` and companion static `.layer` factories (`SnowLumaClient`, `DanbooruClient`, `DanbooruTagMatcher`, `ImageGenClient`, `StatsRepository`, `StatsCooldown`, `StatsRenderer`).
+- **Service Layer**: Services encapsulate domain boundaries via `Context.Service` and companion static `.layer` factories (`SnowLumaClient`, `SauceNaoClient`, `DanbooruClient`, `DanbooruTagMatcher`, `ImageGenClient`, `StatsRepository`, `StatsCooldown`, `StatsRenderer`).
 - **Event Pipeline**: WebSocket callbacks offer messages and notices to unbounded Queues synchronously via `Queue.offerUnsafe`, exposed downstream as typed `messages` and `notices` streams.
 - **Dispatch & Isolation**: `src/index.ts` pre-filters streams with `shouldProcessEvent` and fans out each event to handlers concurrently via `Effect.all(..., { concurrency: "unbounded", discard: true })`. Every handler traps errors with `Effect.catch`/`Effect.catchDefect`, ensuring an error in one feature never tears down the event stream.
 

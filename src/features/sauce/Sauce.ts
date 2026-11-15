@@ -1,12 +1,11 @@
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import { segments } from "@snowluma/sdk/messages";
-import { Effect, Option } from "effect";
-import { BotConfig } from "../../Config.ts";
+import { Effect } from "effect";
 import type { IncomingMessage } from "../../SnowLuma.ts";
 import { formatLogMessagePrefix } from "../../utils/LogFormat.ts";
 import { isSelfMessage } from "../../utils/MessageGuard.ts";
 import { extractMessageImages, parseCommand } from "../../utils/Command.ts";
-import { searchSauce } from "./SauceNao.ts";
+import { SauceNaoClient } from "./SauceNao.ts";
 export const handleSauceMessage = Effect.fnUntraced(function* (
   item: IncomingMessage,
 ) {
@@ -63,12 +62,11 @@ export const handleSauceMessage = Effect.fnUntraced(function* (
       return;
     }
 
-    const config = yield* Effect.option(BotConfig);
-    const apiKey = Option.getOrUndefined(config)?.sauceNaoApiKey;
+    const sauceClient = yield* SauceNaoClient;
     yield* Effect.logInfo(
       `${prefix} Searching SauceNao for image in message ${messageId}...`,
     );
-    const result = yield* searchSauce(imageUrl, apiKey);
+    const result = yield* sauceClient.search(imageUrl);
 
     if (!result) {
       yield* Effect.tryPromise(() =>

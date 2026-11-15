@@ -120,4 +120,21 @@ describe("BotConfig", () => {
     expect(config.openrouterDecisionModel).toBeUndefined();
     expect(config.openrouterImageModel).toBeUndefined();
   });
+
+  it("normalizes empty or whitespace SauceNao API key to undefined", async () => {
+    const config = await Effect.runPromise(
+      BotConfig.pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnvRecord({
+              SNOWLUMA_WS_URL: "ws://localhost:3001",
+              SNOWLUMA_ACCESS_TOKEN: "token",
+              SAUCENAO_API_KEY: "   ",
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(config.sauceNaoApiKey).toBeUndefined();
+  });
 });
